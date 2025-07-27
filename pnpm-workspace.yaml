@@ -1,0 +1,7 @@
+packages:
+  - "auth-service"
+  - "user-service"
+  - "company-service"
+  - "recruitment-service"
+  - "api-gateway"
+  - "shared"
