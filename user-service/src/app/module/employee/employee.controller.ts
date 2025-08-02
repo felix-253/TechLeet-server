@@ -22,10 +22,6 @@ export class EmployeeController {
    @UseGuards(JwtAuthGuard)
    @Get('')
    @ApiBearerAuth('token')
-   @ApiQuery({
-      description: 'Filter employee by role admin',
-      type: GetEmployeeReqDto,
-   })
    async GetEmployeeByFilter(@Query() dto: GetEmployeeReqDto) {
       return await this.EmployeeService.getEmployeeByFilter(dto);
    }

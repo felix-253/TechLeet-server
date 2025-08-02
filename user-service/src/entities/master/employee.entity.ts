@@ -23,8 +23,6 @@ export class EmployeeEntity extends BaseEntity {
    gender: boolean;
    @Column({ nullable: true })
    startDate?: Date;
-   @Column({ nullable: true })
-   confirmationDate?: Date;
    @Column({ type: 'boolean', default: true })
    isActive?: boolean;
    @Column({ nullable: true })

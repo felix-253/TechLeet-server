@@ -21,7 +21,7 @@ export class EmployeeRepository {
 
       if (query.keyword) {
          qb.andWhere(
-            '(employee.fullName ILIKE :keyword OR employee.email ILIKE :keyword OR employee.phoneNumber ILIKE :keyword)',
+            '(employee.firstName ILIKE :keyword OR employee.lastName ILIKE :keyword OR employee.email ILIKE :keyword OR employee.phoneNumber ILIKE :keyword)',
             { keyword: `%${query.keyword}%` },
          );
       }
@@ -31,11 +31,34 @@ export class EmployeeRepository {
       if (typeof query.isActive === 'boolean') {
          qb.andWhere('employee.isActive = :isActive', { isActive: query.isActive });
       }
-      if (query.departmentId) {
-         qb.andWhere('employee.departmentId = :departmentId', { departmentId: query.departmentId });
+      if (query.departmentId && query.departmentId.length > 0) {
+         qb.andWhere('employee.departmentId IN (:...departmentIds)', {
+            departmentIds: query.departmentId,
+         });
       }
-      if (query.positionId) {
-         qb.andWhere('employee.positionId = :positionId', { positionId: query.positionId });
+
+      if (query.positionId && query.positionId.length > 0) {
+         qb.andWhere('employee.positionId IN (:...positionIds)', {
+            positionIds: query.positionId,
+         });
+      }
+
+      if (query.positionTypeId && query.positionTypeId.length > 0) {
+         qb.andWhere('employee.positionTypeId IN (:...positionTypeIds)', {
+            positionTypeIds: query.positionTypeId,
+         });
+      }
+
+      if (typeof query.baseSalaryFrom === 'number') {
+         qb.andWhere('employee.baseSalary >= :baseSalaryFrom', {
+            baseSalaryFrom: query.baseSalaryFrom,
+         });
+      }
+
+      if (typeof query.baseSalaryTo === 'number') {
+         qb.andWhere('employee.baseSalary <= :baseSalaryTo', {
+            baseSalaryTo: query.baseSalaryTo,
+         });
       }
       if (query.startDateFrom) {
          qb.andWhere('employee.startDate >= :startDateFrom', {
