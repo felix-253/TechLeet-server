@@ -99,8 +99,7 @@ export class EmployeeRepository {
 
    async createEmployee(dto: EmployeeEntity): Promise<EmployeeEntity> {
       const employeeModel = this.employeeRepository.create(dto);
-      const employee = this.employeeRepository.save(employeeModel);
-      return employee;
+      return this.employeeRepository.save(employeeModel);
    }
 
    async updatePassword(employeeId: number, newPassword: string): Promise<boolean> {

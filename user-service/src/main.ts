@@ -1,6 +1,6 @@
-import { ValidationPipe } from '@nestjs/common';
+import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
@@ -35,8 +35,12 @@ async function bootstrap() {
    app.enableCors();
 
    app.useGlobalFilters(new GlobalHttpExceptionFilter());
-   app.useGlobalInterceptors(new SuccessResponseInterceptor());
-   app.useGlobalPipes(new ValidationPipe());
+   app.useGlobalInterceptors(
+      // new SuccessResponseInterceptor(),
+      new ClassSerializerInterceptor(app.get(Reflector)),
+   );
+   app.useGlobalPipes(new ValidationPipe({ transform: true }));
+
    await app.listen(port, hostname, () => {
       console.log('---------------------------------------------------------------------------\n');
       console.log(
