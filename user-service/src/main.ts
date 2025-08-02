@@ -9,9 +9,8 @@ import { SuccessResponseInterceptor } from './common/interceptor/response.interc
 async function bootstrap() {
    const app = await NestFactory.create(AppModule);
    const configService = app.get(ConfigService);
-   const port = configService.get<number>('PORT') || 9999;
-   const hostname = configService.get<string>('HOST') || '0.0.0.0';
-   app.setGlobalPrefix('api');
+   const port = configService.get<number>('PORT');
+   const hostname = configService.get<string>('HOST');
    const config = new DocumentBuilder()
       .setTitle('TechLeet API')
       .setDescription('The TechLeet API description')
@@ -31,6 +30,7 @@ async function bootstrap() {
       swaggerOptions: { persistAuthorization: true },
       jsonDocumentUrl: 'swagger/json',
    });
+
    app.use(helmet());
    app.enableCors();
 

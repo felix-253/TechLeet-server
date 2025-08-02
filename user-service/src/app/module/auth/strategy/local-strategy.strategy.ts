@@ -15,7 +15,7 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
    async validate(email: string, password: string): Promise<EmployeeEntity> {
       const employee = await this.employeeRepository.employeeLogin(email);
       if (!employee) {
-         throw new NotFoundException('Không tìm thấy thông tin đăng nhập');
+         throw new NotFoundException('Wrong email or password');
       }
       const isPasswordValid = bcrypt.compare(employee.password, password);
       if (!isPasswordValid) throw new NotFoundException('Wrong email or password');

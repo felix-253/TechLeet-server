@@ -14,6 +14,7 @@ import { SessionEntity } from '@/entities/transaction/session.entity';
 import { EmployeeRepository } from '@/repositories/employee.repository';
 import { PermissionRepository } from '@/repositories/permission.repository';
 import { EmailService } from '@/utils/email/email.service';
+import { EmployeeService } from '../employee/employee.service';
 
 @Module({
    imports: [
@@ -29,6 +30,7 @@ import { EmailService } from '@/utils/email/email.service';
       PermissionRepository,
       /**Service */
       AuthService,
+      EmployeeService,
       EmailService,
       /**Strategy */
       JwtStrategy,

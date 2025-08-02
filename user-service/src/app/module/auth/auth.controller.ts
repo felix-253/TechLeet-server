@@ -1,9 +1,7 @@
-import { Body, Controller, Post, Request, UseGuards } from '@nestjs/common';
-import { AuthService } from './auth.service';
-import { ApiTags, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { LocalAuthGuard } from '@/common/guard/local-auth.guard';
-import { JwtAuthGuard } from '@/common/guard/jwt-auth.guard';
-import { CreateEmployeeDto } from './dto/request/register-req.dto';
+import { Body, Controller, Post, Request, UseGuards } from '@nestjs/common';
+import { ApiBody, ApiTags } from '@nestjs/swagger';
+import { AuthService } from './auth.service';
 import { CreatePassword } from './dto/request/create-password-req.dto';
 
 @Controller('auth')
@@ -26,38 +24,6 @@ export class AuthController {
    })
    async login(@Request() req): Promise<{ token: string }> {
       return this.authService.login(req.user);
-   }
-
-   @UseGuards(JwtAuthGuard)
-   @Post('createEmployee')
-   @ApiBearerAuth('token')
-   @ApiBody({
-      description: 'Create new employee by role admin',
-      examples: {
-         register: {
-            value: {
-               firstName: 'Trần',
-               lastName: 'Viễn',
-               address: '07 Xô Viết Nghệ Tĩnh, Huyện Hòa Vang, TP. Đà Nẵng',
-               birthDate: '1995-11-20T00:00:00.000Z',
-               email: 'tran.vien@example.com',
-               gender: true,
-               startDate: '2023-07-01T00:00:00.000Z',
-               confirmationDate: '2023-09-01T00:00:00.000Z',
-               isActive: true,
-               avatarUrl: 'https://example.com/avatar.jpg',
-               phoneNumber: '0930139700',
-               departmentId: 1,
-               positionId: 1,
-               baseSalary: 12000000,
-               positionTypeId: 1,
-               permissions: [1, 2],
-            },
-         },
-      },
-   })
-   async createEmployee(@Body() dto: CreateEmployeeDto) {
-      return await this.authService.createEmployee(dto);
    }
 
    @Post('/create-password')

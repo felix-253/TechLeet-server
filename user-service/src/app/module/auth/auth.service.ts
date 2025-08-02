@@ -11,7 +11,6 @@ import {
    REDIS_KEY_NEW_EMPLOYEE_OTP,
 } from '@/common/constants/redis-key.constant';
 import { TYPE_EMPLOYEE_PERMISSION_REDIS } from './types/employee-permission-redis.dto';
-import { CreateEmployeeDto } from './dto/request/register-req.dto';
 import { PermissionRepository } from '@/repositories/permission.repository';
 import { EmployeeRepository } from '@/repositories/employee.repository';
 import { EmailService } from '@/utils/email/email.service';
@@ -22,9 +21,7 @@ export class AuthService {
    constructor(
       private jwtService: JwtService,
       private readonly redisService: RedisService,
-      private readonly permissionRepository: PermissionRepository,
       private readonly employeeRepository: EmployeeRepository,
-      private readonly emailService: EmailService,
    ) {}
    async login(employee: EmployeeEntity): Promise<LoginResDto> {
       if (!employee) {
@@ -78,25 +75,6 @@ export class AuthService {
       };
    }
 
-   async createEmployee(dto: CreateEmployeeDto): Promise<EmployeeEntity> {
-      const { permissions, positionId, positionTypeId, departmentId, ...employeeInfo } = dto;
-      const permissionEntityList =
-         await this.permissionRepository.findPermissionsByListId(permissions);
-      const newEmployee = await this.employeeRepository.createEmployee({
-         ...employeeInfo,
-         positionId: positionId,
-         positionTypeId: positionTypeId,
-         permissions: permissionEntityList,
-         departmentId: departmentId,
-      } as EmployeeEntity);
-
-      this.emailService.sendUserConfirmation(newEmployee, this.generateOTP().toString());
-      return newEmployee;
-   }
-
-   generateOTP(): number {
-      return Math.floor(100000 + Math.random() * 899999);
-   }
 
    async createPassword(dto: CreatePassword): Promise<{ status: boolean }> {
       const { newPassword, url } = dto;
