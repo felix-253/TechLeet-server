@@ -2,7 +2,7 @@
   "name": "techleet-system",
   "private": true,
   "scripts": {
-    "dev": "concurrently -n auth,user,company,recruitment -c green,cyan,blue,magenta \"pnpm --filter auth-service start:dev\" \"pnpm --filter user-service start:dev\" \"pnpm --filter company-service start:dev\" \"pnpm --filter recruitment-service start:dev\"",
+    "dev": "concurrently -n user,company,recruitment -c green,cyan,blue  \"pnpm --filter user-service start:dev\" \"pnpm --filter company-service start:dev\" \"pnpm --filter recruitment-service start:dev\"",
     "install:all": "pnpm install"
   },
   "devDependencies": {
