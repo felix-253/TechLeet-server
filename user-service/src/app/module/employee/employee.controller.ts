@@ -1,5 +1,14 @@
 import { JwtAuthGuard } from '@/common/guard/jwt-auth.guard';
-import { Body, Controller, Get, Post, Put, Query, UseGuards } from '@nestjs/common';
+import {
+   Body,
+   Controller,
+   Get,
+   Post,
+   Put,
+   Query,
+   UseGuards,
+   UseInterceptors,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { plainToInstance } from 'class-transformer';
 import { CreateEmployeeDto } from './dto/request/create-entity-req.dto';
@@ -7,10 +16,22 @@ import { GetEmployeeReqDto } from './dto/request/get-employee-req.dto';
 import { UpdateEmployeeDto } from './dto/request/update-employee-req.dto';
 import { EmployeeResponseDto } from './dto/response/employee-res.dto';
 import { EmployeeService } from './employee.service';
+import { AuthInterceptor } from '@/common/interceptor/auth.interceptor';
+import { User } from '@/common/decorater/user.decorator';
+import { IAuthInterceptor } from '@/common/types';
 
 @Controller('employee')
 export class EmployeeController {
    constructor(private readonly EmployeeService: EmployeeService) {}
+
+   @UseGuards(JwtAuthGuard)
+   @UseInterceptors(AuthInterceptor)
+   @Get('my-profile')
+   @ApiBearerAuth('token')
+   async getProfile(@User() user: IAuthInterceptor): Promise<EmployeeResponseDto> {
+      const result = await this.EmployeeService.myProfile(user);
+      return plainToInstance(EmployeeResponseDto, result);
+   }
 
    @UseGuards(JwtAuthGuard)
    @Get('')
@@ -36,9 +57,6 @@ export class EmployeeController {
       const result = plainToInstance(
          EmployeeResponseDto,
          await this.EmployeeService.createEmployee(dto),
-         {
-            excludeExtraneousValues: true,
-         },
       );
 
       return result;
@@ -55,9 +73,6 @@ export class EmployeeController {
       const result = plainToInstance(
          EmployeeResponseDto,
          await this.EmployeeService.updateEmployee(dto),
-         {
-            excludeExtraneousValues: true,
-         },
       );
 
       return result;

@@ -12,6 +12,7 @@ import { EmployeeRepository } from '@/repositories/employee.repository';
 import { GetEmployeeReqDto } from './dto/request/get-employee-req.dto';
 import { pickMapper } from '@/utils/query/pick.query';
 import { UpdateEmployeeDto } from './dto/request/update-employee-req.dto';
+import { IAuthInterceptor } from '@/common/types';
 
 @Injectable()
 export class EmployeeService {
@@ -20,6 +21,16 @@ export class EmployeeService {
       private readonly emailService: EmailService,
       private readonly employeeRepository: EmployeeRepository,
    ) {}
+
+   async myProfile(dto: IAuthInterceptor): Promise<EmployeeEntity> {
+      try {
+         const userFound = await this.employeeRepository.findById(dto.employeeId);
+         if (!userFound) throw new NotFoundException('Not found this user');
+         return userFound;
+      } catch (error) {
+         throw new InternalServerErrorException(error);
+      }
+   }
 
    async getEmployeeByFilter(dto: GetEmployeeReqDto): Promise<{
       total: number;

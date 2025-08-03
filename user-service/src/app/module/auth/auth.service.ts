@@ -45,7 +45,7 @@ export class AuthService {
                   departmentId: permission.departmentId,
                   headquarterId: permission.headquarterId,
                   permissionType: permission.permissionType,
-               };
+               } as TYPE_EMPLOYEE_PERMISSION_REDIS;
             },
          );
 
