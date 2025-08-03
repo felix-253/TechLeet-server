@@ -4,7 +4,7 @@ import { EmployeeEntity } from '@/entities/master/employee.entity';
 import { deleteCondition } from '@/utils/query/pick.query';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, UpdateResult } from 'typeorm';
 
 @Injectable()
 export class EmployeeRepository {
@@ -12,6 +12,15 @@ export class EmployeeRepository {
       @InjectRepository(EmployeeEntity)
       private readonly employeeRepository: Repository<EmployeeEntity>,
    ) {}
+
+   async findById(employeeId: number): Promise<EmployeeEntity> {
+      return this.employeeRepository.findOne({
+         where: {
+            employeeId: employeeId,
+            isDeleted: false,
+         },
+      });
+   }
 
    async findAll(query: GetEmployeeReqDto): Promise<{
       total: number;
@@ -113,5 +122,9 @@ export class EmployeeRepository {
       );
       if (updatedResult.affected > 0) return true;
       return false;
+   }
+
+   async updateEmployee(employee: EmployeeEntity): Promise<EmployeeEntity> {
+      return await this.employeeRepository.save(employee);
    }
 }

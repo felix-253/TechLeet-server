@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+   BadRequestException,
+   Injectable,
+   InternalServerErrorException,
+   NotFoundException,
+} from '@nestjs/common';
 import { CreateEmployeeDto } from './dto/request/create-entity-req.dto';
 import { EmployeeEntity } from '@/entities/master/employee.entity';
 import { PermissionRepository } from '@/repositories/permission.repository';
@@ -6,6 +11,7 @@ import { EmailService } from '@/utils/email/email.service';
 import { EmployeeRepository } from '@/repositories/employee.repository';
 import { GetEmployeeReqDto } from './dto/request/get-employee-req.dto';
 import { pickMapper } from '@/utils/query/pick.query';
+import { UpdateEmployeeDto } from './dto/request/update-employee-req.dto';
 
 @Injectable()
 export class EmployeeService {
@@ -19,26 +25,51 @@ export class EmployeeService {
       total: number;
       data: EmployeeEntity[];
    }> {
-      return await this.employeeRepository.findAll(dto);
+      try {
+         return await this.employeeRepository.findAll(dto);
+      } catch (error) {
+         throw new InternalServerErrorException(error);
+      }
    }
 
    async createEmployee(dto: CreateEmployeeDto): Promise<EmployeeEntity> {
-      const { permissions, positionId, positionTypeId, departmentId, ...employeeInfo } = dto;
-      const permissionEntityList =
-         await this.permissionRepository.findPermissionsByListId(permissions);
-      if (!permissionEntityList || permissionEntityList.length === 0) {
-         throw new NotFoundException('No valid permissions found for the provided IDs');
-      }
+      try {
+         const { permissions, ...employeeInfo } = dto;
+         const permissionEntityList =
+            await this.permissionRepository.findPermissionsByListId(permissions);
+         if (!permissionEntityList || permissionEntityList.length === 0) {
+            throw new NotFoundException('No valid permissions found for the provided IDs');
+         }
 
-      const newEmployee = await this.employeeRepository.createEmployee({
-         ...employeeInfo,
-         positionId: positionId,
-         positionTypeId: positionTypeId,
-         permissions: permissionEntityList,
-         departmentId: departmentId,
-      } as EmployeeEntity);
-      const OTP = Math.floor(100000 + Math.random() * 899999);
-      this.emailService.sendUserConfirmation(newEmployee, OTP.toString());
-      return newEmployee;
+         const newEmployee = await this.employeeRepository.createEmployee({
+            ...employeeInfo,
+            permissions: permissionEntityList,
+         } as EmployeeEntity);
+         const OTP = Math.floor(100000 + Math.random() * 899999);
+         this.emailService.sendUserConfirmation(newEmployee, OTP.toString());
+         return newEmployee;
+      } catch (error) {
+         throw new InternalServerErrorException(error);
+      }
+   }
+
+   async updateEmployee(dto: UpdateEmployeeDto): Promise<EmployeeEntity> {
+      try {
+         const { employeeId, permissions, ...dataUpdate } = dto;
+
+         const foundEmployee = await this.employeeRepository.findById(employeeId);
+         if (!foundEmployee) throw new NotFoundException('Not found employee');
+         const permissionEntityList =
+            await this.permissionRepository.findPermissionsByListId(permissions);
+         if (!permissionEntityList || permissionEntityList.length === 0) {
+            throw new NotFoundException('No valid permissions found for the provided IDs');
+         }
+         const updateResult = await this.employeeRepository.updateEmployee(
+            Object.assign(foundEmployee, ...permissions, dataUpdate),
+         );
+         return updateResult;
+      } catch (error) {
+         throw new InternalServerErrorException(error);
+      }
    }
 }

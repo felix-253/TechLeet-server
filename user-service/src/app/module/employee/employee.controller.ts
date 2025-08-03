@@ -1,11 +1,12 @@
 import { JwtAuthGuard } from '@/common/guard/jwt-auth.guard';
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiBody, ApiQuery } from '@nestjs/swagger';
-import { CreateEmployeeDto } from './dto/request/create-entity-req.dto';
-import { EmployeeService } from './employee.service';
-import { GetEmployeeReqDto } from './dto/request/get-employee-req.dto';
-import { EmployeeResponseDto } from './dto/response/employee-res.dto';
+import { Body, Controller, Get, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { plainToInstance } from 'class-transformer';
+import { CreateEmployeeDto } from './dto/request/create-entity-req.dto';
+import { GetEmployeeReqDto } from './dto/request/get-employee-req.dto';
+import { UpdateEmployeeDto } from './dto/request/update-employee-req.dto';
+import { EmployeeResponseDto } from './dto/response/employee-res.dto';
+import { EmployeeService } from './employee.service';
 
 @Controller('employee')
 export class EmployeeController {
@@ -43,15 +44,22 @@ export class EmployeeController {
       return result;
    }
 
-   // @UseGuards(JwtAuthGuard)
-   // @Post('')
-   // @ApiBearerAuth('token')
-   // @ApiBody({
-   //    description: 'Create new employee by role admin',
-   //    type: CreateEmployeeDto,
-   // })
-   // async updateEmployee(@Body() dto: CreateEmployeeDto): Promise<EmployeeResponseDto> {
-   //    const result = await this.EmployeeService.createEmployee(dto);
-   //    return result;
-   // }
+   @UseGuards(JwtAuthGuard)
+   @Put('')
+   @ApiBearerAuth('token')
+   @ApiBody({
+      description: 'Update new employee by role admin',
+      type: UpdateEmployeeDto,
+   })
+   async updateEmployee(@Body() dto: UpdateEmployeeDto): Promise<EmployeeResponseDto> {
+      const result = plainToInstance(
+         EmployeeResponseDto,
+         await this.EmployeeService.updateEmployee(dto),
+         {
+            excludeExtraneousValues: true,
+         },
+      );
+
+      return result;
+   }
 }

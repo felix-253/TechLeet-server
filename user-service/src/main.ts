@@ -36,7 +36,7 @@ async function bootstrap() {
 
    app.useGlobalFilters(new GlobalHttpExceptionFilter());
    app.useGlobalInterceptors(
-      // new SuccessResponseInterceptor(),
+      new SuccessResponseInterceptor(),
       new ClassSerializerInterceptor(app.get(Reflector)),
    );
    app.useGlobalPipes(new ValidationPipe({ transform: true }));
