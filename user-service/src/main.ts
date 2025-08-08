@@ -32,7 +32,9 @@ async function bootstrap() {
    });
 
    app.use(helmet());
-   app.enableCors();
+   app.enableCors({
+      origin: 'http://localhost:8080',
+   });
 
    app.useGlobalFilters(new GlobalHttpExceptionFilter());
    app.useGlobalInterceptors(
