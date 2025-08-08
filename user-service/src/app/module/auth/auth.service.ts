@@ -27,7 +27,7 @@ export class AuthService {
       if (!employee) {
          throw new NotFoundException('Employee not found or invalid credentials');
       }
-      
+
       const permissions = employee.permissions;
 
       const isAdmin = permissions.find(
@@ -35,9 +35,11 @@ export class AuthService {
       );
       await this.redisService.removeSet(REDIS_KEY_EMPLOYEE_PERMISSION + employee.employeeId);
       if (isAdmin) {
-         await this.redisService.setSet(REDIS_KEY_EMPLOYEE_PERMISSION + employee.employeeId, [
-            { permissionType: TYPE_PERMISSION_ENUM.FULL },
-         ]);
+         await this.redisService.setSet(
+            REDIS_KEY_EMPLOYEE_PERMISSION + employee.employeeId,
+            [{ permissionType: TYPE_PERMISSION_ENUM.FULL }],
+            60 * 60 * 24,
+         );
       } else {
          const employeePermissionArr: TYPE_EMPLOYEE_PERMISSION_REDIS[] = employee.permissions.map(
             (permission) => {
@@ -74,7 +76,6 @@ export class AuthService {
          employeeId: employee.employeeId,
       };
    }
-
 
    async createPassword(dto: CreatePassword): Promise<{ status: boolean }> {
       const { newPassword, url } = dto;
