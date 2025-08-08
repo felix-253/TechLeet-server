@@ -27,7 +27,7 @@ export class AuthService {
       if (!employee) {
          throw new NotFoundException('Employee not found or invalid credentials');
       }
-
+      
       const permissions = employee.permissions;
 
       const isAdmin = permissions.find(

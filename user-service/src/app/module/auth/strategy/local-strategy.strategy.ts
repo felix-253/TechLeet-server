@@ -17,7 +17,7 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
       if (!employee) {
          throw new NotFoundException('Wrong email or password');
       }
-      const isPasswordValid = bcrypt.compare(employee.password, password);
+      const isPasswordValid = await bcrypt.compare(employee.password, password);
       if (!isPasswordValid) throw new NotFoundException('Wrong email or password');
       return employee;
    }
