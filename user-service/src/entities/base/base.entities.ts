@@ -1,16 +1,60 @@
-import { Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Column, CreateDateColumn, UpdateDateColumn, DeleteDateColumn } from 'typeorm';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export class BaseEntity {
+export abstract class BaseEntity {
    @CreateDateColumn({
-      default: () => 'CURRENT_TIMESTAMP', // UTC
+      type: 'timestamp',
+      default: () => 'CURRENT_TIMESTAMP',
+      comment: 'Record creation timestamp'
    })
-   createdAt?: Date;
-   @UpdateDateColumn({
-      default: () => "CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh'",
-   })
-   updatedAt?: Date;
+   createdAt: Date;
 
-   @Column({ default: false })
-   isDeleted?: boolean;
+   @UpdateDateColumn({
+      type: 'timestamp',
+      default: () => 'CURRENT_TIMESTAMP',
+      onUpdate: 'CURRENT_TIMESTAMP',
+      comment: 'Record last update timestamp'
+   })
+   updatedAt: Date;
+
+   @DeleteDateColumn({
+      type: 'timestamp',
+      nullable: true,
+      comment: 'Soft delete timestamp'
+   })
+   deletedAt?: Date;
+
+   @Column({
+      type: 'int',
+      nullable: true,
+      comment: 'ID of user who created this record'
+   })
+   createdBy?: number;
+
+   @Column({
+      type: 'int',
+      nullable: true,
+      comment: 'ID of user who last updated this record'
+   })
+   updatedBy?: number;
+
+   @Column({
+      type: 'int',
+      nullable: true,
+      comment: 'ID of user who deleted this record'
+   })
+   deletedBy?: number;
+
+   @Column({
+      type: 'boolean',
+      default: true,
+      comment: 'Whether this record is active'
+   })
+   isActive: boolean;
+
+   @Column({
+      type: 'text',
+      nullable: true,
+      comment: 'Additional notes or comments'
+   })
+   notes?: string;
 }

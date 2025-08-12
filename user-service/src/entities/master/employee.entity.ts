@@ -1,47 +1,184 @@
-import { Column, Entity, JoinTable, ManyToMany, PrimaryGeneratedColumn } from 'typeorm';
+import {
+   Column,
+   Entity,
+   JoinTable,
+   ManyToMany,
+   PrimaryGeneratedColumn,
+   Index,
+   BeforeInsert,
+   BeforeUpdate
+} from 'typeorm';
 import { BaseEntity } from '../base/base.entities';
 import { PermissionEntity } from './permission.entity';
+import { IsEmail, IsPhoneNumber, Length, IsOptional, Min } from 'class-validator';
+import * as bcrypt from 'bcryptjs';
 
 @Entity('employee')
+@Index(['email'], { unique: true })
+@Index(['employeeCode'], { unique: true })
 export class EmployeeEntity extends BaseEntity {
-   @PrimaryGeneratedColumn('identity')
-   employeeId?: number;
+   @PrimaryGeneratedColumn('identity', {
+      comment: 'Unique identifier for the employee'
+   })
+   employeeId: number;
 
-   @Column({ nullable: true })
+   @Column({
+      type: 'varchar',
+      length: 20,
+      nullable: false,
+      unique: true,
+      comment: 'Unique employee code for identification'
+   })
+   employeeCode: string;
+
+   @Column({
+      type: 'varchar',
+      length: 50,
+      nullable: false,
+      comment: 'Employee first name'
+   })
+   @Length(2, 50, { message: 'First name must be between 2 and 50 characters' })
    firstName: string;
-   @Column({ nullable: true })
-   lastName: string;
-   @Column({ nullable: true })
-   address: string;
-   @Column({ nullable: true })
-   birthDate: Date;
-   @Column({ nullable: true, unique: true })
-   email: string;
-   @Column({ nullable: true })
-   password?: string;
-   @Column({ nullable: true })
-   gender: boolean;
-   @Column({ nullable: true })
-   startDate?: Date;
-   @Column({ type: 'boolean', default: true })
-   isActive?: boolean;
-   @Column({ nullable: true })
-   avatarUrl?: string;
-   @Column({ nullable: true })
-   phoneNumber: string;
-   @Column({ nullable: true })
-   baseSalary: number;
-   /**
-    * relationships
-    */
-   @Column({ nullable: true })
-   departmentId: number;
-   @Column({ nullable: true })
-   positionId: number;
-   @Column({ nullable: true })
-   positionTypeId: number;
 
-   @ManyToMany(() => PermissionEntity, (permission) => permission.permissionId)
+   @Column({
+      type: 'varchar',
+      length: 50,
+      nullable: false,
+      comment: 'Employee last name'
+   })
+   @Length(2, 50, { message: 'Last name must be between 2 and 50 characters' })
+   lastName: string;
+
+   @Column({
+      type: 'text',
+      nullable: true,
+      comment: 'Employee residential address'
+   })
+   address?: string;
+
+   @Column({
+      type: 'date',
+      nullable: true,
+      comment: 'Employee date of birth'
+   })
+   birthDate?: Date;
+
+   @Column({
+      type: 'varchar',
+      length: 100,
+      nullable: false,
+      unique: true,
+      comment: 'Employee email address'
+   })
+   @IsEmail({}, { message: 'Please provide a valid email address' })
+   email: string;
+
+   @Column({
+      type: 'varchar',
+      length: 255,
+      nullable: true,
+      select: false,
+      comment: 'Encrypted password for authentication'
+   })
+   password?: string;
+
+   @Column({
+      type: 'boolean',
+      nullable: true,
+      comment: 'Employee gender (true=male, false=female)'
+   })
+   gender?: boolean;
+
+   @Column({
+      type: 'date',
+      nullable: true,
+      comment: 'Employee start date'
+   })
+   startDate?: Date;
+
+   @Column({
+      type: 'date',
+      nullable: true,
+      comment: 'Date when employee was confirmed'
+   })
+   confirmationDate?: Date;
+
+   @Column({
+      type: 'varchar',
+      length: 255,
+      nullable: true,
+      comment: 'URL to employee avatar image'
+   })
+   avatarUrl?: string;
+
+   @Column({
+      type: 'varchar',
+      length: 20,
+      nullable: true,
+      comment: 'Employee phone number'
+   })
+   @IsOptional()
+   @IsPhoneNumber(null, { message: 'Please provide a valid phone number' })
+   phoneNumber?: string;
+
+   @Column({
+      type: 'decimal',
+      precision: 10,
+      scale: 2,
+      nullable: true,
+      comment: 'Employee base salary'
+   })
+   @IsOptional()
+   @Min(0, { message: 'Salary must be a positive number' })
+   baseSalary?: number;
+   // Foreign Keys (references to Company Service entities)
+   @Column({
+      type: 'int',
+      nullable: true,
+      comment: 'Reference to department (Company Service)'
+   })
+   departmentId?: number;
+
+   @Column({
+      type: 'int',
+      nullable: true,
+      comment: 'Reference to position (Company Service)'
+   })
+   positionId?: number;
+
+   @Column({
+      type: 'int',
+      nullable: true,
+      comment: 'Reference to manager employee'
+   })
+   managerId?: number;
+
+   @Column({
+      type: 'varchar',
+      length: 20,
+      nullable: true,
+      comment: 'Employee status (active, inactive, terminated, etc.)'
+   })
+   status?: string;
+
+   @Column({
+      type: 'date',
+      nullable: true,
+      comment: 'Date when employee was terminated'
+   })
+   terminationDate?: Date;
+
+   @Column({
+      type: 'text',
+      nullable: true,
+      comment: 'Reason for termination'
+   })
+   terminationReason?: string;
+
+   // Relationships
+   @ManyToMany(() => PermissionEntity, permission => permission.employees, {
+      cascade: ['insert', 'update']
+   })
    @JoinTable({
       name: 'employee_permissions',
       joinColumn: {
@@ -54,4 +191,37 @@ export class EmployeeEntity extends BaseEntity {
       },
    })
    permissions?: PermissionEntity[];
+
+   // Computed properties
+   get fullName(): string {
+      return `${this.firstName} ${this.lastName}`;
+   }
+
+   get age(): number | null {
+      if (!this.birthDate) return null;
+      const today = new Date();
+      const birthDate = new Date(this.birthDate);
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+         age--;
+      }
+      return age;
+   }
+
+   // Hooks for password hashing
+   @BeforeInsert()
+   @BeforeUpdate()
+   async hashPassword() {
+      if (this.password) {
+         const saltRounds = 12;
+         this.password = await bcrypt.hash(this.password, saltRounds);
+      }
+   }
+
+   // Method to verify password
+   async verifyPassword(plainPassword: string): Promise<boolean> {
+      if (!this.password) return false;
+      return bcrypt.compare(plainPassword, this.password);
+   }
 }

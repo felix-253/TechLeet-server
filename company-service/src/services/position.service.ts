@@ -27,9 +27,16 @@ export class PositionService {
             throw new BadRequestException('Position name already exists');
          }
 
+         // Validate salary range
+         if (createPositionDto.minSalary && createPositionDto.maxSalary) {
+            if (createPositionDto.minSalary > createPositionDto.maxSalary) {
+               throw new BadRequestException('Minimum salary cannot be greater than maximum salary');
+            }
+         }
+
          const position = this.positionRepository.create(createPositionDto);
          const savedPosition = await this.positionRepository.save(position);
-         
+
          return this.mapToResponseDto(savedPosition);
       } catch (error) {
          if (error instanceof BadRequestException) {
@@ -40,18 +47,49 @@ export class PositionService {
    }
 
    async findAll(query: GetPositionsQueryDto): Promise<{ data: PositionResponseDto[]; total: number }> {
-      const { page = 0, limit = 10, keyword, sortBy = 'positionId', sortOrder = 'ASC' } = query;
+      const {
+         page = 0,
+         limit = 10,
+         keyword,
+         positionTypeId,
+         minLevel,
+         maxLevel,
+         sortBy = 'positionId',
+         sortOrder = 'ASC'
+      } = query;
 
       const findOptions: FindManyOptions<PositionEntity> = {
          skip: page * limit,
          take: limit,
          order: { [sortBy]: sortOrder },
+         relations: ['positionType'],
       };
 
+      // Build where conditions
+      const whereConditions: any = {};
+
       if (keyword) {
-         findOptions.where = {
-            positionName: Like(`%${keyword}%`),
-         };
+         whereConditions.positionName = Like(`%${keyword}%`);
+      }
+
+      if (positionTypeId) {
+         whereConditions.positionTypeId = positionTypeId;
+      }
+
+      if (minLevel) {
+         whereConditions.level = { $gte: minLevel };
+      }
+
+      if (maxLevel) {
+         if (whereConditions.level) {
+            whereConditions.level = { ...whereConditions.level, $lte: maxLevel };
+         } else {
+            whereConditions.level = { $lte: maxLevel };
+         }
+      }
+
+      if (Object.keys(whereConditions).length > 0) {
+         findOptions.where = whereConditions;
       }
 
       const [positions, total] = await this.positionRepository.findAndCount(findOptions);
@@ -65,6 +103,7 @@ export class PositionService {
    async findOne(id: number): Promise<PositionResponseDto> {
       const position = await this.positionRepository.findOne({
          where: { positionId: id },
+         relations: ['positionType'],
       });
 
       if (!position) {
@@ -77,6 +116,7 @@ export class PositionService {
    async update(id: number, updatePositionDto: UpdatePositionDto): Promise<PositionResponseDto> {
       const position = await this.positionRepository.findOne({
          where: { positionId: id },
+         relations: ['positionType'],
       });
 
       if (!position) {
@@ -92,6 +132,14 @@ export class PositionService {
          if (existingPosition) {
             throw new BadRequestException('Position name already exists');
          }
+      }
+
+      // Validate salary range if both are provided
+      const newMinSalary = updatePositionDto.minSalary ?? position.minSalary;
+      const newMaxSalary = updatePositionDto.maxSalary ?? position.maxSalary;
+
+      if (newMinSalary && newMaxSalary && newMinSalary > newMaxSalary) {
+         throw new BadRequestException('Minimum salary cannot be greater than maximum salary');
       }
 
       Object.assign(position, updatePositionDto);
@@ -112,10 +160,81 @@ export class PositionService {
       await this.positionRepository.remove(position);
    }
 
+   async findByType(positionTypeId: number): Promise<PositionResponseDto[]> {
+      const positions = await this.positionRepository.find({
+         where: { positionTypeId },
+         relations: ['positionType'],
+         order: { positionName: 'ASC' },
+      });
+
+      return positions.map(pos => this.mapToResponseDto(pos));
+   }
+
+   async findByLevel(level: number): Promise<PositionResponseDto[]> {
+      const positions = await this.positionRepository.find({
+         where: { level },
+         relations: ['positionType'],
+         order: { positionName: 'ASC' },
+      });
+
+      return positions.map(pos => this.mapToResponseDto(pos));
+   }
+
+   async findBySalaryRange(minSalary?: number, maxSalary?: number): Promise<PositionResponseDto[]> {
+      const queryBuilder = this.positionRepository.createQueryBuilder('position')
+         .leftJoinAndSelect('position.positionType', 'positionType');
+
+      if (minSalary) {
+         queryBuilder.andWhere('position.maxSalary >= :minSalary', { minSalary });
+      }
+
+      if (maxSalary) {
+         queryBuilder.andWhere('position.minSalary <= :maxSalary', { maxSalary });
+      }
+
+      queryBuilder.orderBy('position.positionName', 'ASC');
+
+      const positions = await queryBuilder.getMany();
+      return positions.map(pos => this.mapToResponseDto(pos));
+   }
+
    private mapToResponseDto(position: PositionEntity): PositionResponseDto {
+      const levelDisplayMap = {
+         1: 'Entry Level',
+         2: 'Junior Level',
+         3: 'Senior Level',
+         4: 'Lead Level',
+         5: 'Manager Level',
+      };
+
+      const formatSalary = (amount: number): string => {
+         return new Intl.NumberFormat('vi-VN').format(amount);
+      };
+
+      const getSalaryRange = (): string | undefined => {
+         if (position.minSalary && position.maxSalary) {
+            return `${formatSalary(position.minSalary)} - ${formatSalary(position.maxSalary)} VND`;
+         } else if (position.minSalary) {
+            return `From ${formatSalary(position.minSalary)} VND`;
+         } else if (position.maxSalary) {
+            return `Up to ${formatSalary(position.maxSalary)} VND`;
+         }
+         return undefined;
+      };
+
       return {
          positionId: position.positionId,
          positionName: position.positionName,
+         description: position.description,
+         minSalary: position.minSalary,
+         maxSalary: position.maxSalary,
+         level: position.level,
+         positionCode: position.positionCode,
+         requirements: position.requirements,
+         positionTypeId: position.positionTypeId,
+         positionTypeName: position.positionType?.positionTypeName,
+         salaryRange: getSalaryRange(),
+         levelDisplay: position.level ? levelDisplayMap[position.level] : undefined,
       };
    }
 }

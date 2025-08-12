@@ -10,12 +10,14 @@ import {
    ParseIntPipe,
    HttpStatus,
    HttpCode,
+   BadRequestException,
 } from '@nestjs/common';
 import {
    ApiTags,
    ApiOperation,
    ApiResponse,
    ApiParam,
+   ApiQuery,
    ApiBearerAuth,
 } from '@nestjs/swagger';
 import { PositionService } from '../services/position.service';
@@ -51,9 +53,9 @@ export class PositionController {
    }
 
    @Get()
-   @ApiOperation({ 
+   @ApiOperation({
       summary: 'Get all positions',
-      description: 'Retrieves a paginated list of positions with optional search and sorting'
+      description: 'Retrieves a paginated list of positions with optional search, filtering, and sorting'
    })
    @ApiResponse({
       status: 200,
@@ -71,6 +73,75 @@ export class PositionController {
    })
    async findAll(@Query() query: GetPositionsQueryDto): Promise<{ data: PositionResponseDto[]; total: number }> {
       return this.positionService.findAll(query);
+   }
+
+   @Get('by-type/:positionTypeId')
+   @ApiOperation({
+      summary: 'Get positions by type',
+      description: 'Retrieves all positions of a specific type'
+   })
+   @ApiParam({ name: 'positionTypeId', description: 'Position Type ID', type: 'number' })
+   @ApiResponse({
+      status: 200,
+      description: 'Positions retrieved successfully',
+      type: [PositionResponseDto],
+   })
+   async findByType(@Param('positionTypeId', ParseIntPipe) positionTypeId: number): Promise<PositionResponseDto[]> {
+      return this.positionService.findByType(positionTypeId);
+   }
+
+   @Get('by-level/:level')
+   @ApiOperation({
+      summary: 'Get positions by level',
+      description: 'Retrieves all positions of a specific level'
+   })
+   @ApiParam({
+      name: 'level',
+      description: 'Position Level (1=Entry, 2=Junior, 3=Senior, 4=Lead, 5=Manager)',
+      type: 'number',
+      enum: [1, 2, 3, 4, 5]
+   })
+   @ApiResponse({
+      status: 200,
+      description: 'Positions retrieved successfully',
+      type: [PositionResponseDto],
+   })
+   async findByLevel(@Param('level', ParseIntPipe) level: number): Promise<PositionResponseDto[]> {
+      if (level < 1 || level > 5) {
+         throw new BadRequestException('Position level must be between 1 and 5');
+      }
+      return this.positionService.findByLevel(level);
+   }
+
+   @Get('by-salary-range')
+   @ApiOperation({
+      summary: 'Get positions by salary range',
+      description: 'Retrieves positions within a specified salary range'
+   })
+   @ApiQuery({
+      name: 'minSalary',
+      description: 'Minimum salary (VND)',
+      required: false,
+      type: 'number',
+      example: 20000000
+   })
+   @ApiQuery({
+      name: 'maxSalary',
+      description: 'Maximum salary (VND)',
+      required: false,
+      type: 'number',
+      example: 50000000
+   })
+   @ApiResponse({
+      status: 200,
+      description: 'Positions retrieved successfully',
+      type: [PositionResponseDto],
+   })
+   async findBySalaryRange(
+      @Query('minSalary', new ParseIntPipe({ optional: true })) minSalary?: number,
+      @Query('maxSalary', new ParseIntPipe({ optional: true })) maxSalary?: number,
+   ): Promise<PositionResponseDto[]> {
+      return this.positionService.findBySalaryRange(minSalary, maxSalary);
    }
 
    @Get(':id')
