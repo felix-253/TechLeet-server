@@ -11,9 +11,10 @@ async function bootstrap() {
    const configService = app.get(ConfigService);
    const port = configService.get<number>('PORT');
    const hostname = configService.get<string>('HOST');
+   app.setGlobalPrefix('api');
    const config = new DocumentBuilder()
-      .setTitle('TechLeet API')
-      .setDescription('The TechLeet API description')
+      .setTitle('TechLeet User Service API')
+      .setDescription('The TechLeet User Service API description')
       .setVersion('1.0')
 
       .addBearerAuth(
@@ -28,12 +29,11 @@ async function bootstrap() {
    const document = SwaggerModule.createDocument(app, config);
    SwaggerModule.setup('api', app, document, {
       swaggerOptions: { persistAuthorization: true },
-      jsonDocumentUrl: 'swagger/json',
+      jsonDocumentUrl: 'api/swagger/json',
    });
-
    app.use(helmet());
    app.enableCors({
-      origin: 'http://localhost:8080',
+      origin: 'http://localhost:3030',
       credentials: true,
    });
 

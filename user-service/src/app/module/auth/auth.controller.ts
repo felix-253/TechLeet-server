@@ -1,6 +1,7 @@
 import { LocalAuthGuard } from '@/common/guard/local-auth.guard';
+import { JwtAuthGuard } from '@/common/guard/jwt-auth.guard';
 import { Body, Controller, Post, Request, UseGuards } from '@nestjs/common';
-import { ApiBody, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { CreatePassword } from './dto/request/create-password-req.dto';
 
@@ -40,5 +41,25 @@ export class AuthController {
    })
    async createPassword(@Body() dto: CreatePassword) {
       return await this.authService.createPassword(dto);
+   }
+
+   @Post('/validate-token')
+   @UseGuards(JwtAuthGuard)
+   @ApiBearerAuth('token')
+   @ApiOperation({
+      summary: 'Validate JWT token',
+      description: 'Validates JWT token and returns user information for API Gateway',
+   })
+   @ApiResponse({
+      status: 200,
+      description: 'Token is valid, returns user information',
+   })
+   @ApiResponse({
+      status: 401,
+      description: 'Token is invalid or expired',
+   })
+   async validateToken(@Request() req): Promise<any> {
+      const token = req.headers.authorization?.replace('Bearer ', '');
+      return await this.authService.validateTokenForGateway(token);
    }
 }

@@ -94,4 +94,43 @@ export class AuthService {
       );
       return { status: isUpdated };
    }
+
+   async validateTokenForGateway(token: string) {
+      try {
+         // Verify JWT token
+         const payload = this.jwtService.verify(token);
+
+         if (!payload.employeeId) {
+            throw new BadRequestException('Invalid token payload');
+         }
+
+         // Get permissions from Redis
+         const permissions = await this.redisService.getAllSet(
+            REDIS_KEY_EMPLOYEE_PERMISSION + payload.employeeId,
+         );
+
+         if (!permissions || permissions.length === 0) {
+            throw new BadRequestException('Permission not found');
+         }
+
+         // Check if user is admin
+         const isAdmin = permissions.some(
+            (permission: any) => permission.permissionType === TYPE_PERMISSION_ENUM.FULL,
+         );
+
+         return {
+            employeeId: payload.employeeId,
+            permissions,
+            isAdmin,
+         };
+      } catch (error: any) {
+         if (error.name === 'JsonWebTokenError') {
+            throw new BadRequestException('Invalid token');
+         }
+         if (error.name === 'TokenExpiredError') {
+            throw new BadRequestException('Token expired');
+         }
+         throw error;
+      }
+   }
 }
