@@ -15,7 +15,7 @@ export class AuthService {
    ) {
       this.userServiceUrl = this.configService.get<string>(
          'USER_SERVICE_URL',
-         'http://localhost:3000',
+         'http://localhost:3031',
       );
    }
 
@@ -23,7 +23,7 @@ export class AuthService {
       try {
          const response = await firstValueFrom(
             this.httpService.post(
-               `${this.userServiceUrl}/auth/validate-token`,
+               `${this.userServiceUrl}/api/auth/validate-token`,
                {},
                {
                   headers: {

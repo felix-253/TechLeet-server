@@ -17,12 +17,17 @@ export class AuthMiddleware implements NestMiddleware {
 
    // Paths that don't require authentication
    private readonly publicPaths = [
-      '/api/user/auth/login',
-      '/api/user/auth/create-password',
+      '/api/v1/user-service/auth/login',
+      '/api/v1/user-service/auth/create-password',
       '/health',
+      '/api',
       '/swagger',
       '/swagger/json',
       '/api-docs',
+      // Health checks for all services
+      '/api/v1/user-service/health',
+      '/api/v1/company-service/health',
+      '/api/v1/recruitment-service/health',
    ];
 
    constructor(private readonly authService: AuthService) {}

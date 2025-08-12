@@ -2,8 +2,16 @@
   "name": "techleet-system",
   "private": true,
   "scripts": {
-    "dev": "concurrently -n user,company,recruitment -c green,cyan,blue  \"pnpm --filter user-service start:dev\" \"pnpm --filter company-service start:dev\" \"pnpm --filter recruitment-service start:dev\"",
-    "install:all": "pnpm install"
+    "dev": "concurrently -n gateway,user,company,recruitment -c magenta,green,cyan,blue \"pnpm --filter api-gateway start:dev\" \"pnpm --filter user-service start:dev\" \"pnpm --filter company-service start:dev\" \"pnpm --filter recruitment-service start:dev\"",
+    "dev:gateway": "pnpm --filter api-gateway start:dev",
+    "dev:services": "concurrently -n user,company,recruitment -c green,cyan,blue \"pnpm --filter user-service start:dev\" \"pnpm --filter company-service start:dev\" \"pnpm --filter recruitment-service start:dev\"",
+    "dev:user": "pnpm --filter user-service start:dev",
+    "dev:company": "pnpm --filter company-service start:dev",
+    "dev:recruitment": "pnpm --filter recruitment-service start:dev",
+    "install:all": "pnpm install",
+    "build:all": "pnpm --filter user-service build && pnpm --filter company-service build && pnpm --filter recruitment-service build && pnpm --filter api-gateway build",
+    "test:ports": "node test-ports.js",
+    "start:sequential": "./start-services.sh"
   },
   "devDependencies": {
     "concurrently": "^8.2.0"

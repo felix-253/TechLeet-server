@@ -1,7 +1,5 @@
-import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { firstValueFrom } from 'rxjs';
 import { MicroserviceConfig } from '../interfaces/microservice.interface';
 
 @Injectable()
@@ -11,7 +9,6 @@ export class MicroserviceConfigService {
 
    constructor(
       private readonly configService: ConfigService,
-      private readonly httpService: HttpService,
    ) {
       this.microservices = this.initializeMicroservices();
    }
@@ -20,10 +17,24 @@ export class MicroserviceConfigService {
       return [
          {
             name: 'user-service',
-            url: this.configService.get<string>('USER_SERVICE_URL') || 'http://localhost:3000',
-            swaggerPath: '/swagger/json',
+            url: this.configService.get<string>('USER_SERVICE_URL') || 'http://localhost:3031',
+            swaggerPath: '/api/swagger/json',
             prefix: 'user-service',
-            healthCheck: '/health',
+            healthCheck: '/api/health',
+         },
+         {
+            name: 'company-service',
+            url: this.configService.get<string>('COMPANY_SERVICE_URL') || 'http://localhost:3032',
+            swaggerPath: '/api/swagger/json',
+            prefix: 'company-service',
+            healthCheck: '/api/health',
+         },
+         {
+            name: 'recruitment-service',
+            url: this.configService.get<string>('RECRUITMENT_SERVICE_URL') || 'http://localhost:3033',
+            swaggerPath: '/api/swagger/json',
+            prefix: 'recruitment-service',
+            healthCheck: '/api/health',
          },
       ];
    }

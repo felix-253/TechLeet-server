@@ -5,9 +5,15 @@ import { ConfigAppsModule } from './config/config.module';
 // Services
 import { MicroserviceConfigService } from './services/microservice-config.service';
 import { SwaggerAggregatorService } from './services/swagger-aggregator.service';
+import { AuthService } from './services/auth.service';
 
 // Middleware
 import { LoggerMiddleware } from './middleware/logger.middleware';
+import { AuthMiddleware } from './middleware/auth.middleware';
+
+// Controllers
+import { SwaggerController } from './controllers/swagger.controller';
+import { HealthController } from './controllers/health.controller';
 
 @Module({
    imports: [
@@ -17,11 +23,15 @@ import { LoggerMiddleware } from './middleware/logger.middleware';
          maxRedirects: 5,
       }),
    ],
-   controllers: [],
-   providers: [MicroserviceConfigService, SwaggerAggregatorService],
+   controllers: [SwaggerController, HealthController],
+   providers: [MicroserviceConfigService, SwaggerAggregatorService, AuthService],
 })
 export class AppModule implements NestModule {
    configure(consumer: MiddlewareConsumer) {
-      consumer.apply(LoggerMiddleware).forRoutes('*');
+      consumer
+         .apply(LoggerMiddleware)
+         .forRoutes('*')
+         .apply(AuthMiddleware)
+         .forRoutes('*');
    }
 }
