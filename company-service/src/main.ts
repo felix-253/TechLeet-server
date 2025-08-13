@@ -15,7 +15,9 @@ async function bootstrap() {
 
    const config = new DocumentBuilder()
       .setTitle('TechLeet Company Service API')
-      .setDescription('API for managing company departments, positions, and organizational structure')
+      .setDescription(
+         'API for managing company departments, positions, and organizational structure',
+      )
       .setVersion('1.0')
       .addServer(`http://${hostname}:${port}`, 'Company Service')
       .addBearerAuth(
@@ -36,13 +38,11 @@ async function bootstrap() {
 
    app.use(helmet());
    app.enableCors({
-      origin: ['http://localhost:3000', 'http://localhost:3030'],
+      origin: ['http://localhost:3000', 'http://0.0.0.0:3030'],
       credentials: true,
    });
 
-   app.useGlobalInterceptors(
-      new ClassSerializerInterceptor(app.get(Reflector)),
-   );
+   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
    app.useGlobalPipes(new ValidationPipe({ transform: true }));
 
    await app.listen(port, hostname, () => {
