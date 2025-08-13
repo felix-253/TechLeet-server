@@ -17,6 +17,7 @@ async function bootstrap() {
       .setTitle('TechLeet Company Service API')
       .setDescription('API for managing company departments, positions, and organizational structure')
       .setVersion('1.0')
+      .addServer(`http://${hostname}:${port}`, 'Company Service')
       .addBearerAuth(
          {
             type: 'http',

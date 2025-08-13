@@ -28,20 +28,21 @@ export class AuthService {
          throw new NotFoundException('Employee not found or invalid credentials');
       }
 
-      const permissions = employee.permissions;
+      const permissions = employee.permissions || [];
 
       const isAdmin = permissions.find(
          (permission) => permission.permissionType == TYPE_PERMISSION_ENUM.FULL,
       );
       await this.redisService.removeSet(REDIS_KEY_EMPLOYEE_PERMISSION + employee.employeeId);
+
       if (isAdmin) {
          await this.redisService.setSet(
             REDIS_KEY_EMPLOYEE_PERMISSION + employee.employeeId,
             [{ permissionType: TYPE_PERMISSION_ENUM.FULL }],
             60 * 60 * 24,
          );
-      } else {
-         const employeePermissionArr: TYPE_EMPLOYEE_PERMISSION_REDIS[] = employee.permissions.map(
+      } else if (permissions.length > 0) {
+         const employeePermissionArr: TYPE_EMPLOYEE_PERMISSION_REDIS[] = permissions.map(
             (permission) => {
                return {
                   departmentId: permission.departmentId,
@@ -51,9 +52,18 @@ export class AuthService {
             },
          );
 
-         this.redisService.setSet(
+         await this.redisService.setSet(
             REDIS_KEY_EMPLOYEE_PERMISSION + employee.employeeId,
             employeePermissionArr,
+         );
+      } else {
+         // Employee has no permissions - set a default empty permission or handle appropriately
+         console.warn(`Employee ${employee.employeeId} has no permissions assigned`);
+         // Optionally set a default permission or leave Redis key empty
+         await this.redisService.setSet(
+            REDIS_KEY_EMPLOYEE_PERMISSION + employee.employeeId,
+            [{ permissionType: TYPE_PERMISSION_ENUM.VIEW, departmentId: null, headquarterId: null }],
+            60 * 60 * 24,
          );
       }
 
@@ -70,9 +80,9 @@ export class AuthService {
             expiresIn: process.env.JWT_REFRESH_TOKEN_TIME,
          }),
          email: employee.email,
-         fullName: employee.firstName + ' ' + employee.lastName,
-         phoneNumber: employee.phoneNumber,
-         avatarUrl: employee.avatarUrl,
+         fullName: `${employee.firstName || ''} ${employee.lastName || ''}`.trim(),
+         phoneNumber: employee.phoneNumber || null,
+         avatarUrl: employee.avatarUrl || null,
          employeeId: employee.employeeId,
       };
    }

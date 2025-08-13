@@ -1,5 +1,6 @@
 import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { SwaggerDocument } from '../interfaces/microservice.interface';
 import { MicroserviceConfigService } from './microservice-config.service';
@@ -11,6 +12,7 @@ export class SwaggerAggregatorService {
    constructor(
       private readonly httpService: HttpService,
       private readonly microserviceConfigService: MicroserviceConfigService,
+      private readonly configService: ConfigService,
    ) {}
 
    async getAggregatedSwaggerDocument(): Promise<SwaggerDocument> {
@@ -83,7 +85,7 @@ export class SwaggerAggregatorService {
          },
          servers: [
             {
-               url: 'http://localhost:3030',
+               url: `http://${this.configService.get('HOSTNAME', 'localhost')}:${this.configService.get('PORT', 3030)}`,
                description: 'API Gateway',
             },
          ],

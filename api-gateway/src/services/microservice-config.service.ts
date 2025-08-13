@@ -19,22 +19,22 @@ export class MicroserviceConfigService {
             name: 'user-service',
             url: this.configService.get<string>('USER_SERVICE_URL') || 'http://localhost:3031',
             swaggerPath: '/api/swagger/json',
-            prefix: 'user-service',
-            healthCheck: '/api/health',
+            prefix: '/api/v1/user-service',
+            healthCheck: '/health',
          },
          {
             name: 'company-service',
             url: this.configService.get<string>('COMPANY_SERVICE_URL') || 'http://localhost:3032',
             swaggerPath: '/api/swagger/json',
-            prefix: 'company-service',
-            healthCheck: '/api/health',
+            prefix: '/api/v1/company-service',
+            healthCheck: '/health',
          },
          {
             name: 'recruitment-service',
             url: this.configService.get<string>('RECRUITMENT_SERVICE_URL') || 'http://localhost:3033',
             swaggerPath: '/api/swagger/json',
-            prefix: 'recruitment-service',
-            healthCheck: '/api/health',
+            prefix: '/api/v1/recruitment-service',
+            healthCheck: '/health',
          },
       ];
    }
@@ -43,4 +43,6 @@ export class MicroserviceConfigService {
       this.logger.log('Getting microservices configuration');
       return this.microservices;
    }
+
+
 }

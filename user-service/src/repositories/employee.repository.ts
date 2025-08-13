@@ -97,11 +97,28 @@ export class EmployeeRepository {
    }
 
    async employeeLogin(email: string): Promise<EmployeeEntity | null> {
-      const employee = this.employeeRepository.findOne({
+      const employee = await this.employeeRepository.findOne({
          where: {
             email: email,
          },
          relations: ['permissions'],
+         select: {
+            employeeId: true,
+            employeeCode: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            password: true, // Explicitly select password for login
+            phoneNumber: true,
+            avatarUrl: true,
+            address: true,
+            birthDate: true,
+            gender: true,
+            startDate: true,
+            confirmationDate: true,
+            createdAt: true,
+            updatedAt: true,
+         },
       });
       return employee;
    }

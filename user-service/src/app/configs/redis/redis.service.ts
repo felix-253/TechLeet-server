@@ -107,6 +107,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     * @param data
     */
    async setSet<T>(key: string, data: T[], ttlInSeconds: number = 5 * 60): Promise<void> {
+      if (data.length === 0) {
+         console.warn(`Attempting to set empty Redis set for key: ${key}`);
+         return; // Don't create empty sets
+      }
       await this.client.sadd(key, ...data.map((item) => JSON.stringify(item)));
       await this.client.expire(key, ttlInSeconds);
    }

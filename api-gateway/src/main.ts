@@ -95,7 +95,11 @@ async function bootstrap() {
       const proxy = createProxyMiddleware({
          target,
          changeOrigin: true,
-         pathRewrite: (path: string) => path.replace(`/api/v1/${serviceName}`, '/api'),
+         pathRewrite: (path: string) => {
+            const rewritten = `/api${path}`;
+            console.log(`[${serviceName.toUpperCase()}] Path rewrite: ${path} -> ${rewritten}`);
+            return rewritten;
+         },
          logger: {
             info: (...args: any[]) => console.log(chalk.green(`[${serviceName.toUpperCase()}]`), ...args),
             warn: (...args: any[]) => console.warn(chalk.yellow(`[${serviceName.toUpperCase()}]`), ...args),
