@@ -15,8 +15,8 @@ export function pickMapper<T, K extends keyof T>(
    );
 }
 
-export const deleteCondition = (qb, alias, isDeleted = false) => {
-   qb.andWhere(`${alias}.isDeleted = :isDeleted`, {
-      isDeleted,
-   });
+export const deleteCondition = (qb, alias, includeDeleted = false) => {
+   if (!includeDeleted) {
+      qb.andWhere(`${alias}.deletedAt IS NULL`);
+   }
 };

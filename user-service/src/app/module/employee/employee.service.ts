@@ -83,4 +83,22 @@ export class EmployeeService {
          throw new InternalServerErrorException(error);
       }
    }
+
+   async generateMissingEmployeeCodes(): Promise<{ updated: number }> {
+      try {
+         const updated = await this.employeeRepository.generateMissingEmployeeCodes();
+         return { updated };
+      } catch (error) {
+         throw new InternalServerErrorException(error);
+      }
+   }
+
+   async generateMissingPermissionNames(): Promise<{ updated: number }> {
+      try {
+         const updated = await this.permissionRepository.generateMissingPermissionNames();
+         return { updated };
+      } catch (error) {
+         throw new InternalServerErrorException(error);
+      }
+   }
 }

@@ -17,8 +17,8 @@ export class EmployeeRepository {
       return this.employeeRepository.findOne({
          where: {
             employeeId: employeeId,
-            isDeleted: false,
          },
+         withDeleted: false,
       });
    }
 
@@ -126,5 +126,39 @@ export class EmployeeRepository {
 
    async updateEmployee(employee: EmployeeEntity): Promise<EmployeeEntity> {
       return await this.employeeRepository.save(employee);
+   }
+
+   async generateMissingEmployeeCodes(): Promise<number> {
+      const employeesWithoutCode = await this.employeeRepository.find({
+         where: { employeeCode: null },
+      });
+
+      let updated = 0;
+      for (const employee of employeesWithoutCode) {
+         const year = new Date().getFullYear().toString().slice(-2);
+         let employeeCode: string;
+         let isUnique = false;
+         let attempts = 0;
+
+         // Try to generate a unique employee code
+         while (!isUnique && attempts < 100) {
+            const randomNum = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+            employeeCode = `EMP${year}${randomNum}`;
+
+            const existing = await this.employeeRepository.findOne({
+               where: { employeeCode },
+            });
+
+            if (!existing) {
+               isUnique = true;
+               employee.employeeCode = employeeCode;
+               await this.employeeRepository.save(employee);
+               updated++;
+            }
+            attempts++;
+         }
+      }
+
+      return updated;
    }
 }

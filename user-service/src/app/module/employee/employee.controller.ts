@@ -9,7 +9,7 @@ import {
    UseGuards,
    UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiBody } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiOperation } from '@nestjs/swagger';
 import { plainToInstance } from 'class-transformer';
 import { CreateEmployeeDto } from './dto/request/create-entity-req.dto';
 import { GetEmployeeReqDto } from './dto/request/get-employee-req.dto';
@@ -76,5 +76,21 @@ export class EmployeeController {
       );
 
       return result;
+   }
+
+   @UseGuards(JwtAuthGuard)
+   @Post('generate-employee-codes')
+   @ApiBearerAuth('token')
+   @ApiOperation({ summary: 'Generate employee codes for existing employees without codes' })
+   async generateMissingEmployeeCodes(): Promise<{ updated: number }> {
+      return await this.EmployeeService.generateMissingEmployeeCodes();
+   }
+
+   @UseGuards(JwtAuthGuard)
+   @Post('generate-permission-names')
+   @ApiBearerAuth('token')
+   @ApiOperation({ summary: 'Generate permission names for existing permissions without names' })
+   async generateMissingPermissionNames(): Promise<{ updated: number }> {
+      return await this.EmployeeService.generateMissingPermissionNames();
    }
 }

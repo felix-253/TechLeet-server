@@ -1,4 +1,4 @@
-import { Column, Entity, PrimaryGeneratedColumn, ManyToMany, Index } from 'typeorm';
+import { Column, Entity, PrimaryGeneratedColumn, ManyToMany, Index, BeforeInsert } from 'typeorm';
 import { BaseEntity } from '../base/base.entities';
 import { TYPE_PERMISSION_ENUM } from './enum/permission.enum';
 import { EmployeeEntity } from './employee.entity';
@@ -14,15 +14,16 @@ export class PermissionEntity extends BaseEntity {
    @Column({
       type: 'varchar',
       length: 100,
-      nullable: false,
+      nullable: true,
       unique: true,
       comment: 'Name of the permission'
    })
-   permissionName: string;
+   permissionName?: string;
 
    @Column({
       type: 'enum',
       enum: TYPE_PERMISSION_ENUM,
+      default: TYPE_PERMISSION_ENUM.VIEW,
       nullable: false,
       comment: 'Type of permission'
    })
@@ -77,4 +78,41 @@ export class PermissionEntity extends BaseEntity {
    // Relationships
    @ManyToMany(() => EmployeeEntity, employee => employee.permissions)
    employees: EmployeeEntity[];
+
+   // Hooks
+   @BeforeInsert()
+   async beforeInsert() {
+      if (!this.permissionName) {
+         this.permissionName = this.generatePermissionName();
+      }
+   }
+
+   // Generate permission name based on available properties
+   private generatePermissionName(): string {
+      const parts: string[] = [];
+
+      if (this.category) {
+         parts.push(this.category.toUpperCase());
+      }
+
+      if (this.resource) {
+         parts.push(this.resource.toUpperCase());
+      }
+
+      if (this.action) {
+         parts.push(this.action.toUpperCase());
+      }
+
+      if (this.permissionType) {
+         parts.push(this.permissionType);
+      }
+
+      // If no parts available, generate a generic name
+      if (parts.length === 0) {
+         const timestamp = Date.now().toString().slice(-6);
+         return `PERMISSION_${timestamp}`;
+      }
+
+      return parts.join('_');
+   }
 }

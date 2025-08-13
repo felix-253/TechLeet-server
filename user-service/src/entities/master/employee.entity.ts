@@ -25,15 +25,14 @@ export class EmployeeEntity extends BaseEntity {
    @Column({
       type: 'varchar',
       length: 20,
-      nullable: false,
+      nullable: true,
       unique: true,
       comment: 'Unique employee code for identification'
    })
-   employeeCode: string;
+   employeeCode?: string;
 
    @Column({
       type: 'varchar',
-      length: 50,
       nullable: false,
       comment: 'Employee first name'
    })
@@ -42,7 +41,6 @@ export class EmployeeEntity extends BaseEntity {
 
    @Column({
       type: 'varchar',
-      length: 50,
       nullable: false,
       comment: 'Employee last name'
    })
@@ -65,7 +63,6 @@ export class EmployeeEntity extends BaseEntity {
 
    @Column({
       type: 'varchar',
-      length: 100,
       nullable: false,
       unique: true,
       comment: 'Employee email address'
@@ -209,14 +206,34 @@ export class EmployeeEntity extends BaseEntity {
       return age;
    }
 
-   // Hooks for password hashing
+   // Hooks for password hashing and employee code generation
    @BeforeInsert()
+   async beforeInsert() {
+      // Generate employee code if not provided
+      if (!this.employeeCode) {
+         this.employeeCode = await this.generateEmployeeCode();
+      }
+
+      // Hash password if provided
+      if (this.password) {
+         const saltRounds = 12;
+         this.password = await bcrypt.hash(this.password, saltRounds);
+      }
+   }
+
    @BeforeUpdate()
    async hashPassword() {
       if (this.password) {
          const saltRounds = 12;
          this.password = await bcrypt.hash(this.password, saltRounds);
       }
+   }
+
+   // Generate unique employee code
+   private async generateEmployeeCode(): Promise<string> {
+      const year = new Date().getFullYear().toString().slice(-2);
+      const randomNum = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+      return `EMP${year}${randomNum}`;
    }
 
    // Method to verify password
