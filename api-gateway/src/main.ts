@@ -137,7 +137,10 @@ async function bootstrap() {
    };
 
    // User Service Proxy
-   const userServiceProxy = createServiceProxy('http://techleet.me:3031', 'user-service');
+   const userServiceProxy = createServiceProxy(
+      configService.get<string>('USER_SERVICE_URL') || 'http://localhost:3031',
+      'user-service',
+   );
    server.use('/api/v1/user-service', userServiceProxy);
 
    // Company Service Proxy
