@@ -17,7 +17,6 @@ async function bootstrap() {
       .setTitle('TechLeet Recruitment Service API')
       .setDescription('The TechLeet Recruitment Service API description')
       .setVersion('1.0')
-      .addServer(`http://${hostname}:${port}`, 'Recruitment Service')
       .addBearerAuth(
          {
             type: 'http',
@@ -36,13 +35,11 @@ async function bootstrap() {
 
    app.use(helmet());
    app.enableCors({
-      origin: 'http://localhost:3030',
+      origin: ['http://localhost:3030', 'https://128.199.197.230:3030'],
       credentials: true,
    });
 
-   app.useGlobalInterceptors(
-      new ClassSerializerInterceptor(app.get(Reflector)),
-   );
+   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
    app.useGlobalPipes(new ValidationPipe({ transform: true }));
 
    await app.listen(port, hostname, () => {

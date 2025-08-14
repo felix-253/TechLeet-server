@@ -26,7 +26,13 @@ async function bootstrap() {
 
    // CORS
    app.enableCors({
-      origin: ['http://localhost:8080', 'http://localhost:3000', 'http://localhost:3030'],
+      origin: [
+         'http://localhost:8080',
+         'http://localhost:3000',
+         'http://localhost:3030',
+         'https://128.199.197.230:3030',
+         'https://0.0.0.0:3030',
+      ],
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: [
@@ -71,7 +77,7 @@ async function bootstrap() {
    }
 
    logger.log(`📋 Prepared ${specs.length} specs for selector:`);
-   specs.forEach(spec => logger.log(`   - ${spec.name}: ${spec.url}`));
+   specs.forEach((spec) => logger.log(`   - ${spec.name}: ${spec.url}`));
 
    // Setup single Swagger UI with spec selector
    SwaggerModule.setup('api', app, null as any, {
@@ -82,6 +88,10 @@ async function bootstrap() {
          tagsSorter: 'alpha',
          operationsSorter: 'alpha',
          docExpansion: 'none',
+         requestInterceptor: (req: any) => {
+            req.url = req.url.replace(/^http?:\/\/[^/]+\/api/, '/api');
+            return req;
+         },
       },
       customSiteTitle: 'TechLeet API Gateway - Swagger UI',
       explorer: true,
@@ -101,10 +111,14 @@ async function bootstrap() {
             return rewritten;
          },
          logger: {
-            info: (...args: any[]) => console.log(chalk.green(`[${serviceName.toUpperCase()}]`), ...args),
-            warn: (...args: any[]) => console.warn(chalk.yellow(`[${serviceName.toUpperCase()}]`), ...args),
-            error: (...args: any[]) => console.error(chalk.red(`[${serviceName.toUpperCase()}]`), ...args),
-            debug: (...args: any[]) => console.debug(chalk.cyan(`[${serviceName.toUpperCase()}]`), ...args),
+            info: (...args: any[]) =>
+               console.log(chalk.green(`[${serviceName.toUpperCase()}]`), ...args),
+            warn: (...args: any[]) =>
+               console.warn(chalk.yellow(`[${serviceName.toUpperCase()}]`), ...args),
+            error: (...args: any[]) =>
+               console.error(chalk.red(`[${serviceName.toUpperCase()}]`), ...args),
+            debug: (...args: any[]) =>
+               console.debug(chalk.cyan(`[${serviceName.toUpperCase()}]`), ...args),
          },
          on: {
             error: (err: Error, _req: Request, res: Response) => {
@@ -123,23 +137,20 @@ async function bootstrap() {
    };
 
    // User Service Proxy
-   const userServiceProxy = createServiceProxy(
-      configService.get<string>('USER_SERVICE_URL') || 'http://localhost:3031',
-      'user-service'
-   );
+   const userServiceProxy = createServiceProxy('http://techleet.me:3031', 'user-service');
    server.use('/api/v1/user-service', userServiceProxy);
 
    // Company Service Proxy
    const companyServiceProxy = createServiceProxy(
       configService.get<string>('COMPANY_SERVICE_URL') || 'http://localhost:3032',
-      'company-service'
+      'company-service',
    );
    server.use('/api/v1/company-service', companyServiceProxy);
 
    // Recruitment Service Proxy
    const recruitmentServiceProxy = createServiceProxy(
       configService.get<string>('RECRUITMENT_SERVICE_URL') || 'http://localhost:3033',
-      'recruitment-service'
+      'recruitment-service',
    );
    server.use('/api/v1/recruitment-service', recruitmentServiceProxy);
 

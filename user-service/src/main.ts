@@ -16,7 +16,6 @@ async function bootstrap() {
       .setTitle('TechLeet User Service API')
       .setDescription('The TechLeet User Service API description')
       .setVersion('1.0')
-      .addServer(`http://${hostname}:${port}`, 'User Service')
       .addBearerAuth(
          {
             type: 'http',

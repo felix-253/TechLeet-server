@@ -19,7 +19,6 @@ async function bootstrap() {
          'API for managing company departments, positions, and organizational structure',
       )
       .setVersion('1.0')
-      .addServer(`http://${hostname}:${port}`, 'Company Service')
       .addBearerAuth(
          {
             type: 'http',
@@ -38,7 +37,7 @@ async function bootstrap() {
 
    app.use(helmet());
    app.enableCors({
-      origin: ['http://localhost:3000', 'http://0.0.0.0:3030'],
+      origin: ['http://localhost:3030', 'https://128.199.197.230:3030'],
       credentials: true,
    });
 
