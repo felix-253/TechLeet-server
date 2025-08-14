@@ -32,11 +32,13 @@ export class SwaggerAggregatorService {
       await Promise.allSettled(
          microservices.map(async (service) => {
             try {
-               this.logger.log(`Fetching Swagger from ${service.name} at ${service.url}${service.swaggerPath}`);
+               this.logger.log(
+                  `Fetching Swagger from ${service.name} at ${service.url}${service.swaggerPath}`,
+               );
 
                const response = await firstValueFrom(
                   this.httpService.get(`${service.url}${service.swaggerPath}`, {
-                     timeout: 10000,
+                     timeout: 5000, // Reduce timeout from 10s to 5s
                   }),
                );
 
@@ -53,7 +55,9 @@ export class SwaggerAggregatorService {
          }),
       );
 
-      this.logger.log(`Successfully fetched Swagger docs from ${Object.keys(swaggerDocs).length} services: ${Object.keys(swaggerDocs).join(', ')}`);
+      this.logger.log(
+         `Successfully fetched Swagger docs from ${Object.keys(swaggerDocs).length} services: ${Object.keys(swaggerDocs).join(', ')}`,
+      );
 
       if (Object.keys(swaggerDocs).length === 0) {
          this.logger.warn('No Swagger documents were fetched from any service');
@@ -110,7 +114,9 @@ export class SwaggerAggregatorService {
                if (pathItem && typeof pathItem === 'object') {
                   Object.values(pathItem).forEach((operation: any) => {
                      if (operation && typeof operation === 'object' && operation.tags) {
-                        operation.tags = operation.tags.map((tag: string) => `${serviceName}: ${tag}`);
+                        operation.tags = operation.tags.map(
+                           (tag: string) => `${serviceName}: ${tag}`,
+                        );
                      } else if (operation && typeof operation === 'object') {
                         operation.tags = [serviceName];
                      }
@@ -143,7 +149,7 @@ export class SwaggerAggregatorService {
 
    async getServiceSpecificDocument(serviceName: string): Promise<SwaggerDocument | null> {
       const microservices = this.microserviceConfigService.getMicroservices();
-      const service = microservices.find(s => s.name === serviceName);
+      const service = microservices.find((s) => s.name === serviceName);
 
       if (!service) {
          this.logger.warn(`Service ${serviceName} not found in configuration`);
@@ -151,7 +157,9 @@ export class SwaggerAggregatorService {
       }
 
       try {
-         this.logger.log(`Fetching service-specific Swagger from ${service.name} at ${service.url}${service.swaggerPath}`);
+         this.logger.log(
+            `Fetching service-specific Swagger from ${service.name} at ${service.url}${service.swaggerPath}`,
+         );
 
          const response = await firstValueFrom(
             this.httpService.get(`${service.url}${service.swaggerPath}`, {
@@ -195,9 +203,10 @@ export class SwaggerAggregatorService {
 
          this.logger.log(`Successfully prepared service-specific Swagger for ${serviceName}`);
          return serviceDoc;
-
       } catch (error) {
-         this.logger.warn(`Failed to fetch service-specific Swagger from ${serviceName}: ${error.message}`);
+         this.logger.warn(
+            `Failed to fetch service-specific Swagger from ${serviceName}: ${error.message}`,
+         );
          return null;
       }
    }

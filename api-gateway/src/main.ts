@@ -87,11 +87,16 @@ async function bootstrap() {
          persistAuthorization: true,
          tagsSorter: 'alpha',
          operationsSorter: 'alpha',
-         docExpansion: 'none',
+         docExpansion: 'none', // Keep collapsed for faster loading
+         defaultModelsExpandDepth: 1, // Limit model expansion
+         defaultModelRendering: 'model', // Use model view instead of example
+         tryItOutEnabled: true,
          requestInterceptor: (req: any) => {
             req.url = req.url.replace(/^http?:\/\/[^/]+\/api/, '/api');
             return req;
          },
+         // Disable automatic spec loading on startup
+         preloadSpecs: false,
       },
       customSiteTitle: 'TechLeet API Gateway - Swagger UI',
       explorer: true,
