@@ -28,13 +28,14 @@ export class AuthMiddleware implements NestMiddleware {
       '/api/v1/user-service/health',
       '/api/v1/company-service/health',
       '/api/v1/recruitment-service/health',
+      '/',
    ];
 
    constructor(private readonly authService: AuthService) {}
 
    async use(req: Request, res: Response, next: NextFunction): Promise<void> {
       const { originalUrl, method } = req;
-
+      this.logger.warn('URL Request: ', originalUrl, method);
       // Skip authentication for public paths
       if (this.isPublicPath(originalUrl)) {
          return next();

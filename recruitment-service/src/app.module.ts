@@ -21,13 +21,11 @@ import { ApplicationEntity } from './entities/recruitment/application.entity';
 import { CandidateEntity } from './entities/recruitment/candidate.entity';
 import { InterviewEntity } from './entities/recruitment/interview.entity';
 import { JobPostingEntity } from './entities/recruitment/job-posting.entity';
+import { ConfigAppsModule } from './config/config.module';
 
 @Module({
    imports: [
-      ConfigModule.forRoot({
-         isGlobal: true,
-         envFilePath: '.env',
-      }),
+      ConfigAppsModule,
       TypeOrmModule.forRootAsync({
          imports: [ConfigModule],
          useFactory: getDatabaseConfig,
@@ -47,11 +45,6 @@ import { JobPostingEntity } from './entities/recruitment/job-posting.entity';
       InterviewController,
       JobPostingController,
    ],
-   providers: [
-      ApplicationService,
-      CandidateService,
-      InterviewService,
-      JobPostingService,
-   ],
+   providers: [ApplicationService, CandidateService, InterviewService, JobPostingService],
 })
 export class AppModule {}

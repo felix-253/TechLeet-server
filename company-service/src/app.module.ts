@@ -20,13 +20,11 @@ import { PositionController } from './controllers/position.controller';
 import { HeadquarterService } from './services/headquarter.service';
 import { DepartmentService } from './services/department.service';
 import { PositionService } from './services/position.service';
+import { ConfigAppsModule } from './config/config.module';
 
 @Module({
    imports: [
-      ConfigModule.forRoot({
-         isGlobal: true,
-         envFilePath: '.env',
-      }),
+      ConfigAppsModule,
       TypeOrmModule.forRootAsync({
          imports: [ConfigModule],
          useFactory: getDatabaseConfig,
@@ -40,16 +38,7 @@ import { PositionService } from './services/position.service';
          PositionTypeEntity,
       ]),
    ],
-   controllers: [
-      HealthController,
-      HeadquarterController,
-      DepartmentController,
-      PositionController,
-   ],
-   providers: [
-      HeadquarterService,
-      DepartmentService,
-      PositionService,
-   ],
+   controllers: [HealthController, HeadquarterController, DepartmentController, PositionController],
+   providers: [HeadquarterService, DepartmentService, PositionService],
 })
 export class AppModule {}
