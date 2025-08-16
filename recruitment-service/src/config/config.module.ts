@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { FileModule } from '../file/file.module';
 
 @Module({
    imports: [
@@ -8,7 +7,6 @@ import { FileModule } from '../file/file.module';
          isGlobal: true,
          envFilePath: [`.env.development`, '.env', '.env.firebase'],
       }),
-      FileModule,
    ],
    providers: [],
    exports: [],

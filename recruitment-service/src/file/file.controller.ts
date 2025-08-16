@@ -32,81 +32,81 @@ class SingleFileUploadDto {
    @ApiProperty({
       type: 'string',
       example: '213534dfg568',
-      description: 'Room ID where the file will be uploaded',
+      description: 'CV of candidate',
    })
-   roomId: string;
+   candidateId: string;
 }
 
 // DTO for multiple files upload
-class MultipleFilesUploadDto {
-   @ApiProperty({
-      type: 'array',
-      items: {
-         type: 'string',
-         format: 'binary',
-      },
-      description: 'Multiple files to upload',
-   })
-   multipleFiles: any[];
-}
+// class MultipleFilesUploadDto {
+//    @ApiProperty({
+//       type: 'array',
+//       items: {
+//          type: 'string',
+//          format: 'binary',
+//       },
+//       description: 'Multiple files to upload',
+//    })
+//    multipleFiles: any[];
+// }
 
 @Controller('/file-cloud')
 @ApiTags('file-cloud')
 export class FileCloudController {
    constructor(private fileService: FileService) {}
 
-   @Post('upload-multiple-files')
-   @UseInterceptors(FilesInterceptor('multipleFiles'))
-   @ApiOperation({
-      summary: 'Upload multiple files',
-      description: 'Upload multiple files to the server',
-   })
-   @ApiConsumes('multipart/form-data')
-   @ApiBody({
-      description: 'Multiple files upload',
-      type: MultipleFilesUploadDto,
-   })
-   @ApiResponse({
-      status: 201,
-      description: 'Files uploaded successfully',
-      schema: {
-         type: 'object',
-         properties: {
-            message: { type: 'string', example: 'Files uploaded successfully' },
-            filesCount: { type: 'number', example: 3 },
-            uploadedFiles: {
-               type: 'array',
-               items: {
-                  type: 'object',
-                  properties: {
-                     originalname: { type: 'string' },
-                     filename: { type: 'string' },
-                     size: { type: 'number' },
-                  },
-               },
-            },
-         },
-      },
-   })
-   @ApiResponse({
-      status: 400,
-      description: 'Bad request - Invalid file format or size',
-   })
-   async uploadMultipleFiles(
-      @UploadedFiles(new MultipleFileSizeValidationPipe()) files: Express.Multer.File[],
-   ) {
-      console.log(files);
-      return {
-         message: 'Files uploaded successfully',
-         filesCount: files.length,
-         uploadedFiles: files.map((file) => ({
-            originalname: file.originalname,
-            filename: file.filename,
-            size: file.size,
-            mimetype: file.mimetype,
-         })),
-      };
-   }
+   //    @Post('upload-multiple-files')
+   //    @UseInterceptors(FilesInterceptor('multipleFiles'))
+   //    @ApiOperation({
+   //       summary: 'Upload multiple files',
+   //       description: 'Upload multiple files to the server',
+   //    })
+   //    @ApiConsumes('multipart/form-data')
+   //    @ApiBody({
+   //       description: 'Multiple files upload',
+   //       type: MultipleFilesUploadDto,
+   //    })
+   //    @ApiResponse({
+   //       status: 201,
+   //       description: 'Files uploaded successfully',
+   //       schema: {
+   //          type: 'object',
+   //          properties: {
+   //             message: { type: 'string', example: 'Files uploaded successfully' },
+   //             filesCount: { type: 'number', example: 3 },
+   //             uploadedFiles: {
+   //                type: 'array',
+   //                items: {
+   //                   type: 'object',
+   //                   properties: {
+   //                      originalname: { type: 'string' },
+   //                      filename: { type: 'string' },
+   //                      size: { type: 'number' },
+   //                   },
+   //                },
+   //             },
+   //          },
+   //       },
+   //    })
+   //    @ApiResponse({
+   //       status: 400,
+   //       description: 'Bad request - Invalid file format or size',
+   //    })
+   //    async uploadMultipleFiles(
+   //       @UploadedFiles(new MultipleFileSizeValidationPipe()) files: Express.Multer.File[],
+   //    ) {
+   //       console.log(files);
+   //       return {
+   //          message: 'Files uploaded successfully',
+   //          filesCount: files.length,
+   //          uploadedFiles: files.map((file) => ({
+   //             originalname: file.originalname,
+   //             filename: file.filename,
+   //             size: file.size,
+   //             mimetype: file.mimetype,
+   //          })),
+   //       };
+   //    }
 
    @Post('upload-single-file')
    @UseInterceptors(FileInterceptor('fileSingle'))
@@ -126,7 +126,7 @@ export class FileCloudController {
          type: 'object',
          properties: {
             message: { type: 'string', example: 'File uploaded successfully' },
-            roomId: { type: 'string', example: '213534dfg568' },
+            candidateId: { type: 'string', example: '1' },
             file: {
                type: 'object',
                properties: {
@@ -138,14 +138,6 @@ export class FileCloudController {
             },
          },
       },
-   })
-   @ApiResponse({
-      status: 400,
-      description: 'Bad request - Invalid file format or size',
-   })
-   @ApiResponse({
-      status: 500,
-      description: 'Internal server error',
    })
    async uploadSingleFile(
       @Body() data: UploadFileToRoom,

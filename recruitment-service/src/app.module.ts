@@ -21,7 +21,12 @@ import { ApplicationEntity } from './entities/recruitment/application.entity';
 import { CandidateEntity } from './entities/recruitment/candidate.entity';
 import { InterviewEntity } from './entities/recruitment/interview.entity';
 import { JobPostingEntity } from './entities/recruitment/job-posting.entity';
+import { FileEntity } from './entities/recruitment/file.entity';
 import { ConfigAppsModule } from './config/config.module';
+import { FileController } from './controllers/file.controller';
+import { FileService } from './services/file.service';
+
+// Modules
 
 @Module({
    imports: [
@@ -36,6 +41,7 @@ import { ConfigAppsModule } from './config/config.module';
          CandidateEntity,
          InterviewEntity,
          JobPostingEntity,
+         FileEntity,
       ]),
    ],
    controllers: [
@@ -44,7 +50,14 @@ import { ConfigAppsModule } from './config/config.module';
       CandidateController,
       InterviewController,
       JobPostingController,
+      FileController,
    ],
-   providers: [ApplicationService, CandidateService, InterviewService, JobPostingService],
+   providers: [
+      ApplicationService,
+      CandidateService,
+      InterviewService,
+      JobPostingService,
+      FileService,
+   ],
 })
 export class AppModule {}
