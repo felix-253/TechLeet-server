@@ -39,8 +39,8 @@ import { join } from 'path';
          inject: [ConfigService],
       }),
       ServeStaticModule.forRoot({
-         rootPath: join(__dirname, '..', '/api/temp-uploads'),
-         serveRoot: '/temp-uploads',
+         rootPath: join(__dirname, '..', 'temp-uploads'),
+         serveRoot: '/api/temp-uploads',
       }),
       TypeOrmModule.forFeature([
          ApplicationEntity,
