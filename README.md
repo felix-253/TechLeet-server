@@ -12,10 +12,8 @@ This project implements a microservices architecture for the TechLeet system usi
                                 │
                 ┌───────────────┼───────────────┐
                 │               │               │
-        ┌───────▼──────┐ ┌──────▼──────┐ ┌─────▼──────┐
-        │ User Service │ │Company Svc  │ │Recruitment │
-        │ Port: 3000   │ │Port: 3001   │ │Port: 3002  │
-        └──────────────┘ └─────────────┘ └────────────┘
+        ┌───────▼──────┐ ┌──────▼──────┐ ┌
+        
 ```
 
 ## Services

@@ -17,8 +17,8 @@ export class AuthController {
       examples: {
          login: {
             value: {
-               email: 'admin@example.com',
-               password: 'securePassword123',
+               email: 'admin@techleet.com',
+               password: 'TechLeet2024!',
             },
          },
       },
