@@ -40,7 +40,7 @@ import { join } from 'path';
       }),
       ServeStaticModule.forRoot({
          rootPath: join(__dirname, '..', 'temp-uploads'),
-         serveRoot: '/temp-uploads',
+         serveRoot: '/api/temp-uploads',
       }),
       TypeOrmModule.forFeature([
          ApplicationEntity,
