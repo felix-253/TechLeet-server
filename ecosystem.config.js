@@ -1,21 +1,28 @@
-// ecosystem.config.js
 module.exports = {
   apps: [
     {
       name: 'api-gateway',
-      script: './api-gateway/dist/main.js',
+      cwd: './api-gateway', // Change the current working directory to the service folder
+      script: 'pnpm',
+      args: 'run start:prod', // Pass the script name as arguments
     },
     {
       name: 'user-service',
-      script: './user-service/dist/main.js',
+      cwd: './user-service',
+      script: 'pnpm',
+      args: 'run start:prod',
     },
     {
       name: 'company-service',
-      script: './company-service/dist/main.js',
+      cwd: './company-service',
+      script: 'pnpm',
+      args: 'run start:prod',
     },
     {
       name: 'recruitment-service',
-      script: './recruitment-service/dist/main.js',
+      cwd: './recruitment-service',
+      script: 'pnpm',
+      args: 'run start:prod',
     },
   ],
 };
