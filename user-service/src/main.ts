@@ -31,10 +31,6 @@ async function bootstrap() {
       jsonDocumentUrl: 'api/swagger/json',
    });
    app.use(helmet());
-   app.enableCors({
-      origin: 'http://localhost:3030',
-      credentials: true,
-   });
 
    app.useGlobalFilters(new GlobalHttpExceptionFilter());
    app.useGlobalInterceptors(
