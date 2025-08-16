@@ -149,7 +149,6 @@ export class EntityFileHelpers {
          },
          where: {
             avatars: {
-               referenceType: 'employee',
                fileType: FileType.EMPLOYEE_AVATAR,
             },
          },
@@ -167,7 +166,6 @@ export class EntityFileHelpers {
          },
          where: {
             resumes: {
-               referenceType: 'candidate',
                fileType: FileType.CANDIDATE_RESUME,
             },
          },
@@ -184,7 +182,6 @@ export class EntityFileHelpers {
          },
          where: {
             logos: {
-               referenceType: 'company',
                fileType: FileType.COMPANY_LOGO,
             },
          },

@@ -43,10 +43,7 @@ export class FileEntity {
    fileSize: number; // File size in bytes
    fileType: FileType; // Category of the file
    referenceId?: number; // ID of related entity (employee, candidate, etc.)
-   referenceType?: string; // Type of related entity
-   uploadedBy: number; // ID of user who uploaded
    status: FileStatus; // active, archived, deleted
-   description?: string; // Optional description
    metadata?: any; // Additional file metadata
    createdAt: Date; // Upload timestamp
    updatedAt: Date; // Last update timestamp
@@ -68,8 +65,6 @@ Content-Type: multipart/form-data
   "file": <binary>,
   "fileType": "employee_avatar",
   "referenceId": 123,
-  "referenceType": "employee",
-  "description": "Professional headshot"
 }
 ```
 
@@ -84,7 +79,6 @@ GET /api/v1/recruitment-service/files?fileType=employee_avatar&referenceId=123
 ```http
 PUT /api/v1/recruitment-service/files/1
 {
-  "description": "Updated description",
   "referenceId": 456
 }
 ```
@@ -235,7 +229,6 @@ export class EmployeeEntity extends BaseEntity {
       return (
          this.files?.find(
             (f) =>
-               f.referenceType === 'employee' &&
                f.fileType === FileType.EMPLOYEE_AVATAR &&
                f.status === FileStatus.ACTIVE,
          ) || null
@@ -262,7 +255,6 @@ export class CandidateEntity extends BaseEntity {
       return (
          this.files?.filter(
             (f) =>
-               f.referenceType === 'candidate' &&
                f.fileType === FileType.CANDIDATE_RESUME &&
                f.status === FileStatus.ACTIVE,
          ) || []
@@ -413,7 +405,6 @@ describe('FileService', () => {
          mimeType: 'application/pdf',
          fileSize: 1024,
          fileType: FileType.GENERAL_DOCUMENT,
-         uploadedBy: 1,
       };
 
       const result = await fileService.create(fileData);

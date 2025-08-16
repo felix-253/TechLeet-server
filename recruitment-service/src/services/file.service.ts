@@ -1,11 +1,11 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, FindManyOptions, FindOptionsWhere, DataSource } from 'typeorm';
-import { FileEntity, FileType, FileStatus } from '../entities/recruitment/file.entity';
-import { CreateFileDto, FileQueryDto, FileResponseDto } from '../entities/recruitment/file.dto';
-import { unlink } from 'fs/promises';
 import { existsSync } from 'fs';
+import { unlink } from 'fs/promises';
 import { join } from 'path';
+import { DataSource, FindOptionsWhere, Repository } from 'typeorm';
+import { FileQueryDto, FileResponseDto } from '../dto/file.dto';
+import { FileEntity, FileStatus, FileType } from '../entities/recruitment/file.entity';
 
 export interface FileUploadData {
    originalName: string;
@@ -15,9 +15,6 @@ export interface FileUploadData {
    fileSize: number;
    fileType: FileType;
    referenceId?: number;
-   referenceType?: string;
-   description?: string;
-   uploadedBy: number;
    metadata?: any;
 }
 
@@ -38,7 +35,7 @@ export class FileService {
 
          return await this.fileRepository.save(file);
       } catch (error) {
-         throw new BadRequestException('Failed to save file record');
+         throw new BadRequestException('Failed to save file record: ' + error);
       }
    }
 
@@ -77,12 +74,7 @@ export class FileService {
       if (filters.referenceId) {
          whereConditions.referenceId = filters.referenceId;
       }
-      if (filters.referenceType) {
-         whereConditions.referenceType = filters.referenceType;
-      }
-      if (filters.uploadedBy) {
-         whereConditions.uploadedBy = filters.uploadedBy;
-      }
+      
 
       const [data, total] = await this.fileRepository.findAndCount({
          where: whereConditions,
@@ -99,13 +91,8 @@ export class FileService {
       };
    }
 
-   async findByReference(
-      referenceType: string,
-      referenceId: number,
-      fileType?: FileType,
-   ): Promise<FileEntity[]> {
+   async findByReference(referenceId: number, fileType?: FileType): Promise<FileEntity[]> {
       const whereConditions: FindOptionsWhere<FileEntity> = {
-         referenceType,
          referenceId,
          status: FileStatus.ACTIVE,
       };
@@ -159,16 +146,13 @@ export class FileService {
                uploadDir = './uploads/avatars';
                break;
             case FileType.CANDIDATE_RESUME:
-               uploadDir = './uploads/resumes';
+               uploadDir = './uploads/candidate_resume';
                break;
             case FileType.COMPANY_LOGO:
                uploadDir = './uploads/logos';
                break;
-            case FileType.JOB_ATTACHMENT:
-               uploadDir = './uploads/job-attachments';
-               break;
-            case FileType.APPLICATION_DOCUMENT:
-               uploadDir = './uploads/applications';
+            case FileType.EMPLOYEE_RESUME:
+               uploadDir = './uploads/employee_resumes';
                break;
             default:
                uploadDir = './uploads/documents';
@@ -188,7 +172,6 @@ export class FileService {
    async getEmployeeAvatar(employeeId: number): Promise<FileEntity | null> {
       return await this.fileRepository.findOne({
          where: {
-            referenceType: 'employee',
             referenceId: employeeId,
             fileType: FileType.EMPLOYEE_AVATAR,
             status: FileStatus.ACTIVE,
@@ -200,7 +183,6 @@ export class FileService {
    async getCandidateResumes(candidateId: number): Promise<FileEntity[]> {
       return await this.fileRepository.find({
          where: {
-            referenceType: 'candidate',
             referenceId: candidateId,
             fileType: FileType.CANDIDATE_RESUME,
             status: FileStatus.ACTIVE,
@@ -212,7 +194,6 @@ export class FileService {
    async getCompanyLogo(companyId: number): Promise<FileEntity | null> {
       return await this.fileRepository.findOne({
          where: {
-            referenceType: 'company',
             referenceId: companyId,
             fileType: FileType.COMPANY_LOGO,
             status: FileStatus.ACTIVE,
@@ -232,7 +213,6 @@ export class FileService {
       // Create new avatar
       return await this.create({
          ...fileData,
-         referenceType: 'employee',
          referenceId: employeeId,
          fileType: FileType.EMPLOYEE_AVATAR,
       });
@@ -249,7 +229,6 @@ export class FileService {
       // Create new logo
       return await this.create({
          ...fileData,
-         referenceType: 'company',
          referenceId: companyId,
          fileType: FileType.COMPANY_LOGO,
       });
@@ -296,8 +275,6 @@ export class FileService {
          fileSizeFormatted: file.fileSizeFormatted,
          mimeType: file.mimeType,
          referenceId: file.referenceId,
-         referenceType: file.referenceType,
-         description: file.description,
          createdAt: file.createdAt,
          updatedAt: file.updatedAt,
       };

@@ -12,10 +12,9 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export enum FileType {
    EMPLOYEE_AVATAR = 'employee_avatar',
-   CANDIDATE_RESUME = 'candidate_resume',
+   CANDIDATE_RESUME = 'candidate_resume', // CV
+   EMPLOYEE_RESUME = 'employee_resume',
    COMPANY_LOGO = 'company_logo',
-   JOB_ATTACHMENT = 'job_attachment',
-   APPLICATION_DOCUMENT = 'application_document',
    GENERAL_DOCUMENT = 'general_document',
 }
 
@@ -27,7 +26,6 @@ export enum FileStatus {
 
 @Entity('files')
 @Index(['fileType', 'referenceId'])
-@Index(['uploadedBy', 'createdAt'])
 @Index(['fileType', 'status'])
 export class FileEntity {
    @PrimaryGeneratedColumn()
@@ -113,28 +111,6 @@ export class FileEntity {
       required: false,
    })
    referenceId?: number;
-
-   @Column({
-      type: 'varchar',
-      length: 100,
-      nullable: true,
-   })
-   @ApiProperty({
-      description: 'Type of the referenced entity',
-      example: 'employee',
-      required: false,
-   })
-   referenceType?: string;
-
-   @Column({
-      type: 'int',
-      nullable: false,
-   })
-   @ApiProperty({
-      description: 'ID of the user who uploaded the file',
-      example: 456,
-   })
-   uploadedBy: number;
 
    @Column({
       type: 'enum',
