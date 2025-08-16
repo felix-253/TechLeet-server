@@ -32,6 +32,7 @@ jobs:
             git pull --rebase --stat
 
             echo "PM2 starting/restarting services..."
+
             pm2 startOrRestart ecosystem.config.js
             pm2 save
 
