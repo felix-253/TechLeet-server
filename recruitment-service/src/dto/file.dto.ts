@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsEnum, IsOptional, IsString, IsNumber, MaxLength } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional } from 'class-validator';
 import { FileType } from '../entities/recruitment/file.entity';
 
 export class FileUploadDto {
