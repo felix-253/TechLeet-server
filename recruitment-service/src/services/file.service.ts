@@ -1,12 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { existsSync } from 'fs';
+import { existsSync, mkdirSync } from 'fs';
 import { unlink } from 'fs/promises';
 import { join } from 'path';
 import { DataSource, FindOptionsWhere, Repository } from 'typeorm';
 import { FileQueryDto, FileResponseDto } from '../dto/file.dto';
 import { FileEntity, FileStatus, FileType } from '../entities/recruitment/file.entity';
-
+import * as fs from 'fs-extra';
 export interface FileUploadData {
    originalName: string;
    fileName: string;
@@ -28,8 +28,38 @@ export class FileService {
 
    async create(fileData: FileUploadData): Promise<FileEntity> {
       try {
+         // Determine the correct folder based on fileType
+         let folder = 'documents';
+         switch (fileData.fileType) {
+            case FileType.EMPLOYEE_AVATAR:
+               folder = 'avatars';
+               break;
+            case FileType.CANDIDATE_RESUME:
+               folder = 'candidate_resume';
+               break;
+            case FileType.EMPLOYEE_RESUME:
+               folder = 'employee_resume';
+               break;
+            case FileType.COMPANY_LOGO:
+               folder = 'logos';
+               break;
+            case FileType.GENERAL_DOCUMENT:
+            default:
+               folder = 'documents';
+         }
+
+         const targetDir = `uploads/${folder}`;
+         // Check and create folder if not exists
+         if (!existsSync(targetDir)) {
+            mkdirSync(targetDir, { recursive: true });
+         }
+         const fileUrl = `${targetDir}/${fileData.fileName}`;
+         const tempFile = 'temp-uploads/' + fileData.fileName;
+
+         fs.move(tempFile, fileUrl, { overwrite: true });
          const file = this.fileRepository.create({
             ...fileData,
+            fileUrl,
             status: FileStatus.ACTIVE,
          });
 
@@ -74,7 +104,6 @@ export class FileService {
       if (filters.referenceId) {
          whereConditions.referenceId = filters.referenceId;
       }
-      
 
       const [data, total] = await this.fileRepository.findAndCount({
          where: whereConditions,

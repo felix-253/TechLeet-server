@@ -47,10 +47,7 @@ const multerConfig = {
 @Controller('files')
 @ApiBearerAuth()
 export class FileController {
-   constructor(
-      private readonly fileService: FileService,
-      private readonly configService: ConfigService,
-   ) {}
+   constructor(private readonly fileService: FileService) {}
 
    @Post('upload')
    @ApiOperation({
@@ -415,45 +412,5 @@ export class FileController {
          }
          throw new BadRequestException(`Failed to delete file: ${error.message}`);
       }
-   }
-
-   @Get('download/:id')
-   @ApiOperation({
-      summary: 'Download file',
-      description: 'Download file by ID',
-   })
-   @ApiParam({
-      name: 'id',
-      description: 'File ID',
-      example: 1,
-   })
-   @ApiResponse({
-      status: HttpStatus.OK,
-      description: 'File download',
-   })
-   @ApiResponse({
-      status: HttpStatus.NOT_FOUND,
-      description: 'File not found',
-   })
-   async downloadFile(@Param('id', ParseIntPipe) id: number) {
-      // In a real application:
-      // const file = await this.fileService.findById(id);
-      // return response.download(file.filePath, file.originalName);
-
-      return { message: `Download endpoint for file ${id} - implement actual file streaming here` };
-   }
-
-   // Helper method to format file size
-   private formatFileSize(bytes: number): string {
-      const units = ['B', 'KB', 'MB', 'GB'];
-      let size = bytes;
-      let unitIndex = 0;
-
-      while (size >= 1024 && unitIndex < units.length - 1) {
-         size /= 1024;
-         unitIndex++;
-      }
-
-      return `${size.toFixed(1)} ${units[unitIndex]}`;
    }
 }
