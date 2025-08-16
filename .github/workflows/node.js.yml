@@ -31,18 +31,10 @@ jobs:
             git checkout main
             git pull --rebase --stat
 
-            # Install dependencies
-            pnpm install:all
-
-            # Restart PM2
-            if ! pm2 describe "${{ secrets.PM2_NAME }}" >/dev/null 2>&1; then
-              echo "PM2 process not found, starting..."
-              # pm2 start ecosystem.config.js --only "${{ secrets.PM2_NAME }}"
-              # hoặc:
-              # pm2 start dist/main.js --name "${{ secrets.PM2_NAME }}"
-            fi
-            pm2 restart "techleet"
+            echo "PM2 starting/restarting services..."
+            pm2 startOrRestart ecosystem.config.js
             pm2 save
+
     environment:
       name: production
     concurrency:

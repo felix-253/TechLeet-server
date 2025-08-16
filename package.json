@@ -8,10 +8,8 @@
     "dev:user": "pnpm --filter user-service start:dev",
     "dev:company": "pnpm --filter company-service start:dev",
     "dev:recruitment": "pnpm --filter recruitment-service start:dev",
-    "install:all": "pnpm install",
-    "build:all": "pnpm --filter user-service build && pnpm --filter company-service build && pnpm --filter recruitment-service build && pnpm --filter api-gateway build",
-    "test:ports": "node test-ports.js",
-    "start:sequential": "./start-services.sh"
+    "build": "pnpm --filter user-service build && pnpm --filter company-service build && pnpm --filter recruitment-service build && pnpm --filter api-gateway build",
+    "pm2:start": "pm2 start ecosystem.config.js"
   },
   "devDependencies": {
     "concurrently": "^8.2.0"
