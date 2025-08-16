@@ -31,6 +31,9 @@ jobs:
             git checkout main
             git pull --rebase --stat
 
+            echo "PM2 delete all"
+            pm2 delete api-gateway  company-service recruitment-service user-service
+
             echo "PM2 starting/restarting services..."
 
             pm2 startOrRestart ecosystem.config.js
