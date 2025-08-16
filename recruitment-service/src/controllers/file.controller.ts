@@ -1,126 +1,43 @@
 import {
-    BadRequestException,
-    Body,
-    Controller,
-    Delete,
-    Get,
-    HttpStatus,
-    NotFoundException,
-    Param,
-    ParseIntPipe,
-    Post,
-    Query,
-    UploadedFile,
-    UseInterceptors,
+   BadRequestException,
+   Body,
+   Controller,
+   Delete,
+   Get,
+   HttpStatus,
+   NotFoundException,
+   Param,
+   ParseIntPipe,
+   Post,
+   Query,
+   UploadedFile,
+   UseInterceptors,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
-    ApiBearerAuth,
-    ApiBody,
-    ApiConsumes,
-    ApiOperation,
-    ApiParam,
-    ApiResponse,
-    ApiTags
+   ApiBearerAuth,
+   ApiBody,
+   ApiConsumes,
+   ApiOperation,
+   ApiParam,
+   ApiResponse,
+   ApiTags,
 } from '@nestjs/swagger';
-import { existsSync, mkdirSync } from 'fs';
 import { diskStorage } from 'multer';
-import { extname } from 'path';
-import {
-    FileQueryDto,
-    FileResponseDto,
-    FileUploadDto
-} from '../entities/recruitment/file.dto';
+import { FileQueryDto, FileResponseDto, FileUploadDto } from '../dto/file.dto';
 import { FileType } from '../entities/recruitment/file.entity';
 import { FileService } from '../services/file.service';
 
 // Configure multer for file uploads
 const multerConfig = {
    storage: diskStorage({
-      destination: (req, file, cb) => {
-         // Get file type from body or default to general_document
-         const fileType = req.body.fileType || FileType.GENERAL_DOCUMENT;
-
-         // Create directory based on file type
-         let uploadDir = '';
-         switch (fileType) {
-            case FileType.EMPLOYEE_AVATAR:
-               uploadDir = './uploads/avatars';
-               break;
-            case FileType.CANDIDATE_RESUME:
-               uploadDir = './uploads/resumes';
-               break;
-            case FileType.COMPANY_LOGO:
-               uploadDir = './uploads/logos';
-               break;
-            case FileType.JOB_ATTACHMENT:
-               uploadDir = './uploads/job-attachments';
-               break;
-            case FileType.APPLICATION_DOCUMENT:
-               uploadDir = './uploads/applications';
-               break;
-            default:
-               uploadDir = './uploads/documents';
-         }
-
-         // Create directory if it doesn't exist
-         if (!existsSync(uploadDir)) {
-            mkdirSync(uploadDir, { recursive: true });
-         }
-
-         cb(null, uploadDir);
-      },
+      destination: './temp-uploads', // A temporary directory
       filename: (req, file, cb) => {
-         // Generate unique filename with timestamp
          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-         const ext = extname(file.originalname);
-         const baseName = file.originalname.replace(ext, '').replace(/[^a-zA-Z0-9]/g, '_');
-         cb(null, `${uniqueSuffix}_${baseName}${ext}`);
+         cb(null, `${uniqueSuffix}-${file.originalname}`);
       },
    }),
-   fileFilter: (req, file, cb) => {
-      // Define allowed file types based on upload type
-      const fileType = req.body.fileType || FileType.GENERAL_DOCUMENT;
-      let allowedTypes: string[] = [];
-
-      switch (fileType) {
-         case FileType.EMPLOYEE_AVATAR:
-         case FileType.COMPANY_LOGO:
-            allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-            break;
-         case FileType.CANDIDATE_RESUME:
-         case FileType.APPLICATION_DOCUMENT:
-            allowedTypes = [
-               'application/pdf',
-               'application/msword',
-               'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-               'text/plain',
-            ];
-            break;
-         case FileType.JOB_ATTACHMENT:
-         default:
-            allowedTypes = [
-               'application/pdf',
-               'application/msword',
-               'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-               'text/plain',
-               'image/jpeg',
-               'image/png',
-               'image/gif',
-               'application/vnd.ms-excel',
-               'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            ];
-      }
-
-      if (allowedTypes.includes(file.mimetype)) {
-         cb(null, true);
-      } else {
-         cb(
-            new BadRequestException(`File type ${file.mimetype} is not allowed for ${fileType}`),
-            false,
-         );
-      }
-   },
    limits: {
       fileSize: 10 * 1024 * 1024, // 10MB limit
    },
@@ -130,67 +47,244 @@ const multerConfig = {
 @Controller('files')
 @ApiBearerAuth()
 export class FileController {
-   constructor(private readonly fileService: FileService) {}
+   constructor(
+      private readonly fileService: FileService,
+      private readonly configService: ConfigService,
+   ) {}
 
    @Post('upload')
    @ApiOperation({
       summary: 'Upload a file',
-      description: 'Upload a file with metadata. File will be stored based on its type.',
+      description: `Upload a file with metadata. Supported file types:
+      
+      **Employee Avatar:** JPEG, PNG, GIF, WebP images (max 10MB)
+      **Candidate Resume:** PDF, Word documents, plain text (max 10MB)
+      **Employee Resume:** PDF, Word documents, plain text (max 10MB)
+      **Company Logo:** JPEG, PNG, GIF, WebP images (max 10MB)
+      **General Document:** All supported formats (max 10MB)
+      
+      Files are automatically organized into folders based on file type.
+      
+      **Usage Examples:**
+      - Employee Avatar: Select image file, set fileType to 'employee_avatar', add employee ID as referenceId
+      - Candidate Resume: Select PDF/DOC file, set fileType to 'candidate_resume', add candidate ID as referenceId
+      - Employee Resume: Select PDF/DOC file, set fileType to 'employee_resume', add employee ID as referenceId
+      - Company Logo: Select image file, set fileType to 'company_logo', add company ID as referenceId`,
    })
    @ApiConsumes('multipart/form-data')
    @ApiBody({
-      description: 'File upload with metadata',
+      description: 'File upload form with metadata',
       type: FileUploadDto,
+      examples: {
+         employeeAvatar: {
+            summary: 'Upload Employee Avatar',
+            value: {
+               file: 'employee_photo.jpg',
+               fileType: 'employee_avatar',
+               referenceId: 123,
+               referenceType: 'employee',
+               description: 'Professional headshot photo',
+            },
+         },
+         candidateResume: {
+            summary: 'Upload Candidate Resume',
+            value: {
+               file: 'john_doe_resume.pdf',
+               fileType: 'candidate_resume',
+               referenceId: 456,
+               referenceType: 'candidate',
+               description: 'Updated resume with 5 years experience',
+            },
+         },
+         employeeResume: {
+            summary: 'Upload Employee Resume',
+            value: {
+               file: 'employee_resume.pdf',
+               fileType: 'employee_resume',
+               referenceId: 789,
+               referenceType: 'employee',
+               description: 'Current employee resume',
+            },
+         },
+         companyLogo: {
+            summary: 'Upload Company Logo',
+            value: {
+               file: 'company_logo.png',
+               fileType: 'company_logo',
+               referenceId: 789,
+               referenceType: 'company',
+               description: 'Official company brand logo',
+            },
+         },
+      },
    })
    @ApiResponse({
       status: HttpStatus.CREATED,
       description: 'File uploaded successfully',
       type: FileResponseDto,
+      examples: {
+         success: {
+            summary: 'Successful Upload',
+            value: {
+               fileId: 123,
+               originalName: 'employee_photo.jpg',
+               fileUrl: 'http://localhost:3003/uploads/avatars/1692180000000_employee_photo.jpg',
+               fileType: 'employee_avatar',
+               fileSize: 1048576,
+               fileSizeFormatted: '1.0 MB',
+               mimeType: 'image/jpeg',
+               referenceId: 123,
+               createdAt: '2025-08-16T10:30:00Z',
+               updatedAt: '2025-08-16T10:30:00Z',
+            },
+         },
+      },
    })
    @ApiResponse({
       status: HttpStatus.BAD_REQUEST,
-      description: 'Invalid file or file type not allowed',
+      description: 'Invalid file, file type not allowed, or validation error',
+      examples: {
+         noFile: {
+            summary: 'No File Provided',
+            value: {
+               statusCode: 400,
+               message: 'No file provided',
+               error: 'Bad Request',
+            },
+         },
+         invalidType: {
+            summary: 'Invalid File Type',
+            value: {
+               statusCode: 400,
+               message: 'File type application/exe is not allowed for employee_avatar',
+               error: 'Bad Request',
+            },
+         },
+         fileTooLarge: {
+            summary: 'File Too Large',
+            value: {
+               statusCode: 400,
+               message: 'File too large',
+               error: 'Bad Request',
+            },
+         },
+      },
    })
    @UseInterceptors(FileInterceptor('file', multerConfig))
    async uploadFile(
-      @UploadedFile() file: Express.Multer.File,
       @Body() uploadDto: FileUploadDto,
+      @UploadedFile() file: Express.Multer.File,
    ): Promise<FileResponseDto> {
       if (!file) {
          throw new BadRequestException('No file provided');
       }
-
-      // In a real application, save to database and return the entity
-      // const savedFile = await this.fileService.create({
-      //   originalName: file.originalname,
-      //   fileName: file.filename,
-      //   fileUrl: `/uploads/${file.filename}`,
-      //   mimeType: file.mimetype,
-      //   fileSize: file.size,
-      //   fileType: uploadDto.fileType,
-      //   referenceId: uploadDto.referenceId,
-      //   referenceType: uploadDto.referenceType,
-      //   description: uploadDto.description,
-      //   uploadedBy: req.user.id, // Get from JWT token
-      // });
-
-      // Mock response for demonstration
-      const mockResponse: FileResponseDto = {
-         fileId: Math.floor(Math.random() * 1000) + 1,
-         originalName: file.originalname,
-         fileUrl: `${process.env.BASE_URL || 'http://localhost:3003'}/uploads/${file.filename}`,
-         fileType: uploadDto.fileType,
+      return await this.fileService.create({
+         fileName: file.filename,
          fileSize: file.size,
-         fileSizeFormatted: this.formatFileSize(file.size),
          mimeType: file.mimetype,
+         fileType: uploadDto.fileType,
          referenceId: uploadDto.referenceId,
-         referenceType: uploadDto.referenceType,
-         description: uploadDto.description,
-         createdAt: new Date(),
-         updatedAt: new Date(),
-      };
+         fileUrl: '',
+         originalName: file.originalname,
+      });
+   }
 
-      return mockResponse;
+   @Get('file-types')
+   @ApiOperation({
+      summary: 'Get supported file types',
+      description: 'Get information about supported file types and their allowed MIME types',
+   })
+   @ApiResponse({
+      status: HttpStatus.OK,
+      description: 'File type information retrieved successfully',
+      schema: {
+         type: 'object',
+         properties: {
+            fileTypes: {
+               type: 'array',
+               items: {
+                  type: 'object',
+                  properties: {
+                     type: { type: 'string', example: 'employee_avatar' },
+                     description: { type: 'string', example: 'Employee profile pictures' },
+                     allowedMimeTypes: {
+                        type: 'array',
+                        items: { type: 'string' },
+                        example: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+                     },
+                     maxSize: { type: 'string', example: '10MB' },
+                     uploadPath: { type: 'string', example: './uploads/avatars' },
+                  },
+               },
+            },
+         },
+      },
+   })
+   async getFileTypes() {
+      return {
+         fileTypes: [
+            {
+               type: FileType.EMPLOYEE_AVATAR,
+               description: 'Employee profile pictures',
+               allowedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+               maxSize: '10MB',
+               uploadPath: './uploads/avatars',
+               examples: ['employee_photo.jpg', 'profile_pic.png'],
+            },
+            {
+               type: FileType.CANDIDATE_RESUME,
+               description: 'Candidate CV/resume files',
+               allowedMimeTypes: [
+                  'application/pdf',
+                  'application/msword',
+                  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                  'text/plain',
+               ],
+               maxSize: '10MB',
+               uploadPath: './uploads/candidate_resume',
+               examples: ['john_doe_resume.pdf', 'cv_2025.docx'],
+            },
+            {
+               type: FileType.COMPANY_LOGO,
+               description: 'Company brand logos',
+               allowedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+               maxSize: '10MB',
+               uploadPath: './uploads/logos',
+               examples: ['company_logo.png', 'brand_logo.svg'],
+            },
+            {
+               type: FileType.EMPLOYEE_RESUME,
+               description: 'Employee resume files',
+               allowedMimeTypes: [
+                  'application/pdf',
+                  'application/msword',
+                  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                  'text/plain',
+               ],
+               maxSize: '10MB',
+               uploadPath: './uploads/employee_resume',
+               examples: ['employee_resume.pdf', 'updated_cv.docx'],
+            },
+            {
+               type: FileType.GENERAL_DOCUMENT,
+               description: 'General document files',
+               allowedMimeTypes: [
+                  'application/pdf',
+                  'application/msword',
+                  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                  'text/plain',
+                  'image/jpeg',
+                  'image/png',
+                  'image/gif',
+                  'application/vnd.ms-excel',
+                  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+               ],
+               maxSize: '10MB',
+               uploadPath: './uploads/documents',
+               examples: ['document.pdf', 'spreadsheet.xlsx'],
+            },
+         ],
+      };
    }
 
    @Get()
@@ -209,10 +303,6 @@ export class FileController {
       page: number;
       limit: number;
    }> {
-      // In a real application, implement actual database query
-      // const result = await this.fileService.findWithFilters(query);
-
-      // Mock response for demonstration
       const mockFiles: FileResponseDto[] = [
          {
             fileId: 1,
@@ -223,8 +313,6 @@ export class FileController {
             fileSizeFormatted: '1.0 MB',
             mimeType: 'image/jpeg',
             referenceId: 123,
-            referenceType: 'employee',
-            description: 'Professional headshot',
             createdAt: new Date('2024-01-20T10:30:00Z'),
             updatedAt: new Date('2024-01-20T10:30:00Z'),
          },
@@ -237,8 +325,6 @@ export class FileController {
             fileSizeFormatted: '2.0 MB',
             mimeType: 'application/pdf',
             referenceId: 456,
-            referenceType: 'candidate',
-            description: 'Updated resume with 5 years experience',
             createdAt: new Date('2024-01-20T11:00:00Z'),
             updatedAt: new Date('2024-01-20T11:00:00Z'),
          },
@@ -294,8 +380,6 @@ export class FileController {
          fileSizeFormatted: '1.5 MB',
          mimeType: 'application/pdf',
          referenceId: 789,
-         referenceType: 'application',
-         description: 'Important document',
          createdAt: new Date('2024-01-20T10:30:00Z'),
          updatedAt: new Date('2024-01-20T10:30:00Z'),
       };

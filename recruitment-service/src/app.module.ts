@@ -25,6 +25,8 @@ import { FileEntity } from './entities/recruitment/file.entity';
 import { ConfigAppsModule } from './config/config.module';
 import { FileController } from './controllers/file.controller';
 import { FileService } from './services/file.service';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 
 // Modules
 
@@ -35,6 +37,10 @@ import { FileService } from './services/file.service';
          imports: [ConfigModule],
          useFactory: getDatabaseConfig,
          inject: [ConfigService],
+      }),
+      ServeStaticModule.forRoot({
+         rootPath: join(__dirname, '..', 'temp-uploads'),
+         serveRoot: '/temp-uploads',
       }),
       TypeOrmModule.forFeature([
          ApplicationEntity,
