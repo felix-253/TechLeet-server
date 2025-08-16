@@ -30,7 +30,7 @@ jobs:
             git fetch --all --prune
             git checkout main
             git pull --rebase --stat
-
+            pnpm install
             echo "PM2 delete all"
             pm2 delete api-gateway  company-service recruitment-service user-service
 
