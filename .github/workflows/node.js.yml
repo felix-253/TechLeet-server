@@ -32,7 +32,7 @@ jobs:
             git pull --rebase --stat
 
             # Install dependencies
-            pnpm install
+            pnpm install:all
 
             # Restart PM2
             if ! pm2 describe "${{ secrets.PM2_NAME }}" >/dev/null 2>&1; then
