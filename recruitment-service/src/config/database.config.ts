@@ -9,8 +9,8 @@ export const getDatabaseConfig = (configService: ConfigService): TypeOrmModuleOp
    password: configService.get<string>('DATABASE_PASSWORD', 'password'),
    database: configService.get<string>('DATABASE_NAME', 'tech-leet'),
    entities: [__dirname + '/../entities/**/*.entity{.ts,.js}'],
-   synchronize: configService.get<boolean>('DB_SYNCHRONIZE', false), // Disable for recruitment service
-   logging: configService.get<boolean>('DB_LOGGING', false),
+   synchronize: configService.get<boolean>('DB_SYNCHRONIZE', true), // Enable for development
+   logging: configService.get<boolean>('DB_LOGGING', true),
    ssl: configService.get<boolean>('DB_SSL', false),
    retryAttempts: 3,
    retryDelay: 3000,
