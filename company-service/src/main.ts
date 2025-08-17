@@ -4,6 +4,7 @@ import { NestFactory, Reflector } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { SuccessResponseInterceptor } from './common/interceptors/response.interceptor';
 
 async function bootstrap() {
    const app = await NestFactory.create(AppModule);
@@ -41,7 +42,10 @@ async function bootstrap() {
       credentials: true,
    });
 
-   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
+   app.useGlobalInterceptors(
+      new SuccessResponseInterceptor(),
+      new ClassSerializerInterceptor(app.get(Reflector))
+   );
    app.useGlobalPipes(new ValidationPipe({ transform: true }));
 
    await app.listen(port, hostname, () => {
