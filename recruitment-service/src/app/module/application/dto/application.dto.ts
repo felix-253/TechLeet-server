@@ -1,73 +1,105 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-   IsString,
-   IsOptional,
-   IsNumber,
+import { 
+   IsString, 
+   IsOptional, 
+   IsNumber, 
+   IsNotEmpty, 
+   MinLength, 
+   MaxLength, 
    IsDateString,
    IsInt,
    Min,
    Max,
-   IsIn
+   IsIn,
+   IsUrl,
+   IsDecimal,
+   IsBoolean
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateApplicationDto {
    @ApiProperty({
-      description: 'ID of the job posting',
+      description: 'Reference to job posting',
       example: 1,
    })
    @IsInt()
-   @Type(() => Number)
+   @IsNotEmpty()
    jobPostingId: number;
 
    @ApiProperty({
-      description: 'ID of the candidate',
+      description: 'Reference to candidate',
       example: 1,
    })
    @IsInt()
-   @Type(() => Number)
+   @IsNotEmpty()
    candidateId: number;
 
    @ApiPropertyOptional({
       description: 'Cover letter submitted by candidate',
-      example: 'Dear Hiring Manager, I am excited to apply for the Senior Full Stack Developer position...',
+      example: 'I am very interested in this position...',
    })
    @IsOptional()
    @IsString()
    coverLetter?: string;
 
    @ApiPropertyOptional({
-      description: 'Path to resume file for this specific application',
-      example: '/uploads/candidate_resume/resume-123.pdf',
+      description: 'URL to resume file for this specific application',
+      example: 'https://storage.example.com/resumes/application-123.pdf',
    })
    @IsOptional()
-   @IsString({ message: 'Resume URL must be a string' })
+   @IsUrl({}, { message: 'Please provide a valid resume URL' })
    resumeUrl?: string;
 
    @ApiPropertyOptional({
       description: 'Expected start date if hired (YYYY-MM-DD)',
-      example: '2024-03-01',
+      example: '2024-02-01',
    })
    @IsOptional()
    @IsDateString()
    expectedStartDate?: string;
+
+   @ApiPropertyOptional({
+      description: 'Priority level',
+      example: 'medium',
+      enum: ['low', 'medium', 'high', 'urgent'],
+   })
+   @IsOptional()
+   @IsString()
+   @IsIn(['low', 'medium', 'high', 'urgent'])
+   priority?: string;
+
+   @ApiPropertyOptional({
+      description: 'Additional notes about the application',
+      example: 'Candidate has relevant experience in similar projects',
+   })
+   @IsOptional()
+   @IsString()
+   applicationNotes?: string;
+
+   @ApiPropertyOptional({
+      description: 'Tags for categorization (JSON array)',
+      example: '["urgent", "local-candidate"]',
+   })
+   @IsOptional()
+   @IsString()
+   tags?: string;
 }
 
 export class UpdateApplicationDto {
    @ApiPropertyOptional({
       description: 'Cover letter submitted by candidate',
-      example: 'Dear Hiring Manager, I am excited to apply for the Senior Full Stack Developer position...',
+      example: 'Updated cover letter...',
    })
    @IsOptional()
    @IsString()
    coverLetter?: string;
 
    @ApiPropertyOptional({
-      description: 'Path to resume file for this specific application',
-      example: '/uploads/candidate_resume/resume-123.pdf',
+      description: 'URL to resume file for this specific application',
+      example: 'https://storage.example.com/resumes/application-123-updated.pdf',
    })
    @IsOptional()
-   @IsString({ message: 'Resume URL must be a string' })
+   @IsUrl({}, { message: 'Please provide a valid resume URL' })
    resumeUrl?: string;
 
    @ApiPropertyOptional({
@@ -81,16 +113,8 @@ export class UpdateApplicationDto {
    status?: string;
 
    @ApiPropertyOptional({
-      description: 'Date when application was reviewed (YYYY-MM-DD)',
-      example: '2024-01-20',
-   })
-   @IsOptional()
-   @IsDateString()
-   reviewedDate?: string;
-
-   @ApiPropertyOptional({
       description: 'Notes from reviewer',
-      example: 'Strong technical background, good communication skills. Proceed to technical interview.',
+      example: 'Good technical background, proceed to interview',
    })
    @IsOptional()
    @IsString()
@@ -111,19 +135,11 @@ export class UpdateApplicationDto {
 
    @ApiPropertyOptional({
       description: 'Feedback on the application',
-      example: 'Excellent experience with required technologies. Strong portfolio.',
+      example: 'Strong candidate with relevant experience',
    })
    @IsOptional()
    @IsString()
    feedback?: string;
-
-   @ApiPropertyOptional({
-      description: 'Date when offer was made (YYYY-MM-DD)',
-      example: '2024-02-15',
-   })
-   @IsOptional()
-   @IsDateString()
-   offerDate?: string;
 
    @ApiPropertyOptional({
       description: 'Salary offered (VND)',
@@ -138,7 +154,7 @@ export class UpdateApplicationDto {
 
    @ApiPropertyOptional({
       description: 'Offer expiration date (YYYY-MM-DD)',
-      example: '2024-02-22',
+      example: '2024-02-15',
    })
    @IsOptional()
    @IsDateString()
@@ -155,16 +171,8 @@ export class UpdateApplicationDto {
    offerStatus?: string;
 
    @ApiPropertyOptional({
-      description: 'Date when offer was responded to (YYYY-MM-DD)',
-      example: '2024-02-18',
-   })
-   @IsOptional()
-   @IsDateString()
-   offerResponseDate?: string;
-
-   @ApiPropertyOptional({
       description: 'Reason for rejection (if applicable)',
-      example: 'Candidate did not meet technical requirements for senior level position.',
+      example: 'Not a good cultural fit',
    })
    @IsOptional()
    @IsString()
@@ -172,19 +180,11 @@ export class UpdateApplicationDto {
 
    @ApiPropertyOptional({
       description: 'Expected start date if hired (YYYY-MM-DD)',
-      example: '2024-03-01',
+      example: '2024-02-01',
    })
    @IsOptional()
    @IsDateString()
    expectedStartDate?: string;
-
-   @ApiPropertyOptional({
-      description: 'Additional notes about the application',
-      example: 'Candidate showed great enthusiasm during phone screening.',
-   })
-   @IsOptional()
-   @IsString()
-   applicationNotes?: string;
 
    @ApiPropertyOptional({
       description: 'Priority level',
@@ -197,16 +197,24 @@ export class UpdateApplicationDto {
    priority?: string;
 
    @ApiPropertyOptional({
-      description: 'Tags for categorization (comma-separated)',
-      example: 'senior-level,react-expert,remote-ok',
+      description: 'Additional notes about the application',
+      example: 'Updated notes after interview',
+   })
+   @IsOptional()
+   @IsString()
+   applicationNotes?: string;
+
+   @ApiPropertyOptional({
+      description: 'Tags for categorization (JSON array)',
+      example: '["interviewed", "recommended"]',
    })
    @IsOptional()
    @IsString()
    tags?: string;
 
    @ApiPropertyOptional({
-      description: 'ID of employee who reviewed application (User Service)',
-      example: 1,
+      description: 'Reference to employee who reviewed application',
+      example: 5,
    })
    @IsOptional()
    @IsInt()
@@ -214,13 +222,37 @@ export class UpdateApplicationDto {
    reviewedBy?: number;
 
    @ApiPropertyOptional({
-      description: 'ID of hiring manager (User Service)',
-      example: 1,
+      description: 'Reference to hiring manager',
+      example: 3,
    })
    @IsOptional()
    @IsInt()
    @Type(() => Number)
    hiringManagerId?: number;
+
+   @ApiPropertyOptional({
+      description: 'Date when application was reviewed (YYYY-MM-DD)',
+      example: '2024-01-16',
+   })
+   @IsOptional()
+   @IsDateString()
+   reviewedDate?: string;
+
+   @ApiPropertyOptional({
+      description: 'Date when offer was made (YYYY-MM-DD)',
+      example: '2024-01-20',
+   })
+   @IsOptional()
+   @IsDateString()
+   offerDate?: string;
+
+   @ApiPropertyOptional({
+      description: 'Date when offer was responded to (YYYY-MM-DD)',
+      example: '2024-01-22',
+   })
+   @IsOptional()
+   @IsDateString()
+   offerResponseDate?: string;
 }
 
 export class ApplicationResponseDto {
@@ -231,26 +263,26 @@ export class ApplicationResponseDto {
    applicationId: number;
 
    @ApiProperty({
-      description: 'Job posting ID',
+      description: 'Reference to job posting',
       example: 1,
    })
    jobPostingId: number;
 
    @ApiProperty({
-      description: 'Candidate ID',
+      description: 'Reference to candidate',
       example: 1,
    })
    candidateId: number;
 
    @ApiPropertyOptional({
       description: 'Cover letter submitted by candidate',
-      example: 'Dear Hiring Manager, I am excited to apply for the Senior Full Stack Developer position...',
+      example: 'I am very interested in this position...',
    })
    coverLetter?: string;
 
    @ApiPropertyOptional({
-      description: 'Path to resume file for this application',
-      example: '/uploads/candidate_resume/resume-123.pdf',
+      description: 'URL to resume file',
+      example: 'https://storage.example.com/resumes/application-123.pdf',
    })
    resumeUrl?: string;
 
@@ -262,19 +294,19 @@ export class ApplicationResponseDto {
 
    @ApiProperty({
       description: 'Date when application was submitted',
-      example: '2024-01-15',
+      example: '2024-01-15T10:30:00Z',
    })
    appliedDate: string;
 
    @ApiPropertyOptional({
       description: 'Date when application was reviewed',
-      example: '2024-01-20',
+      example: '2024-01-16T14:20:00Z',
    })
    reviewedDate?: string;
 
    @ApiPropertyOptional({
       description: 'Notes from reviewer',
-      example: 'Strong technical background, good communication skills.',
+      example: 'Good technical background',
    })
    reviewNotes?: string;
 
@@ -286,13 +318,13 @@ export class ApplicationResponseDto {
 
    @ApiPropertyOptional({
       description: 'Feedback on the application',
-      example: 'Excellent experience with required technologies.',
+      example: 'Strong candidate with relevant experience',
    })
    feedback?: string;
 
    @ApiPropertyOptional({
       description: 'Date when offer was made',
-      example: '2024-02-15',
+      example: '2024-01-20',
    })
    offerDate?: string;
 
@@ -304,7 +336,7 @@ export class ApplicationResponseDto {
 
    @ApiPropertyOptional({
       description: 'Offer expiration date',
-      example: '2024-02-22',
+      example: '2024-02-15',
    })
    offerExpiryDate?: string;
 
@@ -316,52 +348,78 @@ export class ApplicationResponseDto {
 
    @ApiPropertyOptional({
       description: 'Date when offer was responded to',
-      example: '2024-02-18',
+      example: '2024-01-22',
    })
    offerResponseDate?: string;
 
    @ApiPropertyOptional({
       description: 'Reason for rejection (if applicable)',
-      example: 'Candidate did not meet technical requirements.',
+      example: 'Salary expectations too high',
    })
    rejectionReason?: string;
 
    @ApiPropertyOptional({
       description: 'Expected start date if hired',
-      example: '2024-03-01',
+      example: '2024-02-01',
    })
    expectedStartDate?: string;
 
    @ApiPropertyOptional({
       description: 'Additional notes about the application',
-      example: 'Candidate showed great enthusiasm during phone screening.',
+      example: 'Candidate has relevant experience',
    })
    applicationNotes?: string;
 
    @ApiPropertyOptional({
       description: 'Priority level',
-      example: 'high',
+      example: 'medium',
    })
    priority?: string;
 
    @ApiPropertyOptional({
       description: 'Tags for categorization',
-      example: 'senior-level,react-expert,remote-ok',
+      example: '["urgent", "local-candidate"]',
    })
    tags?: string;
 
    @ApiPropertyOptional({
-      description: 'ID of employee who reviewed application',
-      example: 1,
+      description: 'Reference to employee who reviewed application',
+      example: 5,
    })
    reviewedBy?: number;
 
    @ApiPropertyOptional({
-      description: 'ID of hiring manager',
-      example: 1,
+      description: 'Reference to hiring manager',
+      example: 3,
    })
    hiringManagerId?: number;
 
+   // CV Screening fields
+   @ApiPropertyOptional({
+      description: 'Whether CV screening has been completed',
+      example: true,
+   })
+   isScreeningCompleted?: boolean;
+
+   @ApiPropertyOptional({
+      description: 'Overall CV screening score (0-100)',
+      example: 85.75,
+   })
+   screeningScore?: number;
+
+   @ApiPropertyOptional({
+      description: 'CV screening status',
+      example: 'completed',
+   })
+   screeningStatus?: string;
+
+   @ApiPropertyOptional({
+      description: 'When CV screening was completed',
+      example: '2024-01-15T12:30:00Z',
+   })
+   screeningCompletedAt?: string;
+
+   // Computed properties
    @ApiPropertyOptional({
       description: 'Days since application was submitted',
       example: 5,
@@ -375,14 +433,14 @@ export class ApplicationResponseDto {
    formattedOfferedSalary?: string;
 
    @ApiPropertyOptional({
-      description: 'Whether offer is currently active',
+      description: 'Whether offer is still active',
       example: true,
    })
    isOfferActive?: boolean;
 
    @ApiPropertyOptional({
       description: 'Days until offer expires',
-      example: 4,
+      example: 10,
    })
    daysUntilOfferExpiry?: number;
 
@@ -449,7 +507,7 @@ export class GetApplicationsQueryDto {
 
    @ApiPropertyOptional({
       description: 'Filter by status',
-      example: 'submitted',
+      example: 'screening',
       enum: ['submitted', 'screening', 'interviewing', 'offer', 'hired', 'rejected', 'withdrawn'],
    })
    @IsOptional()
@@ -458,7 +516,33 @@ export class GetApplicationsQueryDto {
    status?: string;
 
    @ApiPropertyOptional({
-      description: 'Filter by priority',
+      description: 'Filter by minimum score',
+      example: 7,
+      minimum: 1,
+      maximum: 10,
+   })
+   @IsOptional()
+   @IsInt()
+   @Min(1)
+   @Max(10)
+   @Type(() => Number)
+   minScore?: number;
+
+   @ApiPropertyOptional({
+      description: 'Filter by maximum score',
+      example: 10,
+      minimum: 1,
+      maximum: 10,
+   })
+   @IsOptional()
+   @IsInt()
+   @Min(1)
+   @Max(10)
+   @Type(() => Number)
+   maxScore?: number;
+
+   @ApiPropertyOptional({
+      description: 'Filter by priority level',
       example: 'high',
       enum: ['low', 'medium', 'high', 'urgent'],
    })
@@ -466,6 +550,52 @@ export class GetApplicationsQueryDto {
    @IsString()
    @IsIn(['low', 'medium', 'high', 'urgent'])
    priority?: string;
+
+   @ApiPropertyOptional({
+      description: 'Filter by date range start (YYYY-MM-DD)',
+      example: '2024-01-01',
+   })
+   @IsOptional()
+   @IsDateString()
+   dateFrom?: string;
+
+   @ApiPropertyOptional({
+      description: 'Filter by date range end (YYYY-MM-DD)',
+      example: '2024-01-31',
+   })
+   @IsOptional()
+   @IsDateString()
+   dateTo?: string;
+
+   @ApiPropertyOptional({
+      description: 'Search keyword for candidate name or job title',
+      example: 'developer',
+   })
+   @IsOptional()
+   @IsString()
+   keyword?: string;
+
+   @ApiPropertyOptional({
+      description: 'Filter by CV screening completion',
+      example: true,
+   })
+   @IsOptional()
+   @IsBoolean()
+   @Type(() => Boolean)
+   isScreeningCompleted?: boolean;
+
+   @ApiPropertyOptional({
+      description: 'Filter by minimum screening score',
+      example: 70,
+      minimum: 0,
+      maximum: 100,
+   })
+   @IsOptional()
+   @IsNumber()
+   @Min(0)
+   @Max(100)
+   @Type(() => Number)
+   minScreeningScore?: number;
 
    @ApiPropertyOptional({
       description: 'Filter by offer status',
@@ -478,8 +608,8 @@ export class GetApplicationsQueryDto {
    offerStatus?: string;
 
    @ApiPropertyOptional({
-      description: 'Filter by reviewer ID',
-      example: 1,
+      description: 'Filter by employee who reviewed application',
+      example: 5,
    })
    @IsOptional()
    @IsInt()
@@ -488,7 +618,7 @@ export class GetApplicationsQueryDto {
 
    @ApiPropertyOptional({
       description: 'Filter by hiring manager ID',
-      example: 1,
+      example: 3,
    })
    @IsOptional()
    @IsInt()
@@ -498,11 +628,11 @@ export class GetApplicationsQueryDto {
    @ApiPropertyOptional({
       description: 'Sort field',
       example: 'appliedDate',
-      enum: ['applicationId', 'appliedDate', 'reviewedDate', 'score', 'status', 'priority'],
+      enum: ['applicationId', 'appliedDate', 'score', 'screeningScore', 'status'],
    })
    @IsOptional()
    @IsString()
-   @IsIn(['applicationId', 'appliedDate', 'reviewedDate', 'score', 'status', 'priority'])
+   @IsIn(['applicationId', 'appliedDate', 'score', 'screeningScore', 'status'])
    sortBy?: string = 'appliedDate';
 
    @ApiPropertyOptional({
