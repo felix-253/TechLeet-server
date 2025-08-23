@@ -24,27 +24,6 @@ export abstract class BaseEntity {
    deletedAt?: Date;
 
    @Column({
-      type: 'int',
-      nullable: true,
-      comment: 'ID of user who created this record'
-   })
-   createdBy?: number;
-
-   @Column({
-      type: 'int',
-      nullable: true,
-      comment: 'ID of user who last updated this record'
-   })
-   updatedBy?: number;
-
-   @Column({
-      type: 'int',
-      nullable: true,
-      comment: 'ID of user who deleted this record'
-   })
-   deletedBy?: number;
-
-   @Column({
       type: 'boolean',
       default: true,
       comment: 'Whether this record is active'

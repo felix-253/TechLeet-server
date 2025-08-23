@@ -383,6 +383,77 @@ Each endpoint supports specific filters relevant to the entity type.
 - 100 requests per minute per user
 - 1000 requests per minute per service
 
+### CV Screening API
+
+#### Trigger CV Screening
+```http
+POST /cv-screening/trigger
+Content-Type: application/json
+
+{
+  "applicationId": 123,
+  "resumePath": "/uploads/resumes/resume-123.pdf",
+  "priority": 5
+}
+```
+
+#### Get Screening Results
+```http
+GET /cv-screening/results?page=0&limit=10&status=completed&minScore=70&sortBy=overallScore&sortOrder=DESC
+```
+
+#### Get Specific Screening Result
+```http
+GET /cv-screening/result/1
+```
+
+#### Get Screening by Application
+```http
+GET /cv-screening/application/123
+```
+
+#### Bulk Trigger Screening
+```http
+POST /cv-screening/bulk-trigger
+Content-Type: application/json
+
+{
+  "applicationIds": [123, 124, 125],
+  "priority": 5
+}
+```
+
+#### Get Screening Statistics
+```http
+GET /cv-screening/stats?jobPostingId=456
+```
+
+#### Retry Failed Screening
+```http
+POST /cv-screening/retry
+Content-Type: application/json
+
+{
+  "screeningId": 1,
+  "force": false
+}
+```
+
+#### Cancel Screening
+```http
+POST /cv-screening/cancel/1
+```
+
+#### Get Queue Status
+```http
+GET /cv-screening/queue/status
+```
+
+#### Reprocess Job Applications
+```http
+POST /cv-screening/reprocess-job/456
+```
+
 ## Swagger Documentation
 
 Access interactive API documentation at:

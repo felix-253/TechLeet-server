@@ -36,15 +36,15 @@ export class ApplicationEntity extends BaseEntity {
    status: string;
 
    @Column({
-      type: 'date',
+      type: 'timestamp',
       nullable: false,
-      default: () => 'CURRENT_DATE',
+      default: () => 'CURRENT_TIMESTAMP',
       comment: 'Date when application was submitted'
    })
    appliedDate: Date;
 
    @Column({
-      type: 'date',
+      type: 'timestamp',
       nullable: true,
       comment: 'Date when application was reviewed'
    })
@@ -173,6 +173,38 @@ export class ApplicationEntity extends BaseEntity {
       comment: 'Reference to hiring manager (User Service)'
    })
    hiringManagerId?: number;
+
+   // CV Screening fields
+   @Column({
+      type: 'boolean',
+      default: false,
+      comment: 'Whether CV screening has been completed'
+   })
+   isScreeningCompleted: boolean;
+
+   @Column({
+      type: 'decimal',
+      precision: 5,
+      scale: 2,
+      nullable: true,
+      comment: 'Overall CV screening score (0-100)'
+   })
+   screeningScore?: number;
+
+   @Column({
+      type: 'varchar',
+      length: 50,
+      nullable: true,
+      comment: 'CV screening status (pending, processing, completed, failed)'
+   })
+   screeningStatus?: string;
+
+   @Column({
+      type: 'timestamp',
+      nullable: true,
+      comment: 'When CV screening was completed'
+   })
+   screeningCompletedAt?: Date;
 
    // Relationships will be added after all entities are created
    // @ManyToOne(() => JobPostingEntity, jobPosting => jobPosting.applications, {
