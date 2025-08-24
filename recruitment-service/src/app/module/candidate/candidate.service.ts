@@ -272,6 +272,27 @@ export class CandidateService {
    }
 
    private mapToResponseDto(candidate: CandidateEntity): CandidateResponseDto {
+      // Helper function to safely format dates
+      const formatDate = (date: Date | string | null | undefined): string | undefined => {
+         if (!date) return undefined;
+         try {
+            if (typeof date === 'string') {
+               // If it's already a string, check if it's a valid date string
+               const parsedDate = new Date(date);
+               if (isNaN(parsedDate.getTime())) return undefined;
+               return parsedDate.toISOString().split('T')[0];
+            }
+            if (date instanceof Date) {
+               if (isNaN(date.getTime())) return undefined;
+               return date.toISOString().split('T')[0];
+            }
+            return undefined;
+         } catch (error) {
+            console.error('Error formatting date:', error, 'Date value:', date);
+            return undefined;
+         }
+      };
+
       const getAge = (): number | undefined => {
          if (!candidate.birthDate) return undefined;
          const today = new Date();
@@ -295,7 +316,7 @@ export class CandidateService {
          lastName: candidate.lastName,
          email: candidate.email,
          phoneNumber: candidate.phoneNumber,
-         birthDate: candidate.birthDate?.toISOString().split('T')[0],
+         birthDate: formatDate(candidate.birthDate),
          gender: candidate.gender,
          address: candidate.address,
          resumeUrl: candidate.resumeUrl,
@@ -303,7 +324,7 @@ export class CandidateService {
          githubUrl: candidate.githubUrl,
          portfolioUrl: candidate.portfolioUrl,
          status: candidate.status,
-         appliedDate: candidate.appliedDate.toISOString().split('T')[0],
+         appliedDate: formatDate(candidate.appliedDate) || new Date().toISOString().split('T')[0],
          summary: candidate.summary,
          yearsOfExperience: candidate.yearsOfExperience,
          currentJobTitle: candidate.currentJobTitle,
@@ -317,7 +338,7 @@ export class CandidateService {
          expectedSalary: candidate.expectedSalary,
          preferredEmploymentType: candidate.preferredEmploymentType,
          availableForRemote: candidate.availableForRemote,
-         availableStartDate: candidate.availableStartDate?.toISOString().split('T')[0],
+         availableStartDate: formatDate(candidate.availableStartDate),
          source: candidate.source,
          fullName: `${candidate.firstName} ${candidate.lastName}`,
          age: getAge(),

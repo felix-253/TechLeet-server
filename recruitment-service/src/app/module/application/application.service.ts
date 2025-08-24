@@ -349,6 +349,27 @@ export class ApplicationService {
    }
 
    private mapToResponseDto(application: ApplicationEntity): ApplicationResponseDto {
+      // Helper function to safely format dates
+      const formatDate = (date: Date | string | null | undefined): string | undefined => {
+         if (!date) return undefined;
+         try {
+            if (typeof date === 'string') {
+               // If it's already a string, check if it's a valid date string
+               const parsedDate = new Date(date);
+               if (isNaN(parsedDate.getTime())) return undefined;
+               return parsedDate.toISOString().split('T')[0];
+            }
+            if (date instanceof Date) {
+               if (isNaN(date.getTime())) return undefined;
+               return date.toISOString().split('T')[0];
+            }
+            return undefined;
+         } catch (error) {
+            console.error('Error formatting date:', error, 'Date value:', date);
+            return undefined;
+         }
+      };
+
       const getDaysSinceApplied = (): number => {
          const today = new Date();
          const applied = new Date(application.appliedDate);
@@ -394,40 +415,18 @@ export class ApplicationService {
          coverLetter: application.coverLetter,
          resumeUrl: application.resumeUrl,
          status: application.status,
-         appliedDate: application.appliedDate instanceof Date
-            ? application.appliedDate.toISOString().split('T')[0]
-            : new Date(application.appliedDate).toISOString().split('T')[0],
-         reviewedDate: application.reviewedDate
-            ? (application.reviewedDate instanceof Date
-               ? application.reviewedDate.toISOString().split('T')[0]
-               : new Date(application.reviewedDate).toISOString().split('T')[0])
-            : undefined,
+         appliedDate: formatDate(application.appliedDate) || new Date().toISOString().split('T')[0],
+         reviewedDate: formatDate(application.reviewedDate),
          reviewNotes: application.reviewNotes,
          score: application.score,
          feedback: application.feedback,
-         offerDate: application.offerDate
-            ? (application.offerDate instanceof Date
-               ? application.offerDate.toISOString().split('T')[0]
-               : new Date(application.offerDate).toISOString().split('T')[0])
-            : undefined,
+         offerDate: formatDate(application.offerDate),
          offeredSalary: application.offeredSalary,
-         offerExpiryDate: application.offerExpiryDate
-            ? (application.offerExpiryDate instanceof Date
-               ? application.offerExpiryDate.toISOString().split('T')[0]
-               : new Date(application.offerExpiryDate).toISOString().split('T')[0])
-            : undefined,
+         offerExpiryDate: formatDate(application.offerExpiryDate),
          offerStatus: application.offerStatus,
-         offerResponseDate: application.offerResponseDate
-            ? (application.offerResponseDate instanceof Date
-               ? application.offerResponseDate.toISOString().split('T')[0]
-               : new Date(application.offerResponseDate).toISOString().split('T')[0])
-            : undefined,
+         offerResponseDate: formatDate(application.offerResponseDate),
          rejectionReason: application.rejectionReason,
-         expectedStartDate: application.expectedStartDate
-            ? (application.expectedStartDate instanceof Date
-               ? application.expectedStartDate.toISOString().split('T')[0]
-               : new Date(application.expectedStartDate).toISOString().split('T')[0])
-            : undefined,
+         expectedStartDate: formatDate(application.expectedStartDate),
          applicationNotes: application.applicationNotes,
          priority: application.priority,
          tags: application.tags,
