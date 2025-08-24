@@ -124,7 +124,7 @@ export class CvLlmSummaryService {
    }
 
    /**
-    * Build prompt for CV summary generation
+    * Build prompt for CV summary generation with enhanced detail
     */
    private buildSummaryPrompt(
       cvText: string,
@@ -132,42 +132,83 @@ export class CvLlmSummaryService {
       jobDescription?: string
    ): string {
       const jobContext = jobDescription 
-         ? `\n\nJob Context:\n${jobDescription}\n\nPlease consider this job when evaluating the candidate's fit.`
+         ? `\n\nJob Context:\n${jobDescription}\n\nPlease evaluate the candidate's fit for this specific role.`
          : '';
 
       return `
-Analyze this CV and provide a structured assessment:
+Bạn là một chuyên viên HR và nhà tuyển dụng kỹ thuật chuyên nghiệp. Hãy phân tích CV này một cách kỹ lưỡng và cung cấp đánh giá chi tiết, toàn diện bằng tiếng Việt.
 
-CV Text:
+Nội dung CV:
 ${cvText}
 
-Extracted Data:
-- Experience: ${processedData.totalExperienceYears} years
-- Technical Skills: ${processedData.skills.technical.join(', ')}
-- Education: ${processedData.education.map(e => `${e.degree} from ${e.institution}`).join(', ')}
+Dữ liệu trích xuất:
+- Kinh nghiệm: ${processedData.totalExperienceYears} năm
+- Kỹ năng kỹ thuật: ${processedData.skills.technical.join(', ')}
+- Kỹ năng mềm: ${processedData.skills.soft.join(', ')}
+- Học vấn: ${processedData.education.map(e => `${e.degree} tại ${e.institution} (${e.graduationYear})`).join(', ')}
+- Lịch sử công việc: ${processedData.workExperience.map(w => `${w.position} tại ${w.company} (${w.duration})`).join(', ')}
 ${jobContext}
 
-Please provide your analysis in the following JSON format:
+Vui lòng cung cấp phân tích chi tiết theo định dạng JSON sau. Hãy viết toàn bộ bằng tiếng Việt và chi tiết, cụ thể:
+
 {
-  "summary": "2-3 sentence professional summary",
-  "keyHighlights": ["highlight 1", "highlight 2", "highlight 3"],
-  "concerns": ["concern 1", "concern 2"],
+  "summary": "Tóm tắt chuyên môn chi tiết 3-4 câu về điểm mạnh chính, mức độ kinh nghiệm, chuyên môn kỹ thuật và hồ sơ tổng thể. Hãy cụ thể về nền tảng và thành tích của họ.",
+  "keyHighlights": [
+    "Kỹ năng kỹ thuật hoặc thành tích cụ thể",
+    "Kinh nghiệm lãnh đạo hoặc quản lý dự án", 
+    "Trình độ kỹ thuật đáng chú ý",
+    "Kinh nghiệm ngành hoặc kiến thức chuyên môn",
+    "Điểm nổi bật về học vấn hoặc chứng chỉ"
+  ],
+  "concerns": [
+    "Bất kỳ khoảng trống nào trong kinh nghiệm hoặc kỹ năng",
+    "Các lĩnh vực cần cải thiện",
+    "Yêu cầu còn thiếu cho vị trí này"
+  ],
   "skillsAssessment": {
-    "technicalSkills": ["skill1", "skill2"],
+    "technicalSkills": ["kỹ năng1", "kỹ năng2", "kỹ năng3"],
     "experienceLevel": "junior|mid|senior|lead",
-    "strengthAreas": ["area1", "area2"],
-    "improvementAreas": ["area1", "area2"]
+    "strengthAreas": ["lĩnh vực1", "lĩnh vực2"],
+    "improvementAreas": ["lĩnh vực1", "lĩnh vực2"]
   },
   "fitScore": 85,
-  "recommendation": "strong_fit|good_fit|moderate_fit|poor_fit"
+  "recommendation": "phù_hợp_cao|phù_hợp_tốt|phù_hợp_vừa|ít_phù_hợp"
 }
 
-Focus on:
-1. Technical competency and experience level
-2. Career progression and growth
-3. Relevant skills for the role
-4. Any red flags or concerns
-5. Overall potential and fit
+Hướng dẫn phân tích:
+1. **Tóm tắt**: Viết tóm tắt toàn diện 3-4 câu bằng tiếng Việt bao gồm:
+   - Mức độ kinh nghiệm và số năm kinh nghiệm
+   - Năng lực kỹ thuật chính và công nghệ họ làm việc
+   - Cấp độ/vị trí của họ (junior, mid, senior, lead)
+   - Bất kỳ thành tích hoặc chuyên môn đáng chú ý nào
+   
+2. **Điểm nổi bật chính**: Liệt kê 4-5 điểm mạnh cụ thể bằng tiếng Việt:
+   - Kỹ năng kỹ thuật với các công nghệ cụ thể được đề cập
+   - Kinh nghiệm lãnh đạo, cố vấn hoặc quản lý nhóm
+   - Kinh nghiệm quản lý dự án hoặc giao hàng
+   - Chuyên môn lĩnh vực hoặc kiến thức ngành
+   - Thành tích hoặc kết quả đáng chú ý
+   
+3. **Mối quan ngại**: Trung thực về bất kỳ khoảng trống hoặc mối quan ngại nào:
+   - Thiếu kỹ năng cần thiết cho vị trí
+   - Khoảng trống kinh nghiệm hoặc thiếu công nghệ nhất định
+   - Câu hỏi về sự phát triển nghề nghiệp
+   - Bất kỳ cờ đỏ nào trong CV
+   
+4. **Đánh giá kỹ năng**: Cung cấp đánh giá kỹ thuật chi tiết:
+   - Liệt kê các kỹ năng kỹ thuật mạnh nhất của họ
+   - Đánh giá chính xác mức độ kinh nghiệm của họ
+   - Xác định các lĩnh vực điểm mạnh chính
+   - Đề xuất các lĩnh vực để phát triển
+   
+5. **Chấm điểm**: Hãy thực tế trong việc chấm điểm:
+   - 90-100: Phù hợp xuất sắc, vượt qua yêu cầu
+   - 80-89: Phù hợp mạnh, đáp ứng tốt hầu hết yêu cầu
+   - 70-79: Phù hợp tốt, đáp ứng yêu cầu cơ bản
+   - 60-69: Phù hợp vừa phải, có một số khoảng trống nhưng có tiềm năng
+   - Dưới 60: Ít phù hợp, có khoảng trống đáng kể
+
+Tập trung vào việc cung cấp những hiểu biết có thể hành động cho các quyết định tuyển dụng. Hãy cụ thể về công nghệ, số năm kinh nghiệm và kỹ năng cụ thể thay vì các tuyên bố chung chung. Tất cả nội dung phải bằng tiếng Việt.
 `;
    }
 

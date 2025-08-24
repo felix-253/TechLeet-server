@@ -145,18 +145,36 @@ export class CvNlpProcessingService {
    }
 
    /**
-    * Extract work experience from CV text
+    * Extract work experience from CV text with Vietnamese support
     */
    private extractWorkExperience(text: string): WorkExperience[] {
       const experiences: WorkExperience[] = [];
       
-      // Look for experience sections
-      const experienceKeywords = ['experience', 'work history', 'employment', 'career', 'professional experience'];
+      // Look for experience sections (English and Vietnamese)
+      const experienceKeywords = [
+         'experience', 'work history', 'employment', 'career', 'professional experience',
+         'kinh nghiệm', 'kinh nghiệm làm việc', 'công việc', 'nghề nghiệp'
+      ];
+      
+      // Extract years of experience from text
+      const experienceYears = this.extractExperienceYears(text);
+      if (experienceYears > 0) {
+         // Create a synthetic work experience entry
+         experiences.push({
+            company: 'Multiple Companies', // Placeholder since we don't parse individual jobs yet
+            position: 'Various Positions',
+            duration: `${experienceYears} years`,
+            durationInMonths: experienceYears * 12,
+            description: 'Extracted from CV summary',
+            isCurrent: true
+         });
+      }
+      
       const sections = this.splitIntoSections(text);
       
       for (const section of sections) {
          if (experienceKeywords.some(keyword => 
-            section.toLowerCase().includes(keyword)
+            section.toLowerCase().includes(keyword.toLowerCase())
          )) {
             const sectionExperiences = this.parseExperienceSection(section);
             experiences.push(...sectionExperiences);
@@ -164,6 +182,44 @@ export class CvNlpProcessingService {
       }
 
       return experiences;
+   }
+
+   /**
+    * Extract years of experience from Vietnamese and English text
+    */
+   private extractExperienceYears(text: string): number {
+      const patterns = [
+         // Vietnamese patterns
+         /(\d+)\s*năm\s*kinh\s*nghiệm/gi,
+         /kinh\s*nghiệm\s*(\d+)\s*năm/gi,
+         /hơn\s*(\d+)\s*năm\s*kinh\s*nghiệm/gi,
+         /trên\s*(\d+)\s*năm\s*kinh\s*nghiệm/gi,
+         
+         // English patterns
+         /(\d+)\s*years?\s*of\s*experience/gi,
+         /(\d+)\s*years?\s*experience/gi,
+         /over\s*(\d+)\s*years?\s*of\s*experience/gi,
+         /more\s*than\s*(\d+)\s*years?\s*experience/gi,
+         /(\d+)\+\s*years?\s*experience/gi
+      ];
+
+      for (const pattern of patterns) {
+         const matches = text.match(pattern);
+         if (matches) {
+            for (const match of matches) {
+               const numberMatch = match.match(/(\d+)/);
+               if (numberMatch) {
+                  const years = parseInt(numberMatch[1]);
+                  if (years > 0 && years <= 50) { // Reasonable range
+                     this.logger.log(`Extracted ${years} years of experience from: "${match.trim()}"`);
+                     return years;
+                  }
+               }
+            }
+         }
+      }
+
+      return 0;
    }
 
    /**

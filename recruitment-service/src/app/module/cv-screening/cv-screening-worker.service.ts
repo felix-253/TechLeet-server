@@ -8,6 +8,8 @@ import { CvTextExtractionService } from './cv-text-extraction.service';
 import { CvNlpProcessingService, ProcessedCvData } from './cv-nlp-processing.service';
 import { CvEmbeddingService } from './cv-embedding.service';
 import { CvLlmSummaryService } from './cv-llm-summary.service';
+import { CvChunkingService } from './cv-chunking.service';
+import { SkillTaxonomyService } from './skill-taxonomy.service';
 import { EmbeddingType } from '../../../entities/recruitment/cv-embedding.entity';
 
 export interface ScreeningPipelineResult {
@@ -17,6 +19,8 @@ export interface ScreeningPipelineResult {
    skillsScore: number;
    experienceScore: number;
    educationScore: number;
+   vectorSimilarity: number;
+   chunkSimilarity: number;
    aiSummary: string;
    keyHighlights: string[];
    concerns: string[];
@@ -39,10 +43,12 @@ export class CvScreeningWorkerService {
       private readonly nlpProcessingService: CvNlpProcessingService,
       private readonly embeddingService: CvEmbeddingService,
       private readonly llmSummaryService: CvLlmSummaryService,
+      private readonly chunkingService: CvChunkingService,
+      private readonly skillTaxonomyService: SkillTaxonomyService,
    ) {}
 
    /**
-    * Execute the complete CV screening pipeline
+    * Execute the complete CV screening pipeline with error recovery
     */
    async executeScreeningPipeline(
       applicationId: number,
@@ -50,6 +56,7 @@ export class CvScreeningWorkerService {
    ): Promise<ScreeningPipelineResult> {
       const startTime = Date.now();
       let screeningResult: CvScreeningResultEntity | undefined;
+      let lastError: Error | undefined;
 
       try {
          this.logger.log(`Starting CV screening pipeline for application ${applicationId}`);
@@ -60,41 +67,58 @@ export class CvScreeningWorkerService {
             throw new Error(`Application ${applicationId} or job posting not found`);
          }
 
-         // Create initial screening record
-         screeningResult = await this.createScreeningRecord(applicationId, application.jobPostingId);
+         // Create or update existing screening record
+         screeningResult = await this.createOrUpdateScreeningRecord(applicationId, application.jobPostingId);
 
-         // Step 1: Extract text from CV
-         const extractedText = await this.extractTextFromCv(application, resumePath);
+         // Step 1: Extract text from CV with retry
+         const extractedText = await this.executeWithRetry(
+            () => this.extractTextFromCv(application, resumePath),
+            'Text extraction',
+            3
+         );
          await this.updateScreeningProgress(screeningResult.screeningId, {
             extractedText,
             status: ScreeningStatus.PROCESSING,
          });
 
-         // Step 2: Process text with NLP
-         const processedData = await this.processWithNlp(extractedText);
+         // Step 2: Process text with NLP with retry
+         const processedData = await this.executeWithRetry(
+            () => this.processWithNlp(extractedText),
+            'NLP processing',
+            2
+         );
          await this.updateScreeningProgress(screeningResult.screeningId, {
             extractedSkills: processedData.skills.technical,
             extractedExperience: processedData.workExperience,
             extractedEducation: processedData.education,
          });
 
-         // Step 3: Generate embeddings
-         const cvEmbedding = await this.generateCvEmbedding(applicationId, extractedText);
-         const jobEmbedding = await this.ensureJobEmbedding(application.jobPostingId, application.jobPosting);
+         // Step 3: Generate embeddings with retry
+         const cvEmbedding = await this.executeWithRetry(
+            () => this.generateCvEmbedding(applicationId, extractedText),
+            'CV embedding generation',
+            2
+         );
+         
+         const jobEmbedding = await this.executeWithRetry(
+            () => this.ensureJobEmbedding(application.jobPostingId, application.jobPosting!),
+            'Job embedding generation',
+            2
+         );
 
          // Step 4: Calculate similarity scores
          const scores = await this.calculateSimilarityScores(
             applicationId,
             application.jobPostingId,
             processedData,
-            application.jobPosting
+            application.jobPosting!
          );
 
-         // Step 5: Generate AI summary
-         const summary = await this.generateAiSummary(
-            extractedText,
-            processedData,
-            application.jobPosting
+         // Step 5: Generate AI summary with circuit breaker
+         const summary = await this.executeWithCircuitBreaker(
+            () => this.generateAiSummary(extractedText, processedData, application.jobPosting!),
+            'AI summary generation',
+            60000 // 60 second timeout
          );
 
          // Step 6: Complete screening
@@ -117,6 +141,8 @@ export class CvScreeningWorkerService {
             skillsScore: finalResult.skillsScore || 0,
             experienceScore: finalResult.experienceScore || 0,
             educationScore: finalResult.educationScore || 0,
+            vectorSimilarity: finalResult.vectorSimilarity || 0,
+            chunkSimilarity: finalResult.chunkSimilarity || 0,
             aiSummary: finalResult.aiSummary || '',
             keyHighlights: finalResult.keyHighlights || [],
             concerns: finalResult.concerns || [],
@@ -143,6 +169,8 @@ export class CvScreeningWorkerService {
             skillsScore: 0,
             experienceScore: 0,
             educationScore: 0,
+            vectorSimilarity: 0,
+            chunkSimilarity: 0,
             aiSummary: '',
             keyHighlights: [],
             concerns: [],
@@ -191,7 +219,7 @@ export class CvScreeningWorkerService {
    }
 
    /**
-    * Extract text from CV
+    * Extract text from CV with improved error handling
     */
    private async extractTextFromCv(
       application: any,
@@ -206,12 +234,33 @@ export class CvScreeningWorkerService {
       // Convert URL to local file path if needed
       const localFilePath = this.convertUrlToLocalPath(filePath);
 
+      // Check if file exists before attempting extraction
+      const fs = require('fs');
+      if (!fs.existsSync(localFilePath)) {
+         throw new Error(`Resume file not found at path: ${localFilePath}. Original path: ${filePath}`);
+      }
+
+      // Check file size (optional safety check)
+      const stats = fs.statSync(localFilePath);
+      const fileSizeMB = stats.size / (1024 * 1024);
+      
+      if (fileSizeMB > 50) { // 50MB limit
+         throw new Error(`Resume file too large: ${fileSizeMB.toFixed(2)}MB. Maximum allowed: 50MB`);
+      }
+
+      this.logger.log(`Extracting text from file: ${localFilePath} (${fileSizeMB.toFixed(2)}MB)`);
+
       const result = await this.textExtractionService.extractTextFromPdf(localFilePath);
+      
+      if (!result.text || result.text.trim().length < 10) {
+         throw new Error('Extracted text is too short or empty. File may be corrupted or not contain readable text.');
+      }
+
       return result.text;
    }
 
    /**
-    * Convert URL to local file path
+    * Convert URL to local file path with improved robustness
     */
    private convertUrlToLocalPath(urlOrPath: string): string {
       // If it's already a local path, return as is
@@ -220,16 +269,20 @@ export class CvScreeningWorkerService {
       }
 
       try {
-         // Extract the path from URL
-         // Example: https://techleet.me/api/v1/recruitment-service/uploads/candidate_resume/file.pdf
-         // Should become: ./uploads/candidate_resume/file.pdf
          const url = new URL(urlOrPath);
-         const pathParts = url.pathname.split('/');
+         const pathParts = url.pathname.split('/').filter(part => part.length > 0);
 
          // Find the 'uploads' part in the path
          const uploadsIndex = pathParts.findIndex(part => part === 'uploads');
          if (uploadsIndex === -1) {
-            throw new Error('Invalid file URL format - uploads directory not found');
+            // Fallback: try to extract filename and assume uploads directory
+            const filename = pathParts[pathParts.length - 1];
+            if (filename && filename.includes('.')) {
+               const fallbackPath = `./uploads/candidate_resume/${filename}`;
+               this.logger.warn(`Could not find uploads directory in URL, using fallback: ${fallbackPath}`);
+               return fallbackPath;
+            }
+            throw new Error('Invalid file URL format - uploads directory not found and no filename detected');
          }
 
          // Reconstruct the local path starting from 'uploads'
@@ -239,7 +292,20 @@ export class CvScreeningWorkerService {
          return localPath;
       } catch (error) {
          this.logger.error(`Failed to convert URL to local path: ${urlOrPath}`, error);
-         throw new Error(`Invalid file URL format: ${urlOrPath}`);
+         
+         // Last resort: try to extract just the filename
+         try {
+            const filename = urlOrPath.split('/').pop();
+            if (filename && filename.includes('.')) {
+               const emergencyPath = `./uploads/candidate_resume/${filename}`;
+               this.logger.warn(`Using emergency fallback path: ${emergencyPath}`);
+               return emergencyPath;
+            }
+         } catch {
+            // Ignore and throw original error
+         }
+         
+         throw new Error(`Invalid file URL format: ${urlOrPath}. Error: ${error.message}`);
       }
    }
 
@@ -495,5 +561,83 @@ export class CvScreeningWorkerService {
       }
 
       return 0.3; // Some education but not exact match
+   }
+
+   /**
+    * Create or update existing screening record
+    */
+   private async createOrUpdateScreeningRecord(
+      applicationId: number,
+      jobPostingId: number
+   ): Promise<CvScreeningResultEntity> {
+      let screeningResult = await this.screeningRepository.findOne({
+         where: { applicationId },
+      });
+
+      if (screeningResult) {
+         // Update existing record
+         screeningResult.status = ScreeningStatus.PROCESSING;
+         screeningResult.errorMessage = undefined;
+         return this.screeningRepository.save(screeningResult);
+      } else {
+         // Create new record
+         return this.createScreeningRecord(applicationId, jobPostingId);
+      }
+   }
+
+   /**
+    * Execute function with retry logic
+    */
+   private async executeWithRetry<T>(
+      fn: () => Promise<T>,
+      operation: string,
+      maxRetries: number = 3,
+      delay: number = 1000
+   ): Promise<T> {
+      let lastError: Error = new Error(`${operation} failed for unknown reason`);
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+         try {
+            this.logger.log(`Executing ${operation} (attempt ${attempt}/${maxRetries})`);
+            return await fn();
+         } catch (error) {
+            lastError = error instanceof Error ? error : new Error(String(error));
+            this.logger.warn(`${operation} failed (attempt ${attempt}/${maxRetries}): ${error.message}`);
+            
+            if (attempt === maxRetries) {
+               break;
+            }
+
+            // Exponential backoff
+            const backoffDelay = delay * Math.pow(2, attempt - 1);
+            this.logger.log(`Retrying ${operation} in ${backoffDelay}ms...`);
+            await this.sleep(backoffDelay);
+         }
+      }
+
+      throw new Error(`${operation} failed after ${maxRetries} attempts: ${lastError.message}`);
+   }
+
+   /**
+    * Sleep utility function
+    */
+   private sleep(ms: number): Promise<void> {
+      return new Promise(resolve => setTimeout(resolve, ms));
+   }
+
+   /**
+    * Circuit breaker for external API calls
+    */
+   private async executeWithCircuitBreaker<T>(
+      fn: () => Promise<T>,
+      operation: string,
+      timeout: number = 30000
+   ): Promise<T> {
+      return Promise.race([
+         fn(),
+         new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`${operation} timed out after ${timeout}ms`)), timeout)
+         )
+      ]);
    }
 }

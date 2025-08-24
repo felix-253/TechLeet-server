@@ -26,6 +26,7 @@ import {
    ScreeningStatsDto,
    BulkScreeningDto,
    RetryScreeningDto,
+   TestLocalCvDto,
 } from './cv-screening.dto';
 
 @ApiTags('CV Screening')
@@ -237,6 +238,39 @@ export class CvScreeningController {
          cancelled,
          message: cancelled ? 'Screening cancelled successfully' : 'Could not cancel screening'
       };
+   }
+
+   @Post('test-local-cv')
+   @ApiOperation({
+      summary: 'Test CV screening with local file',
+      description: 'Test the CV screening pipeline with a local CV file (for development/testing)'
+   })
+   @ApiResponse({
+      status: HttpStatus.OK,
+      description: 'Test screening completed successfully',
+      schema: {
+         type: 'object',
+         properties: {
+            success: { type: 'boolean', example: true },
+            processingTimeMs: { type: 'number', example: 15000 },
+            extractedText: { type: 'string', example: 'CV text content...' },
+            processedData: { type: 'object' },
+            scores: { type: 'object' },
+            summary: { type: 'object' },
+            error: { type: 'string' }
+         }
+      }
+   })
+   @ApiResponse({
+      status: HttpStatus.BAD_REQUEST,
+      description: 'Invalid file path or processing error'
+   })
+   async testLocalCv(@Body() testDto: TestLocalCvDto) {
+      return this.screeningService.testLocalCvScreening(
+         testDto.filePath,
+         testDto.jobPostingId,
+         testDto.mockApplicationId
+      );
    }
 
    @Get('queue/status')

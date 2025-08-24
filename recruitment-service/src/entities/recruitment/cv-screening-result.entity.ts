@@ -121,6 +121,32 @@ export class CvScreeningResultEntity {
    educationScore?: number;
 
    @Column({
+      type: 'decimal',
+      precision: 5,
+      scale: 4,
+      nullable: true,
+      comment: 'Vector similarity score using full CV embedding (0-1)'
+   })
+   @ApiPropertyOptional({
+      description: 'Vector similarity score using full CV embedding (0-1)',
+      example: 0.8542
+   })
+   vectorSimilarity?: number;
+
+   @Column({
+      type: 'decimal',
+      precision: 5,
+      scale: 4,
+      nullable: true,
+      comment: 'Chunk-based similarity score using max chunk similarity (0-1)'
+   })
+   @ApiPropertyOptional({
+      description: 'Chunk-based similarity score using max chunk similarity (0-1)',
+      example: 0.9125
+   })
+   chunkSimilarity?: number;
+
+   @Column({
       type: 'jsonb',
       nullable: true,
       comment: 'Extracted skills from CV'

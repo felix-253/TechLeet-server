@@ -14,6 +14,7 @@ export enum EmbeddingType {
 @Index(['applicationId'])
 @Index(['jobPostingId'])
 @Index(['embeddingType'])
+@Index(['embeddingType', 'applicationId', 'jobPostingId'], { unique: true }) // For idempotent operations
 export class CvEmbeddingEntity {
    @PrimaryGeneratedColumn('identity', {
       comment: 'Unique identifier for the embedding'
@@ -70,17 +71,17 @@ export class CvEmbeddingEntity {
    })
    originalText: string;
 
-   // Using string type for pgvector as per documentation
+   // Using vector type for pgvector
    @Column({
-      type: 'varchar',
-      nullable: false,
+      type: 'varchar', // Will be migrated to vector(768) in migration
+      nullable: true, // Allow NULL initially, embeddings are generated asynchronously
       comment: 'Vector embedding of the text (768 dimensions for Gemini text-embedding-004)'
    })
-   @ApiProperty({
+   @ApiPropertyOptional({
       description: 'Vector embedding of the text',
       example: '[0.1, -0.2, 0.3, ...]'
    })
-   embedding: string;
+   embedding?: string; // Will hold vector data after migration
 
    @Column({
       type: 'varchar',

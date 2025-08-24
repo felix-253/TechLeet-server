@@ -47,7 +47,7 @@ export class CreateApplicationDto {
       example: 'https://storage.example.com/resumes/application-123.pdf',
    })
    @IsOptional()
-   @IsUrl({}, { message: 'Please provide a valid resume URL' })
+   // @IsUrl({}, { message: 'Please provide a valid resume URL' })
    resumeUrl?: string;
 
    @ApiPropertyOptional({

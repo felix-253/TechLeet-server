@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/commo
 import { ConfigService } from '@nestjs/config';
 import { Queue, Worker, Job } from 'bullmq';
 import { createQueueOptions } from '../../../config/queue.config';
+import { CvScreeningWorkerService } from './cv-screening-worker.service';
 
 export enum QueueNames {
    CV_PROCESSING = 'cv-processing',
@@ -55,7 +56,10 @@ export class CvQueueService implements OnModuleInit, OnModuleDestroy {
    private similarityWorker: Worker;
    private summaryWorker: Worker;
 
-   constructor(private readonly configService: ConfigService) {}
+   constructor(
+      private readonly configService: ConfigService,
+      private readonly screeningWorkerService: CvScreeningWorkerService,
+   ) {}
 
    async onModuleInit() {
       await this.initializeQueues();
@@ -92,9 +96,27 @@ export class CvQueueService implements OnModuleInit, OnModuleDestroy {
       this.cvProcessingWorker = new Worker(
          QueueNames.CV_PROCESSING,
          async (job: Job) => {
-            this.logger.log(`Processing CV job: ${job.id} - ${job.name}`);
-            // Worker logic will be handled by the CV screening worker service
-            return { processed: true, jobId: job.id };
+            this.logger.log(`Processing CV job: ${job.id} - ${job.name} for application ${job.data.applicationId}`);
+            
+            try {
+               // Execute the actual screening pipeline
+               const result = await this.screeningWorkerService.executeScreeningPipeline(
+                  job.data.applicationId,
+                  job.data.resumePath
+               );
+               
+               this.logger.log(`CV processing job ${job.id} completed successfully with score ${result.overallScore}`);
+               return { 
+                  processed: true, 
+                  jobId: job.id,
+                  screeningId: result.screeningId,
+                  overallScore: result.overallScore,
+                  status: result.status
+               };
+            } catch (error) {
+               this.logger.error(`CV processing job ${job.id} failed: ${error.message}`, error.stack);
+               throw error; // Re-throw to mark job as failed
+            }
          },
          {
             connection: queueOptions.connection,
@@ -107,7 +129,9 @@ export class CvQueueService implements OnModuleInit, OnModuleDestroy {
          QueueNames.SIMILARITY_CALCULATION,
          async (job: Job) => {
             this.logger.log(`Processing similarity job: ${job.id} - ${job.name}`);
-            return { processed: true, jobId: job.id };
+            // For now, this is handled within the main pipeline
+            // Could be split out for more granular processing later
+            return { processed: true, jobId: job.id, note: 'Handled within main pipeline' };
          },
          {
             connection: queueOptions.connection,
@@ -120,7 +144,9 @@ export class CvQueueService implements OnModuleInit, OnModuleDestroy {
          QueueNames.SUMMARY_GENERATION,
          async (job: Job) => {
             this.logger.log(`Processing summary job: ${job.id} - ${job.name}`);
-            return { processed: true, jobId: job.id };
+            // For now, this is handled within the main pipeline
+            // Could be split out for more granular processing later
+            return { processed: true, jobId: job.id, note: 'Handled within main pipeline' };
          },
          {
             connection: queueOptions.connection,

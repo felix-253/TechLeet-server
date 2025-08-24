@@ -7,9 +7,14 @@ import { CvTextExtractionService } from './cv-text-extraction.service';
 import { CvNlpProcessingService } from './cv-nlp-processing.service';
 import { CvEmbeddingService } from './cv-embedding.service';
 import { CvLlmSummaryService } from './cv-llm-summary.service';
+import { CvChunkingService } from './cv-chunking.service';
+import { SkillTaxonomyService } from './skill-taxonomy.service';
 import { CvQueueService } from './cv-queue.service';
 import { CvScreeningResultEntity } from '../../../entities/recruitment/cv-screening-result.entity';
 import { CvEmbeddingEntity } from '../../../entities/recruitment/cv-embedding.entity';
+import { CvEmbeddingChunkEntity } from '../../../entities/recruitment/cv-embedding-chunk.entity';
+import { SkillEntity } from '../../../entities/recruitment/skill.entity';
+import { SkillAliasEntity } from '../../../entities/recruitment/skill-alias.entity';
 import { ApplicationEntity } from '../../../entities/recruitment/application.entity';
 import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
 
@@ -18,6 +23,9 @@ import { JobPostingEntity } from '../../../entities/recruitment/job-posting.enti
       TypeOrmModule.forFeature([
          CvScreeningResultEntity,
          CvEmbeddingEntity,
+         CvEmbeddingChunkEntity,
+         SkillEntity,
+         SkillAliasEntity,
          ApplicationEntity,
          JobPostingEntity,
       ]),
@@ -30,6 +38,8 @@ import { JobPostingEntity } from '../../../entities/recruitment/job-posting.enti
       CvNlpProcessingService,
       CvEmbeddingService,
       CvLlmSummaryService,
+      CvChunkingService,
+      SkillTaxonomyService,
       CvQueueService,
    ],
    exports: [
@@ -39,6 +49,8 @@ import { JobPostingEntity } from '../../../entities/recruitment/job-posting.enti
       CvNlpProcessingService,
       CvEmbeddingService,
       CvLlmSummaryService,
+      CvChunkingService,
+      SkillTaxonomyService,
       CvQueueService,
    ],
 })

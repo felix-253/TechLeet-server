@@ -294,3 +294,30 @@ export class RetryScreeningDto {
    @IsBoolean()
    force?: boolean;
 }
+
+export class TestLocalCvDto {
+   @ApiProperty({
+      description: 'Local file path to the CV file',
+      example: './uploads/test-cv.pdf'
+   })
+   @IsString()
+   filePath: string;
+
+   @ApiPropertyOptional({
+      description: 'Job posting ID to test against (optional)',
+      example: 1
+   })
+   @IsOptional()
+   @IsNumber()
+   @Type(() => Number)
+   jobPostingId?: number;
+
+   @ApiPropertyOptional({
+      description: 'Mock application ID for testing (optional)',
+      example: 9999
+   })
+   @IsOptional()
+   @IsNumber()
+   @Type(() => Number)
+   mockApplicationId?: number;
+}
