@@ -33,7 +33,8 @@ jobs:
             pnpm install
             echo "PM2 delete all"
             pm2 delete api-gateway  company-service recruitment-service user-service
-
+            echo "run migrate"
+            pnpm run migrate
             echo "PM2 starting/restarting services..."
 
             pm2 startOrRestart ecosystem.config.js

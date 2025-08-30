@@ -13,13 +13,13 @@
       "start:debug": "nest start --debug --watch",
       "start:prod": "node dist/main",
       "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
-      "typeorm": "typeorm-ts-node-commonjs",
-      "migration:generate": "npm run typeorm -- migration:generate -d typeorm.config.ts",
-      "migration:run": "npm run typeorm -- migration:run -d typeorm.config.ts",
-      "migration:revert": "npm run typeorm -- migration:revert -d typeorm.config.ts",
-      "migration:create": "npm run typeorm -- migration:create",
-      "schema:sync": "npm run typeorm -- schema:sync -d typeorm.config.ts",
-      "schema:drop": "npm run typeorm -- schema:drop -d typeorm.config.ts"
+      "typeorm": "node -r ts-node/register -r tsconfig-paths/register ./node_modules/typeorm/cli.js",
+      "migration:gen:init": "pnpm typeorm migration:generate -d src/config/datasource.ts src/migrations/Init",
+      "migration:gen:diff": "pnpm typeorm migration:generate -d src/config/datasource.ts",
+      "migration:run": "pnpm typeorm migration:run -d src/config/datasource.ts",
+      "migration:revert": "pnpm typeorm migration:revert -d src/config/datasource.ts",
+      "migration:show": "pnpm typeorm migration:show -d src/config/datasource.ts",
+      "migration:check": "pnpm typeorm migration:generate src/migrations/tmpCheck -d src/config/datasource.ts --check --pretty"
    },
    "dependencies": {
       "@google/generative-ai": "^0.24.1",

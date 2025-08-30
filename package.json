@@ -9,6 +9,7 @@
     "dev:company": "pnpm --filter company-service start:dev",
     "dev:recruitment": "pnpm --filter recruitment-service start:dev",
     "build": "pnpm --filter user-service build && pnpm --filter company-service build && pnpm --filter recruitment-service build && pnpm --filter api-gateway build",
+    "migrate": "concurrently -n user,company,recruitment -c green,cyan,blue  \"pnpm --filter user-service migration:run\" \"pnpm --filter company-service migration:run\" \"pnpm --filter recruitment-service migration:run\"",
     "pm2:start": "pm2 start ecosystem.config.js"
   },
   "devDependencies": {

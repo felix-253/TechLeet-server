@@ -6,7 +6,7 @@ import {
    PrimaryGeneratedColumn,
    Index,
    BeforeInsert,
-   BeforeUpdate
+   BeforeUpdate,
 } from 'typeorm';
 import { BaseEntity } from '../base/base.entities';
 import { PermissionEntity } from './permission.entity';
@@ -18,7 +18,7 @@ import * as bcrypt from 'bcryptjs';
 @Index(['employeeCode'], { unique: true })
 export class EmployeeEntity extends BaseEntity {
    @PrimaryGeneratedColumn('identity', {
-      comment: 'Unique identifier for the employee'
+      comment: 'Unique identifier for the employee',
    })
    employeeId: number;
 
@@ -27,14 +27,14 @@ export class EmployeeEntity extends BaseEntity {
       length: 20,
       nullable: true,
       unique: true,
-      comment: 'Unique employee code for identification'
+      comment: 'Unique employee code for identification',
    })
    employeeCode?: string;
 
    @Column({
       type: 'varchar',
       nullable: false,
-      comment: 'Employee first name'
+      comment: 'Employee first name',
    })
    @Length(2, 50, { message: 'First name must be between 2 and 50 characters' })
    firstName: string;
@@ -42,7 +42,7 @@ export class EmployeeEntity extends BaseEntity {
    @Column({
       type: 'varchar',
       nullable: false,
-      comment: 'Employee last name'
+      comment: 'Employee last name',
    })
    @Length(2, 50, { message: 'Last name must be between 2 and 50 characters' })
    lastName: string;
@@ -50,14 +50,14 @@ export class EmployeeEntity extends BaseEntity {
    @Column({
       type: 'text',
       nullable: true,
-      comment: 'Employee residential address'
+      comment: 'Employee residential address',
    })
    address?: string;
 
    @Column({
       type: 'date',
       nullable: true,
-      comment: 'Employee date of birth'
+      comment: 'Employee date of birth',
    })
    birthDate?: Date;
 
@@ -65,7 +65,7 @@ export class EmployeeEntity extends BaseEntity {
       type: 'varchar',
       nullable: false,
       unique: true,
-      comment: 'Employee email address'
+      comment: 'Employee email address',
    })
    @IsEmail({}, { message: 'Please provide a valid email address' })
    email: string;
@@ -75,28 +75,28 @@ export class EmployeeEntity extends BaseEntity {
       length: 255,
       nullable: true,
       select: false,
-      comment: 'Encrypted password for authentication'
+      comment: 'Encrypted password for authentication',
    })
    password?: string;
 
    @Column({
       type: 'boolean',
       nullable: true,
-      comment: 'Employee gender (true=male, false=female)'
+      comment: 'Employee gender (true=male, false=female)',
    })
    gender?: boolean;
 
    @Column({
       type: 'date',
       nullable: true,
-      comment: 'Employee start date'
+      comment: 'Employee start date',
    })
    startDate?: Date;
 
    @Column({
       type: 'date',
       nullable: true,
-      comment: 'Date when employee was confirmed'
+      comment: 'Date when employee was confirmed',
    })
    confirmationDate?: Date;
 
@@ -104,7 +104,7 @@ export class EmployeeEntity extends BaseEntity {
       type: 'varchar',
       length: 255,
       nullable: true,
-      comment: 'URL to employee avatar image'
+      comment: 'URL to employee avatar image',
    })
    avatarUrl?: string;
 
@@ -112,7 +112,7 @@ export class EmployeeEntity extends BaseEntity {
       type: 'varchar',
       length: 20,
       nullable: true,
-      comment: 'Employee phone number'
+      comment: 'Employee phone number',
    })
    @IsOptional()
    @IsPhoneNumber(null, { message: 'Please provide a valid phone number' })
@@ -123,7 +123,7 @@ export class EmployeeEntity extends BaseEntity {
       precision: 10,
       scale: 2,
       nullable: true,
-      comment: 'Employee base salary'
+      comment: 'Employee base salary',
    })
    @IsOptional()
    @Min(0, { message: 'Salary must be a positive number' })
@@ -132,21 +132,21 @@ export class EmployeeEntity extends BaseEntity {
    @Column({
       type: 'int',
       nullable: true,
-      comment: 'Reference to department (Company Service)'
+      comment: 'Reference to department (Company Service)',
    })
    departmentId?: number;
 
    @Column({
       type: 'int',
       nullable: true,
-      comment: 'Reference to position (Company Service)'
+      comment: 'Reference to position (Company Service)',
    })
    positionId?: number;
 
    @Column({
       type: 'int',
       nullable: true,
-      comment: 'Reference to manager employee'
+      comment: 'Reference to manager employee',
    })
    managerId?: number;
 
@@ -154,27 +154,27 @@ export class EmployeeEntity extends BaseEntity {
       type: 'varchar',
       length: 20,
       nullable: true,
-      comment: 'Employee status (active, inactive, terminated, etc.)'
+      comment: 'Employee status (active, inactive, terminated, etc.)',
    })
    status?: string;
 
    @Column({
       type: 'date',
       nullable: true,
-      comment: 'Date when employee was terminated'
+      comment: 'Date when employee was terminated',
    })
    terminationDate?: Date;
 
    @Column({
       type: 'text',
       nullable: true,
-      comment: 'Reason for termination'
+      comment: 'Reason for termination',
    })
    terminationReason?: string;
 
    // Relationships
-   @ManyToMany(() => PermissionEntity, permission => permission.employees, {
-      cascade: ['insert', 'update']
+   @ManyToMany(() => PermissionEntity, (permission) => permission.employees, {
+      cascade: ['insert', 'update'],
    })
    @JoinTable({
       name: 'employee_permissions',
@@ -232,7 +232,9 @@ export class EmployeeEntity extends BaseEntity {
    // Generate unique employee code
    private async generateEmployeeCode(): Promise<string> {
       const year = new Date().getFullYear().toString().slice(-2);
-      const randomNum = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+      const randomNum = Math.floor(Math.random() * 10000)
+         .toString()
+         .padStart(4, '0');
       return `EMP${year}${randomNum}`;
    }
 
