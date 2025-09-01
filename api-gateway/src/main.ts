@@ -28,7 +28,9 @@ async function bootstrap() {
    app.enableCors({
       origin: [
          `${configService.get<string>('FRONTEND_URL', 'http://localhost:3000')}`,
+         `${configService.get<string>('FRONTEND_CANDIDATE_URL', 'http://localhost:8080')}`,
          `${configService.get<string>('DOMAIN', 'http://localhost:3030')}`,
+         "http://localhost:8080"
       ],
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],

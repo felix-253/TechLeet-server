@@ -37,11 +37,6 @@ async function bootstrap() {
    });
 
    app.use(helmet());
-   app.enableCors({
-      origin: ['http://localhost:3030', 'https://128.199.197.230:3030'],
-      credentials: true,
-   });
-
    app.useGlobalInterceptors(
       new SuccessResponseInterceptor(),
       new ClassSerializerInterceptor(app.get(Reflector))
