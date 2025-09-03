@@ -2,12 +2,13 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, FindManyOptions, Like, Between } from 'typeorm';
 import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
-import { 
-   CreateJobPostingDto, 
-   UpdateJobPostingDto, 
-   JobPostingResponseDto, 
-   GetJobPostingsQueryDto 
+import {
+   CreateJobPostingDto,
+   UpdateJobPostingDto,
+   JobPostingResponseDto,
+   GetJobPostingsQueryDto,
 } from './job-posting.dto';
+import * as dayjs from 'dayjs';
 
 @Injectable()
 export class JobPostingService {
@@ -21,14 +22,18 @@ export class JobPostingService {
          // Validate salary range
          if (createJobPostingDto.salaryMin && createJobPostingDto.salaryMax) {
             if (createJobPostingDto.salaryMin > createJobPostingDto.salaryMax) {
-               throw new BadRequestException('Minimum salary cannot be greater than maximum salary');
+               throw new BadRequestException(
+                  'Minimum salary cannot be greater than maximum salary',
+               );
             }
          }
 
          // Validate experience range
          if (createJobPostingDto.minExperience && createJobPostingDto.maxExperience) {
             if (createJobPostingDto.minExperience > createJobPostingDto.maxExperience) {
-               throw new BadRequestException('Minimum experience cannot be greater than maximum experience');
+               throw new BadRequestException(
+                  'Minimum experience cannot be greater than maximum experience',
+               );
             }
          }
 
@@ -54,19 +59,21 @@ export class JobPostingService {
       }
    }
 
-   async findAll(query: GetJobPostingsQueryDto): Promise<{ data: JobPostingResponseDto[]; total: number }> {
-      const { 
-         page = 0, 
-         limit = 10, 
-         keyword, 
+   async findAll(
+      query: GetJobPostingsQueryDto,
+   ): Promise<{ data: JobPostingResponseDto[]; total: number }> {
+      const {
+         page = 0,
+         limit = 10,
+         keyword,
          status,
          departmentId,
          positionId,
          employmentType,
          experienceLevel,
          location,
-         sortBy = 'createdAt', 
-         sortOrder = 'DESC' 
+         sortBy = 'createdAt',
+         sortOrder = 'DESC',
       } = query;
 
       const findOptions: FindManyOptions<JobPostingEntity> = {
@@ -109,11 +116,13 @@ export class JobPostingService {
       if (Object.keys(whereConditions).length > 0) {
          findOptions.where = whereConditions;
       }
-
-      const [jobPostings, total] = await this.jobPostingRepository.findAndCount(findOptions);
+      console.log(findOptions);
+      const [jobPostings, total] = await this.jobPostingRepository.findAndCount();
+      console.log('job', jobPostings);
+      console.log('total', total);
 
       return {
-         data: jobPostings.map(jp => this.mapToResponseDto(jp)),
+         data: jobPostings.map((jp) => this.mapToResponseDto(jp)),
          total,
       };
    }
@@ -130,7 +139,10 @@ export class JobPostingService {
       return this.mapToResponseDto(jobPosting);
    }
 
-   async update(id: number, updateJobPostingDto: UpdateJobPostingDto): Promise<JobPostingResponseDto> {
+   async update(
+      id: number,
+      updateJobPostingDto: UpdateJobPostingDto,
+   ): Promise<JobPostingResponseDto> {
       const jobPosting = await this.jobPostingRepository.findOne({
          where: { jobPostingId: id },
       });
@@ -142,7 +154,7 @@ export class JobPostingService {
       // Validate salary range if both are provided
       const newMinSalary = updateJobPostingDto.salaryMin ?? jobPosting.salaryMin;
       const newMaxSalary = updateJobPostingDto.salaryMax ?? jobPosting.salaryMax;
-      
+
       if (newMinSalary && newMaxSalary && newMinSalary > newMaxSalary) {
          throw new BadRequestException('Minimum salary cannot be greater than maximum salary');
       }
@@ -150,9 +162,11 @@ export class JobPostingService {
       // Validate experience range if both are provided
       const newMinExp = updateJobPostingDto.minExperience ?? jobPosting.minExperience;
       const newMaxExp = updateJobPostingDto.maxExperience ?? jobPosting.maxExperience;
-      
+
       if (newMinExp && newMaxExp && newMinExp > newMaxExp) {
-         throw new BadRequestException('Minimum experience cannot be greater than maximum experience');
+         throw new BadRequestException(
+            'Minimum experience cannot be greater than maximum experience',
+         );
       }
 
       // Validate application deadline if provided
@@ -231,7 +245,7 @@ export class JobPostingService {
          order: { createdAt: 'DESC' },
       });
 
-      return jobPostings.map(jp => this.mapToResponseDto(jp));
+      return jobPostings.map((jp) => this.mapToResponseDto(jp));
    }
 
    async findByPosition(positionId: number): Promise<JobPostingResponseDto[]> {
@@ -240,23 +254,23 @@ export class JobPostingService {
          order: { createdAt: 'DESC' },
       });
 
-      return jobPostings.map(jp => this.mapToResponseDto(jp));
+      return jobPostings.map((jp) => this.mapToResponseDto(jp));
    }
 
    async findActive(): Promise<JobPostingResponseDto[]> {
       const jobPostings = await this.jobPostingRepository.find({
-         where: { 
+         where: {
             status: 'published',
          },
          order: { applicationDeadline: 'ASC' },
       });
 
       // Filter by deadline in application logic since TypeORM doesn't support computed columns in WHERE
-      const activeJobPostings = jobPostings.filter(jp => 
-         new Date(jp.applicationDeadline) > new Date()
+      const activeJobPostings = jobPostings.filter(
+         (jp) => new Date(jp.applicationDeadline) > new Date(),
       );
 
-      return activeJobPostings.map(jp => this.mapToResponseDto(jp));
+      return activeJobPostings.map((jp) => this.mapToResponseDto(jp));
    }
 
    private mapToResponseDto(jobPosting: JobPostingEntity): JobPostingResponseDto {
@@ -275,13 +289,6 @@ export class JobPostingService {
          return undefined;
       };
 
-      const getDaysUntilDeadline = (): number => {
-         const today = new Date();
-         const deadline = new Date(jobPosting.applicationDeadline);
-         const diffTime = deadline.getTime() - today.getTime();
-         return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      };
-
       return {
          jobPostingId: jobPosting.jobPostingId,
          title: jobPosting.title,
@@ -291,7 +298,7 @@ export class JobPostingService {
          salaryMin: jobPosting.salaryMin,
          salaryMax: jobPosting.salaryMax,
          vacancies: jobPosting.vacancies,
-         applicationDeadline: jobPosting.applicationDeadline.toISOString().split('T')[0],
+         applicationDeadline: jobPosting.applicationDeadline as unknown as string,
          status: jobPosting.status,
          location: jobPosting.location,
          employmentType: jobPosting.employmentType,
@@ -304,11 +311,13 @@ export class JobPostingService {
          positionId: jobPosting.positionId,
          hiringManagerId: jobPosting.hiringManagerId,
          salaryRange: getSalaryRange(),
-         isJobActive: jobPosting.status === 'published' && new Date(jobPosting.applicationDeadline) > new Date(),
-         daysUntilDeadline: getDaysUntilDeadline(),
-         applicationCount: 0, // TODO: Will be populated when applications are implemented
-         createdAt: jobPosting.createdAt.toISOString(),
-         updatedAt: jobPosting.updatedAt.toISOString(),
+         isJobActive:
+            jobPosting.status === 'published' &&
+            dayjs(jobPosting.applicationDeadline).isAfter(dayjs()),
+         daysUntilDeadline: dayjs(jobPosting.applicationDeadline).diff(dayjs(), 'day'),
+         applicationCount: 0, // TODO
+         createdAt: dayjs(jobPosting.createdAt).toISOString(),
+         updatedAt: dayjs(jobPosting.updatedAt).toISOString(),
       };
    }
 }
