@@ -120,7 +120,7 @@ export class JobPostingService {
       const [jobPostings, total] = await this.jobPostingRepository.findAndCount();
       console.log('job', jobPostings);
       console.log('total', total);
-
+      console.log('Confirm test cicd');
       return {
          data: jobPostings.map((jp) => this.mapToResponseDto(jp)),
          total,

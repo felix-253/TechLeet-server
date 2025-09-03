@@ -35,8 +35,15 @@ jobs:
             pm2 delete api-gateway  company-service recruitment-service user-service
             echo "run migrate"
             pnpm run migrate
-            echo "PM2 starting/restarting services..."
 
+            echo "==> Build services"
+            cd api-gateway && pnpm run build
+            cd ../user-service && pnpm run build
+            cd ../company-service && pnpm run build
+            cd ../recruitment-service && pnpm run build
+            cd ..
+
+            echo "PM2 starting/restarting services..."
             pm2 startOrRestart ecosystem.config.js
             pm2 save
 
