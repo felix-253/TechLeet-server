@@ -117,7 +117,7 @@ export class JobPostingService {
          findOptions.where = whereConditions;
       }
       console.log(findOptions);
-      const [jobPostings, total] = await this.jobPostingRepository.findAndCount();
+      const [jobPostings, total] = await this.jobPostingRepository.findAndCount(findOptions);
       console.log('job', jobPostings);
       console.log('total', total);
       console.log('Confirm test cicd');
