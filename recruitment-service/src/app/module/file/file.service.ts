@@ -6,7 +6,9 @@ import { join } from 'path';
 import { DataSource, FindOptionsWhere, Repository } from 'typeorm';
 import { FileQueryDto, FileResponseDto } from './file.dto';
 import { FileEntity, FileStatus, FileType } from '../../../entities/recruitment/file.entity';
+import { InboundAttachment } from './brevo-webhook.dto';
 import * as fs from 'fs-extra';
+import axios from 'axios';
 export interface FileUploadData {
    originalName: string;
    fileName: string;
@@ -307,5 +309,142 @@ export class FileService {
          createdAt: file.createdAt,
          updatedAt: file.updatedAt,
       };
+   }
+
+   /**
+    * Process Brevo email attachments and save them as files
+    * @param attachments Array of Brevo attachments
+    * @param emailMetadata Additional metadata from the email
+    * @returns Array of created file entities
+    */
+   async processBrevoAttachments(
+      attachments: InboundAttachment[],
+      emailMetadata?: {
+         messageId?: string;
+         senderEmail?: string;
+         subject?: string;
+         referenceId?: number;
+      },
+   ): Promise<FileEntity[]> {
+      const createdFiles: FileEntity[] = [];
+
+      for (const attachment of attachments) {
+         try {
+            // Download attachment from Brevo
+            const fileBuffer = await this.downloadBrevoAttachment(attachment.DownloadToken);
+
+            // Generate unique filename
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+            const fileName = `${uniqueSuffix}-${attachment.Name}`;
+
+            // Determine file type based on content type
+
+            const targetDir = `uploads/${FileType.CANDIDATE_RESUME}`;
+            // Check and create folder if not exists
+            if (!existsSync(targetDir)) {
+               mkdirSync(targetDir, { recursive: true });
+            }
+
+            const fileUrl = `${targetDir}/${fileName}`;
+            const tempFile = `temp-uploads/${fileName}`;
+
+            // Save file to temp directory first
+            await fs.writeFile(tempFile, fileBuffer);
+
+            // Move to final location
+            await fs.move(tempFile, fileUrl, { overwrite: true });
+
+            // Create file record using the existing create method
+            const fileData: FileUploadData = {
+               originalName: attachment.Name,
+               fileName,
+               fileUrl,
+               mimeType: attachment.ContentType,
+               fileSize: fileBuffer.length,
+               fileType: FileType.CANDIDATE_RESUME,
+               referenceId: emailMetadata?.referenceId,
+               metadata: {
+                  source: 'brevo_email',
+                  messageId: emailMetadata?.messageId,
+                  senderEmail: emailMetadata?.senderEmail,
+                  subject: emailMetadata?.subject,
+                  downloadToken: attachment.DownloadToken,
+               },
+            };
+
+            const savedFile = await this.create(fileData);
+            createdFiles.push(savedFile);
+         } catch (error) {
+            console.error(`Failed to process Brevo attachment ${attachment.Name}:`, error);
+            // Continue processing other attachments even if one fails
+         }
+      }
+
+      return createdFiles;
+   }
+
+   /**
+    * Download attachment from Brevo API
+    * @param downloadToken Token provided by Brevo
+    * @returns Buffer containing the file data
+    */
+   private async downloadBrevoAttachment(downloadToken: string): Promise<Buffer> {
+      const url = `https://api.brevo.com/v3/inbound/attachments/${encodeURIComponent(downloadToken)}`;
+
+      const response = await axios.get<ArrayBuffer>(url, {
+         responseType: 'arraybuffer',
+         headers: {
+            'api-key': process.env.BREVO_API_KEY!,
+         },
+      });
+
+      return Buffer.from(response.data as any);
+   }
+
+   /**
+    * Determine file type based on MIME type
+    * @param mimeType MIME type of the file
+    * @returns FileType enum value
+    */
+   private determineFileTypeFromMimeType(mimeType: string): FileType {
+      // Image files - could be avatar or logo
+      if (mimeType.startsWith('image/')) {
+         // Default to general document for images unless specified otherwise
+         return FileType.GENERAL_DOCUMENT;
+      }
+
+      // Document files - likely resumes
+      const documentTypes = [
+         'application/pdf',
+         'application/msword',
+         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+         'text/plain',
+      ];
+
+      if (documentTypes.includes(mimeType)) {
+         // Default to candidate resume for documents
+         return FileType.CANDIDATE_RESUME;
+      }
+
+      // Default to general document
+      return FileType.GENERAL_DOCUMENT;
+   }
+
+   /**
+    * Check if a message has already been processed to prevent duplicates
+    * @param messageId Brevo message ID
+    * @returns True if already processed
+    */
+   async isMessageProcessed(messageId: string): Promise<boolean> {
+      const existingFile = await this.fileRepository.findOne({
+         where: {
+            metadata: {
+               source: 'brevo_email',
+               messageId: messageId,
+            } as any,
+         },
+      });
+
+      return !!existingFile;
    }
 }
