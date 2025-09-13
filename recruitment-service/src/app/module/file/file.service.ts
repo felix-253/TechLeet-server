@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { unlink } from 'fs/promises';
 import { join } from 'path';
 import { DataSource, FindOptionsWhere, Repository } from 'typeorm';
@@ -333,12 +333,27 @@ export class FileService {
       //    originalName: file.originalname,
       // });
       for (const attachment of attachments) {
+         // Create unique filename to avoid conflicts
+         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+         const fileName = `${uniqueSuffix}-${attachment.Name}`;
+
+         // Ensure temp-uploads directory exists
+         const tempDir = 'temp-uploads';
+         if (!existsSync(tempDir)) {
+            mkdirSync(tempDir, { recursive: true });
+         }
+
          try {
             const fileBuffer = await this.downloadBrevoAttachment(attachment.DownloadToken);
             console.log('fileBuffer', fileBuffer);
+
+            // Save file buffer to temp-uploads directory
+            const tempFilePath = `${tempDir}/${fileName}`;
+            writeFileSync(tempFilePath, fileBuffer);
+
             const fileData: FileUploadData = {
                originalName: attachment.Name,
-               fileName: attachment.Name,
+               fileName: fileName,
                fileUrl: '',
                mimeType: attachment.ContentType,
                fileSize: fileBuffer.length,
@@ -357,6 +372,15 @@ export class FileService {
             createdFiles.push(savedFile);
          } catch (error) {
             console.error(`Failed to process Brevo attachment ${attachment.Name}:`, error);
+
+            try {
+               const tempFilePath = `${tempDir}/${fileName}`;
+               if (existsSync(tempFilePath)) {
+                  fs.unlinkSync(tempFilePath);
+               }
+            } catch (cleanupError) {
+               console.error('Failed to cleanup temp file:', cleanupError);
+            }
          }
       }
 
