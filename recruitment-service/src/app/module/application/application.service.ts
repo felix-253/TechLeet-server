@@ -8,9 +8,10 @@ import {
    CreateApplicationDto,
    UpdateApplicationDto,
    ApplicationResponseDto,
-   GetApplicationsQueryDto
+   GetApplicationsQueryDto,
 } from './dto/application.dto';
 import { CvScreeningService } from '../cv-screening/cv-screening.service';
+import { InformationService } from '../cv-screening/information.service';
 
 @Injectable()
 export class ApplicationService {
@@ -24,7 +25,82 @@ export class ApplicationService {
       @InjectRepository(CandidateEntity)
       private readonly candidateRepository: Repository<CandidateEntity>,
       private readonly cvScreeningService: CvScreeningService,
+      private readonly informationService: InformationService,
    ) {}
+
+   /**
+    * Trích xuất thông tin từ PDF và tạo application
+    * @param pdfFilePath - Đường dẫn đến file PDF
+    * @param jobPostingId - ID của job posting (bắt buộc)
+    * @returns Application đã được tạo
+    */
+   async extractApplicationFromPdfs(
+      pdfFilePath: string,
+      jobPostingId: number,
+   ): Promise<ApplicationResponseDto> {
+      try {
+         this.logger.log(`Bắt đầu trích xuất application từ PDF: ${pdfFilePath}`);
+
+         // Bước 1: Trích xuất thông tin candidate từ PDF
+         const candidateInfo = await this.informationService.extractCandidateInformationFromPdf(
+            pdfFilePath,
+            jobPostingId,
+         );
+
+         if (!candidateInfo.success) {
+            throw new BadRequestException(
+               `Failed to extract candidate information: ${candidateInfo.errorMessage}`,
+            );
+         }
+
+         if (!candidateInfo.candidateId) {
+            throw new BadRequestException('Failed to create candidate from PDF');
+         }
+
+         // Bước 2: Kiểm tra xem application đã tồn tại chưa
+         const existingApplication = await this.applicationRepository.findOne({
+            where: {
+               jobPostingId,
+               candidateId: candidateInfo.candidateId,
+            },
+         });
+
+         if (existingApplication) {
+            this.logger.log(
+               `Application đã tồn tại cho candidate ${candidateInfo.candidateId} và job ${jobPostingId}`,
+            );
+            return this.mapToResponseDto(existingApplication);
+         }
+
+         // Bước 3: Tạo application mới sử dụng hàm create
+         const createApplicationDto: CreateApplicationDto = {
+            jobPostingId,
+            candidateId: candidateInfo.candidateId,
+            resumeUrl: pdfFilePath,
+            coverLetter: candidateInfo.extractedData.aiAnalysis?.summary || '',
+            applicationNotes: `Application created from PDF extraction. AI Analysis: ${JSON.stringify(
+               candidateInfo.extractedData.aiAnalysis,
+            )}`,
+            priority: 'medium',
+         };
+
+         // Gọi hàm create để tạo application
+         const application = await this.create(createApplicationDto);
+
+         this.logger.log(
+            `Đã tạo application thành công từ PDF với ID: ${application.applicationId}`,
+         );
+
+         return application;
+      } catch (error) {
+         this.logger.error(`Lỗi khi trích xuất application từ PDF: ${error.message}`, error.stack);
+
+         if (error instanceof BadRequestException || error instanceof NotFoundException) {
+            throw error;
+         }
+         throw new BadRequestException('Failed to extract application from PDF', error.message);
+      }
+   }
 
    async create(createApplicationDto: CreateApplicationDto): Promise<ApplicationResponseDto> {
       try {
@@ -56,9 +132,9 @@ export class ApplicationService {
 
          // Check if application already exists for this job posting and candidate
          const existingApplication = await this.applicationRepository.findOne({
-            where: { 
+            where: {
                jobPostingId: createApplicationDto.jobPostingId,
-               candidateId: createApplicationDto.candidateId 
+               candidateId: createApplicationDto.candidateId,
             },
          });
 
@@ -68,7 +144,9 @@ export class ApplicationService {
 
          const application = this.applicationRepository.create({
             ...createApplicationDto,
-            expectedStartDate: createApplicationDto.expectedStartDate ? new Date(createApplicationDto.expectedStartDate) : undefined,
+            expectedStartDate: createApplicationDto.expectedStartDate
+               ? new Date(createApplicationDto.expectedStartDate)
+               : undefined,
             status: 'submitted', // Default status
             appliedDate: new Date(),
          });
@@ -78,15 +156,24 @@ export class ApplicationService {
          // Trigger CV screening if resume is provided
          if (savedApplication.resumeUrl) {
             try {
-               this.logger.log(`Triggering CV screening for application ${savedApplication.applicationId}`);
+               this.logger.log(
+                  `Triggering CV screening for application ${savedApplication.applicationId}`,
+               );
                await this.cvScreeningService.triggerScreening(savedApplication.applicationId);
-               this.logger.log(`CV screening triggered successfully for application ${savedApplication.applicationId}`);
+               this.logger.log(
+                  `CV screening triggered successfully for application ${savedApplication.applicationId}`,
+               );
             } catch (error) {
-               this.logger.error(`Failed to trigger CV screening for application ${savedApplication.applicationId}: ${error.message}`, error.stack);
+               this.logger.error(
+                  `Failed to trigger CV screening for application ${savedApplication.applicationId}: ${error.message}`,
+                  error.stack,
+               );
                // Don't fail the application creation if screening fails
             }
          } else {
-            this.logger.warn(`No resume URL provided for application ${savedApplication.applicationId}, skipping CV screening`);
+            this.logger.warn(
+               `No resume URL provided for application ${savedApplication.applicationId}, skipping CV screening`,
+            );
          }
 
          return this.mapToResponseDto(savedApplication);
@@ -98,10 +185,12 @@ export class ApplicationService {
       }
    }
 
-   async findAll(query: GetApplicationsQueryDto): Promise<{ data: ApplicationResponseDto[]; total: number }> {
-      const { 
-         page = 0, 
-         limit = 10, 
+   async findAll(
+      query: GetApplicationsQueryDto,
+   ): Promise<{ data: ApplicationResponseDto[]; total: number }> {
+      const {
+         page = 0,
+         limit = 10,
          jobPostingId,
          candidateId,
          status,
@@ -109,8 +198,8 @@ export class ApplicationService {
          offerStatus,
          reviewedBy,
          hiringManagerId,
-         sortBy = 'appliedDate', 
-         sortOrder = 'DESC' 
+         sortBy = 'appliedDate',
+         sortOrder = 'DESC',
       } = query;
 
       const findOptions: FindManyOptions<ApplicationEntity> = {
@@ -157,7 +246,7 @@ export class ApplicationService {
       const [applications, total] = await this.applicationRepository.findAndCount(findOptions);
 
       return {
-         data: applications.map(app => this.mapToResponseDto(app)),
+         data: applications.map((app) => this.mapToResponseDto(app)),
          total,
       };
    }
@@ -174,7 +263,10 @@ export class ApplicationService {
       return this.mapToResponseDto(application);
    }
 
-   async update(id: number, updateApplicationDto: UpdateApplicationDto): Promise<ApplicationResponseDto> {
+   async update(
+      id: number,
+      updateApplicationDto: UpdateApplicationDto,
+   ): Promise<ApplicationResponseDto> {
       const application = await this.applicationRepository.findOne({
          where: { applicationId: id },
       });
@@ -191,7 +283,7 @@ export class ApplicationService {
       if (updateApplicationDto.offerDate && updateApplicationDto.offerExpiryDate) {
          const offerDate = new Date(updateApplicationDto.offerDate);
          const expiryDate = new Date(updateApplicationDto.offerExpiryDate);
-         
+
          if (expiryDate <= offerDate) {
             throw new BadRequestException('Offer expiry date must be after offer date');
          }
@@ -200,16 +292,26 @@ export class ApplicationService {
       // Convert date strings to Date objects
       const updateData = {
          ...updateApplicationDto,
-         reviewedDate: updateApplicationDto.reviewedDate ? new Date(updateApplicationDto.reviewedDate) : undefined,
-         offerDate: updateApplicationDto.offerDate ? new Date(updateApplicationDto.offerDate) : undefined,
-         offerExpiryDate: updateApplicationDto.offerExpiryDate ? new Date(updateApplicationDto.offerExpiryDate) : undefined,
-         offerResponseDate: updateApplicationDto.offerResponseDate ? new Date(updateApplicationDto.offerResponseDate) : undefined,
-         expectedStartDate: updateApplicationDto.expectedStartDate ? new Date(updateApplicationDto.expectedStartDate) : undefined,
+         reviewedDate: updateApplicationDto.reviewedDate
+            ? new Date(updateApplicationDto.reviewedDate)
+            : undefined,
+         offerDate: updateApplicationDto.offerDate
+            ? new Date(updateApplicationDto.offerDate)
+            : undefined,
+         offerExpiryDate: updateApplicationDto.offerExpiryDate
+            ? new Date(updateApplicationDto.offerExpiryDate)
+            : undefined,
+         offerResponseDate: updateApplicationDto.offerResponseDate
+            ? new Date(updateApplicationDto.offerResponseDate)
+            : undefined,
+         expectedStartDate: updateApplicationDto.expectedStartDate
+            ? new Date(updateApplicationDto.expectedStartDate)
+            : undefined,
       };
 
       // Check if resume URL is being updated and trigger screening if needed
-      const resumeUrlChanged = updateApplicationDto.resumeUrl &&
-                               updateApplicationDto.resumeUrl !== application.resumeUrl;
+      const resumeUrlChanged =
+         updateApplicationDto.resumeUrl && updateApplicationDto.resumeUrl !== application.resumeUrl;
 
       Object.assign(application, updateData);
       const updatedApplication = await this.applicationRepository.save(application);
@@ -221,7 +323,10 @@ export class ApplicationService {
             await this.cvScreeningService.triggerScreening(id);
             this.logger.log(`CV screening triggered successfully for updated application ${id}`);
          } catch (error) {
-            this.logger.error(`Failed to trigger CV screening for updated application ${id}: ${error.message}`, error.stack);
+            this.logger.error(
+               `Failed to trigger CV screening for updated application ${id}: ${error.message}`,
+               error.stack,
+            );
             // Don't fail the update if screening fails
          }
       }
@@ -250,9 +355,19 @@ export class ApplicationService {
          throw new NotFoundException(`Application with ID ${id} not found`);
       }
 
-      const validStatuses = ['submitted', 'screening', 'interviewing', 'offer', 'hired', 'rejected', 'withdrawn'];
+      const validStatuses = [
+         'submitted',
+         'screening',
+         'interviewing',
+         'offer',
+         'hired',
+         'rejected',
+         'withdrawn',
+      ];
       if (!validStatuses.includes(status)) {
-         throw new BadRequestException(`Invalid status. Must be one of: ${validStatuses.join(', ')}`);
+         throw new BadRequestException(
+            `Invalid status. Must be one of: ${validStatuses.join(', ')}`,
+         );
       }
 
       application.status = status;
@@ -261,7 +376,10 @@ export class ApplicationService {
       return this.mapToResponseDto(updatedApplication);
    }
 
-   async makeOffer(id: number, offerData: { offeredSalary: number; offerExpiryDate: string }): Promise<ApplicationResponseDto> {
+   async makeOffer(
+      id: number,
+      offerData: { offeredSalary: number; offerExpiryDate: string },
+   ): Promise<ApplicationResponseDto> {
       const application = await this.applicationRepository.findOne({
          where: { applicationId: id },
       });
@@ -271,7 +389,9 @@ export class ApplicationService {
       }
 
       if (application.status !== 'interviewing') {
-         throw new BadRequestException('Can only make offers to applications in interviewing status');
+         throw new BadRequestException(
+            'Can only make offers to applications in interviewing status',
+         );
       }
 
       const expiryDate = new Date(offerData.offerExpiryDate);
@@ -289,7 +409,10 @@ export class ApplicationService {
       return this.mapToResponseDto(updatedApplication);
    }
 
-   async respondToOffer(id: number, response: 'accepted' | 'rejected'): Promise<ApplicationResponseDto> {
+   async respondToOffer(
+      id: number,
+      response: 'accepted' | 'rejected',
+   ): Promise<ApplicationResponseDto> {
       const application = await this.applicationRepository.findOne({
          where: { applicationId: id },
       });
@@ -308,7 +431,7 @@ export class ApplicationService {
 
       application.offerStatus = response;
       application.offerResponseDate = new Date();
-      
+
       if (response === 'accepted') {
          application.status = 'hired';
       } else {
@@ -319,11 +442,7 @@ export class ApplicationService {
       return this.mapToResponseDto(updatedApplication);
    }
 
-   async findByJobPosting(
-      jobPostingId: number,
-      page: number = 0,
-      limit: number = 10
-   ) {
+   async findByJobPosting(jobPostingId: number, page: number = 0, limit: number = 10) {
       const [applications, total] = await this.applicationRepository.findAndCount({
          where: { jobPostingId },
          order: { appliedDate: 'DESC' },
@@ -332,7 +451,7 @@ export class ApplicationService {
       });
 
       return {
-         data: applications.map(app => this.mapToResponseDto(app)),
+         data: applications.map((app) => this.mapToResponseDto(app)),
          total,
          page,
          limit,
@@ -345,7 +464,7 @@ export class ApplicationService {
          order: { appliedDate: 'DESC' },
       });
 
-      return applications.map(app => this.mapToResponseDto(app));
+      return applications.map((app) => this.mapToResponseDto(app));
    }
 
    private mapToResponseDto(application: ApplicationEntity): ApplicationResponseDto {
@@ -397,13 +516,13 @@ export class ApplicationService {
 
       const getStatusColor = (): string => {
          const statusColors = {
-            'submitted': 'blue',
-            'screening': 'yellow',
-            'interviewing': 'orange',
-            'offer': 'purple',
-            'hired': 'green',
-            'rejected': 'red',
-            'withdrawn': 'gray'
+            submitted: 'blue',
+            screening: 'yellow',
+            interviewing: 'orange',
+            offer: 'purple',
+            hired: 'green',
+            rejected: 'red',
+            withdrawn: 'gray',
          };
          return statusColors[application.status] || 'gray';
       };
@@ -437,12 +556,14 @@ export class ApplicationService {
          isOfferActive: getIsOfferActive(),
          daysUntilOfferExpiry: getDaysUntilOfferExpiry(),
          statusColor: getStatusColor(),
-         createdAt: application.createdAt instanceof Date
-            ? application.createdAt.toISOString()
-            : new Date(application.createdAt).toISOString(),
-         updatedAt: application.updatedAt instanceof Date
-            ? application.updatedAt.toISOString()
-            : new Date(application.updatedAt).toISOString(),
+         createdAt:
+            application.createdAt instanceof Date
+               ? application.createdAt.toISOString()
+               : new Date(application.createdAt).toISOString(),
+         updatedAt:
+            application.updatedAt instanceof Date
+               ? application.updatedAt.toISOString()
+               : new Date(application.updatedAt).toISOString(),
       };
    }
 }

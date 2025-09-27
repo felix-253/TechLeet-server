@@ -37,7 +37,7 @@ export class ApplicationController {
    @Post()
    @ApiOperation({
       summary: 'Create a new application',
-      description: 'Creates a new job application for a candidate'
+      description: 'Creates a new job application for a candidate',
    })
    @ApiResponse({
       status: HttpStatus.CREATED,
@@ -46,16 +46,18 @@ export class ApplicationController {
    })
    @ApiResponse({
       status: HttpStatus.BAD_REQUEST,
-      description: 'Invalid input data'
+      description: 'Invalid input data',
    })
-   async create(@Body() createApplicationDto: CreateApplicationDto): Promise<ApplicationResponseDto> {
+   async create(
+      @Body() createApplicationDto: CreateApplicationDto,
+   ): Promise<ApplicationResponseDto> {
       return this.applicationService.create(createApplicationDto);
    }
 
    @Get()
    @ApiOperation({
       summary: 'Get all applications',
-      description: 'Retrieve a list of applications with optional filtering and pagination'
+      description: 'Retrieve a list of applications with optional filtering and pagination',
    })
    @ApiResponse({
       status: HttpStatus.OK,
@@ -65,13 +67,13 @@ export class ApplicationController {
          properties: {
             data: {
                type: 'array',
-               items: { $ref: '#/components/schemas/ApplicationResponseDto' }
+               items: { $ref: '#/components/schemas/ApplicationResponseDto' },
             },
             total: { type: 'number', example: 100 },
             page: { type: 'number', example: 0 },
-            limit: { type: 'number', example: 10 }
-         }
-      }
+            limit: { type: 'number', example: 10 },
+         },
+      },
    })
    async findAll(@Query() query: GetApplicationsQueryDto) {
       return this.applicationService.findAll(query);
@@ -80,12 +82,12 @@ export class ApplicationController {
    @Get(':id')
    @ApiOperation({
       summary: 'Get application by ID',
-      description: 'Retrieve a specific application by its ID'
+      description: 'Retrieve a specific application by its ID',
    })
    @ApiParam({
       name: 'id',
       description: 'Application ID',
-      example: 1
+      example: 1,
    })
    @ApiResponse({
       status: HttpStatus.OK,
@@ -94,7 +96,7 @@ export class ApplicationController {
    })
    @ApiResponse({
       status: HttpStatus.NOT_FOUND,
-      description: 'Application not found'
+      description: 'Application not found',
    })
    async findOne(@Param('id', ParseIntPipe) id: number): Promise<ApplicationResponseDto> {
       const application = await this.applicationService.findOne(id);
@@ -107,12 +109,12 @@ export class ApplicationController {
    @Patch(':id')
    @ApiOperation({
       summary: 'Update application',
-      description: 'Update an existing application'
+      description: 'Update an existing application',
    })
    @ApiParam({
       name: 'id',
       description: 'Application ID',
-      example: 1
+      example: 1,
    })
    @ApiResponse({
       status: HttpStatus.OK,
@@ -121,11 +123,11 @@ export class ApplicationController {
    })
    @ApiResponse({
       status: HttpStatus.NOT_FOUND,
-      description: 'Application not found'
+      description: 'Application not found',
    })
    async update(
       @Param('id', ParseIntPipe) id: number,
-      @Body() updateApplicationDto: UpdateApplicationDto
+      @Body() updateApplicationDto: UpdateApplicationDto,
    ): Promise<ApplicationResponseDto> {
       return this.applicationService.update(id, updateApplicationDto);
    }
@@ -133,12 +135,12 @@ export class ApplicationController {
    @Delete(':id')
    @ApiOperation({
       summary: 'Delete application',
-      description: 'Delete an application by ID'
+      description: 'Delete an application by ID',
    })
    @ApiParam({
       name: 'id',
       description: 'Application ID',
-      example: 1
+      example: 1,
    })
    @ApiResponse({
       status: HttpStatus.OK,
@@ -146,13 +148,13 @@ export class ApplicationController {
       schema: {
          type: 'object',
          properties: {
-            message: { type: 'string', example: 'Application deleted successfully' }
-         }
-      }
+            message: { type: 'string', example: 'Application deleted successfully' },
+         },
+      },
    })
    @ApiResponse({
       status: HttpStatus.NOT_FOUND,
-      description: 'Application not found'
+      description: 'Application not found',
    })
    async remove(@Param('id', ParseIntPipe) id: number) {
       await this.applicationService.remove(id);
@@ -162,24 +164,24 @@ export class ApplicationController {
    @Get('job/:jobId')
    @ApiOperation({
       summary: 'Get applications by job posting',
-      description: 'Retrieve all applications for a specific job posting'
+      description: 'Retrieve all applications for a specific job posting',
    })
    @ApiParam({
       name: 'jobId',
       description: 'Job posting ID',
-      example: 1
+      example: 1,
    })
    @ApiQuery({
       name: 'page',
       description: 'Page number (0-based)',
       required: false,
-      example: 0
+      example: 0,
    })
    @ApiQuery({
       name: 'limit',
       description: 'Number of items per page',
       required: false,
-      example: 10
+      example: 10,
    })
    @ApiResponse({
       status: HttpStatus.OK,
@@ -189,18 +191,18 @@ export class ApplicationController {
          properties: {
             data: {
                type: 'array',
-               items: { $ref: '#/components/schemas/ApplicationResponseDto' }
+               items: { $ref: '#/components/schemas/ApplicationResponseDto' },
             },
             total: { type: 'number' },
             page: { type: 'number' },
-            limit: { type: 'number' }
-         }
-      }
+            limit: { type: 'number' },
+         },
+      },
    })
    async findByJobPosting(
       @Param('jobId', ParseIntPipe) jobId: number,
       @Query('page') page: number = 0,
-      @Query('limit') limit: number = 10
+      @Query('limit') limit: number = 10,
    ) {
       return this.applicationService.findByJobPosting(jobId, page, limit);
    }
@@ -208,19 +210,53 @@ export class ApplicationController {
    @Get('candidate/:candidateId')
    @ApiOperation({
       summary: 'Get applications by candidate',
-      description: 'Retrieve all applications for a specific candidate'
+      description: 'Retrieve all applications for a specific candidate',
    })
    @ApiParam({
       name: 'candidateId',
       description: 'Candidate ID',
-      example: 1
+      example: 1,
    })
    @ApiResponse({
       status: HttpStatus.OK,
       description: 'Applications retrieved successfully',
       type: [ApplicationResponseDto],
    })
-   async findByCandidate(@Param('candidateId', ParseIntPipe) candidateId: number): Promise<ApplicationResponseDto[]> {
+   async findByCandidate(
+      @Param('candidateId', ParseIntPipe) candidateId: number,
+   ): Promise<ApplicationResponseDto[]> {
       return this.applicationService.findByCandidate(candidateId);
+   }
+
+   @Post('extract-from-pdf')
+   @ApiOperation({
+      summary: 'Trích xuất và tạo application từ file PDF CV',
+      description: 'Trích xuất thông tin từ PDF và tạo application mới',
+   })
+   @ApiResponse({
+      status: HttpStatus.CREATED,
+      description: 'Application được tạo thành công từ PDF',
+      type: ApplicationResponseDto,
+   })
+   @ApiResponse({
+      status: HttpStatus.BAD_REQUEST,
+      description: 'File PDF không tồn tại hoặc lỗi xử lý',
+   })
+   @ApiResponse({
+      status: HttpStatus.NOT_FOUND,
+      description: 'Job posting không tồn tại',
+   })
+   async extractApplicationFromPdf(@Body() body: { pdfFilePath: string; jobPostingId: number }) {
+      const { pdfFilePath, jobPostingId } = body;
+
+      if (!pdfFilePath) {
+         throw new BadRequestException('pdfFilePath là bắt buộc');
+      }
+
+      if (!jobPostingId) {
+         throw new BadRequestException('jobPostingId là bắt buộc');
+      }
+
+      return this.applicationService.extractApplicationFromPdfs(pdfFilePath, jobPostingId);
    }
 }

@@ -40,6 +40,7 @@ export class BrevoWebhookController {
                      messageId: item.MessageId,
                      senderEmail: item.From.Address,
                      subject: item.Subject,
+                     recipientEmail: item.To?.[0]?.Address ,
                   };
 
                   const createdFiles = await this.fileService.processBrevoAttachments(
