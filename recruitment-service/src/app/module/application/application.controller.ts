@@ -89,15 +89,7 @@ export class ApplicationController {
       description: 'Application ID',
       example: 1,
    })
-   @ApiResponse({
-      status: HttpStatus.OK,
-      description: 'Application retrieved successfully',
-      type: ApplicationResponseDto,
-   })
-   @ApiResponse({
-      status: HttpStatus.NOT_FOUND,
-      description: 'Application not found',
-   })
+   
    async findOne(@Param('id', ParseIntPipe) id: number): Promise<ApplicationResponseDto> {
       const application = await this.applicationService.findOne(id);
       if (!application) {
