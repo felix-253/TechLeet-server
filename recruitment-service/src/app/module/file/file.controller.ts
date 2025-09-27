@@ -354,8 +354,8 @@ export class FileController {
       description: 'candidateId ID',
       example: 1,
    })
-   async getFilesByApplicationId(
-      @Param('candidateId', ParseIntPipe) candidateId: number,
+   async getFilesByCandidateId(
+      @Param('candidateId') candidateId: number,
    ): Promise<FileResponseDto[]> {
       try {
          const files = await this.fileService.findByCandidateIdId(candidateId);
