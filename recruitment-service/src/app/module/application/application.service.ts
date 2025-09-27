@@ -251,16 +251,15 @@ export class ApplicationService {
       };
    }
 
-   async findOne(id: number): Promise<ApplicationResponseDto> {
-      const application = await this.applicationRepository.findOne({
-         where: { applicationId: id },
-      });
+   async findOne(applicationId: number): Promise<any> {
+      const row = await this.applicationRepository
+         .createQueryBuilder('application')
+         .leftJoin('candidate', 'candidate', 'application.candidateId = candidate.candidateId')
+         .select(['row_to_json(application) as application', 'row_to_json(candidate) as candidate'])
+         .where('application.applicationId = :applicationId', { applicationId })
+         .getRawOne();
 
-      if (!application) {
-         throw new NotFoundException(`Application with ID ${id} not found`);
-      }
-
-      return this.mapToResponseDto(application);
+      return row;
    }
 
    async update(
