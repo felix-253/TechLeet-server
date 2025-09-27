@@ -22,6 +22,7 @@
       "migration:check": "pnpm typeorm migration:generate src/migrations/tmpCheck -d src/config/datasource.ts --check --pretty"
    },
    "dependencies": {
+      "@getbrevo/brevo": "^2.5.0",
       "@google/generative-ai": "^0.24.1",
       "@nestjs/common": "^11.0.1",
       "@nestjs/config": "^4.0.2",

@@ -359,7 +359,7 @@ export class FileController {
       @Param('candidateId') candidateId: number,
    ): Promise<FileResponseDto[]> {
       try {
-         const files = await this.fileService.findByCandidateIdId(candidateId);
+         const files = await this.fileService.findByCandidateId(candidateId);
          return files;
       } catch (error) {
          if (error instanceof NotFoundException) {
@@ -544,10 +544,10 @@ export class FileController {
             fileSize: file.size,
             fileType: FileType.CANDIDATE_CERTIFICATE,
             referenceId: candidateId,
-            metadata: {
-               source: 'test_endpoint',
-               isTest: true,
-            }
+            // metadata: {
+            //    source: 'test_endpoint',
+            //    isTest: true,
+            // }
          });
 
          // Run OCR analysis

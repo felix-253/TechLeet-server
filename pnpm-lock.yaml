@@ -241,6 +241,9 @@ importers:
 
   recruitment-service:
     dependencies:
+      '@getbrevo/brevo':
+        specifier: ^2.5.0
+        version: 2.5.0
       '@google/generative-ai':
         specifier: ^0.24.1
         version: 0.24.1

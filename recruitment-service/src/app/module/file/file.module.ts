@@ -24,6 +24,16 @@ import { CvEmbeddingChunkEntity } from '../../../entities/recruitment/cv-embeddi
 import { SkillEntity } from '../../../entities/recruitment/skill.entity';
 import { SkillAliasEntity } from '../../../entities/recruitment/skill-alias.entity';
 
+// Import new modular services
+import { OcrService } from './ocr/ocr.service';
+import { CvAnalyzer } from './processors/cv-analyzer.service';
+import { CertificateAnalyzer } from './processors/certificate-analyzer.service';
+import { BrevoHandler } from './handlers/brevo-handler.service';
+import { FileManagementHandler } from './handlers/file-management.service';
+
+// Import email service directly (not module to avoid circular dependency)
+import { RecruitmentEmailService } from '../email/email.service';
+
 @Module({
    imports: [
       TypeOrmModule.forFeature([
@@ -52,8 +62,21 @@ import { SkillAliasEntity } from '../../../entities/recruitment/skill-alias.enti
       CvEmbeddingService,
       CvChunkingService,
       SkillTaxonomyService,
-      
+      // New modular services
+      OcrService,
+      CvAnalyzer,
+      CertificateAnalyzer,
+      BrevoHandler,
+      FileManagementHandler,
+      RecruitmentEmailService,
    ],
-   exports: [FileService],
+   exports: [
+      FileService,
+      OcrService,
+      CvAnalyzer,
+      CertificateAnalyzer,
+      BrevoHandler,
+      FileManagementHandler,
+   ],
 })
 export class FileModule {}
