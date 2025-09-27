@@ -234,6 +234,26 @@ export class FileService {
       });
    }
 
+   async findByCandidateIdId(candidateId: number): Promise<FileResponseDto[]> {
+      try {
+         const files = await this.fileRepository.find({
+            where: {
+               referenceId: candidateId,
+               status: FileStatus.ACTIVE,
+            },
+            order: { createdAt: 'DESC' },
+         });
+         return files;
+      } catch (error) {
+         if (error instanceof NotFoundException) {
+            throw error;
+         }
+         throw new BadRequestException(
+            `Failed to retrieve files for candidateId: ${error.message}`,
+         );
+      }
+   }
+
    async updateEmployeeAvatar(employeeId: number, fileData: FileUploadData): Promise<FileEntity> {
       // Mark old avatar as archived
       const oldAvatar = await this.getEmployeeAvatar(employeeId);
@@ -366,27 +386,6 @@ export class FileService {
             };
 
             const savedFile = await this.create(fileData);
-            console.log('savedFile', savedFile);
-            const recipientEmail = emailMetadata?.recipientEmail; // "job123@techleet.me"
-
-            let jobId: number | null = null;
-            if (recipientEmail) {
-               const localPart = recipientEmail.split('@')[0];
-               jobId = parseInt(localPart.replace(/^job/, ''), 10); // 123
-            }
-            if (jobId) {
-               const application = await this.applicationService.extractApplicationFromPdfs(
-                  savedFile.fileUrl,
-                  jobId,
-               );
-               console.log('application', application);
-               const information = await this.informationService.extractCandidateInformationFromPdf(
-                  savedFile.fileUrl,
-                  jobId,
-                  application.candidateId,
-               );
-               console.log('information', information);
-            }
 
             createdFiles.push(savedFile);
          } catch (error) {
@@ -401,6 +400,30 @@ export class FileService {
                console.error('Failed to cleanup temp file:', cleanupError);
             }
          }
+      }
+      console.log('savedFile', createdFiles[0]);
+      const recipientEmail = emailMetadata?.recipientEmail; // "job123@techleet.me"
+
+      let jobId: number | null = null;
+      if (recipientEmail) {
+         const localPart = recipientEmail.split('@')[0];
+         jobId = parseInt(localPart.replace(/^job/, ''), 10); // 123
+      }
+      if (jobId) {
+         const application = await this.applicationService.extractApplicationFromPdfs(
+            createdFiles[0].fileUrl,
+            jobId,
+         );
+         console.log('application', application);
+         const information = await this.informationService.extractCandidateInformationFromPdf(
+            createdFiles[0].fileUrl,
+            jobId,
+            application.candidateId,
+         );
+         console.log('information', information);
+         await this.fileRepository.update(createdFiles[0].fileId, {
+            referenceId: application.candidateId,
+         });
       }
 
       return createdFiles;

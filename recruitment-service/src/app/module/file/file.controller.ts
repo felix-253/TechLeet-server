@@ -344,6 +344,32 @@ export class FileController {
       };
    }
 
+   @Get('candidate/:candidateId')
+   @ApiOperation({
+      summary: 'Get files by candidateId ',
+      description: 'Retrieve all files associated with a specific candidateId',
+   })
+   @ApiParam({
+      name: 'candidateId',
+      description: 'candidateId ID',
+      example: 1,
+   })
+   async getFilesByApplicationId(
+      @Param('candidateId', ParseIntPipe) candidateId: number,
+   ): Promise<FileResponseDto[]> {
+      try {
+         const files = await this.fileService.findByCandidateIdId(candidateId);
+         return files;
+      } catch (error) {
+         if (error instanceof NotFoundException) {
+            throw error;
+         }
+         throw new BadRequestException(
+            `Failed to retrieve files for application: ${error.message}`,
+         );
+      }
+   }
+
    @Get(':id')
    @ApiOperation({
       summary: 'Get file by ID',
