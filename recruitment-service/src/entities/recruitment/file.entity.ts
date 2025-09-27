@@ -16,6 +16,7 @@ export enum FileType {
    EMPLOYEE_RESUME = 'employee_resume',
    COMPANY_LOGO = 'company_logo',
    GENERAL_DOCUMENT = 'general_document',
+   CANDIDATE_CERTIFICATE = 'candidate_certificate',
 }
 
 export enum FileStatus {

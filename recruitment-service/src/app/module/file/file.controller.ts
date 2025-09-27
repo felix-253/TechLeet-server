@@ -11,10 +11,11 @@ import {
    Post,
    Query,
    UploadedFile,
+   UploadedFiles,
    UseInterceptors,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import {
    ApiBearerAuth,
    ApiBody,
@@ -437,6 +438,311 @@ export class FileController {
             throw error;
          }
          throw new BadRequestException(`Failed to delete file: ${error.message}`);
+      }
+   }
+
+   @Post('test-certificate-ocr')
+   @ApiOperation({
+      summary: '🧪 Test Certificate OCR Analysis',
+      description: `Test endpoint to analyze certificate images using OCR without sending emails.
+      
+      **Perfect for testing:**
+      - TOEIC, IELTS, TOEFL certificate photos
+      - AWS, Google, Microsoft certification screenshots  
+      - University diplomas and academic certificates
+      - Any photographed or scanned certificate
+      
+      **Supports:**
+      - Image formats: JPG, PNG, TIFF, WebP
+      - Languages: English + Vietnamese OCR
+      - Automatic text extraction and analysis
+      - Certificate type detection and scoring
+      
+      **What it extracts:**
+      - Certificate type (TOEIC, AWS, etc.)
+      - Scores and grades
+      - Issue/expiry dates  
+      - Candidate names
+      - Confidence ratings`,
+   })
+   @ApiConsumes('multipart/form-data')
+   @ApiBody({
+      description: 'Certificate image file for OCR analysis',
+      schema: {
+         type: 'object',
+         properties: {
+           file: {
+             type: 'string',
+             format: 'binary',
+             description: 'Certificate image file (JPG, PNG, TIFF, WebP)',
+           },
+           candidateId: {
+             type: 'number',
+             description: 'Optional candidate ID to associate with certificate',
+             example: 123
+           }
+         },
+         required: ['file']
+       },
+   })
+   @ApiResponse({
+      status: HttpStatus.OK,
+      description: 'OCR analysis completed successfully',
+      schema: {
+         type: 'object',
+         properties: {
+            success: { type: 'boolean', example: true },
+            processingTimeMs: { type: 'number', example: 5420 },
+            fileName: { type: 'string', example: 'toeic_certificate.jpg' },
+            fileSize: { type: 'string', example: '2.1 MB' },
+            ocrResults: {
+               type: 'object',
+               properties: {
+                  type: { type: 'string', example: 'image_certificate_ocr' },
+                  ocrSuccess: { type: 'boolean', example: true },
+                  extractedText: { type: 'string', example: 'TOEIC Listening and Reading Test Certificate...' },
+                  ocrConfidence: { type: 'number', example: 89.5 },
+                  certificateType: { type: 'string', example: 'TOEIC' },
+                  score: { type: 'string', example: '850' },
+                  candidateName: { type: 'string', example: 'Nguyen Van An' },
+                  issueDate: { type: 'string', example: '15/03/2024' },
+                  confidence: { type: 'string', example: 'high' },
+                  summary: { type: 'string', example: 'TOEIC | Score: 850 | Candidate: Nguyen Van An (90% OCR confidence)' },
+                  recommendations: { 
+                     type: 'array', 
+                     items: { type: 'string' },
+                     example: ['TOEIC certificate detected - high value credential']
+                  }
+               }
+            }
+         }
+      }
+   })
+   @UseInterceptors(FileInterceptor('file', multerConfig))
+   async testCertificateOCR(
+      @Body('candidateId') candidateId?: number,
+      @UploadedFile() file?: Express.Multer.File,
+   ) {
+      if (!file) {
+         throw new BadRequestException('No certificate file provided');
+      }
+
+      // Validate file type (should be image)
+      if (!file.mimetype.startsWith('image/')) {
+         throw new BadRequestException('File must be an image (JPG, PNG, TIFF, WebP)');
+      }
+
+      const startTime = Date.now();
+
+      try {
+         // Create a temporary file entity for testing
+         const tempFile = await this.fileService.create({
+            originalName: file.originalname,
+            fileName: file.filename, 
+            fileUrl: file.path,
+            mimeType: file.mimetype,
+            fileSize: file.size,
+            fileType: FileType.CANDIDATE_CERTIFICATE,
+            referenceId: candidateId,
+            metadata: {
+               source: 'test_endpoint',
+               isTest: true,
+            }
+         });
+
+         // Run OCR analysis
+         const ocrResults = await this.fileService['analyzeImageCertificateWithOCR'](tempFile);
+         
+         const processingTime = Date.now() - startTime;
+
+         return {
+            success: true,
+            processingTimeMs: processingTime,
+            fileName: file.originalname,
+            fileSize: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
+            testFileId: tempFile.fileId,
+            ocrResults,
+         };
+
+      } catch (error) {
+         const processingTime = Date.now() - startTime;
+         
+         return {
+            success: false,
+            processingTimeMs: processingTime,
+            fileName: file.originalname,
+            error: error.message,
+            details: 'OCR analysis failed - check file quality and format'
+         };
+      }
+   }
+
+   @Post('test-brevo-simulation')
+   @ApiOperation({
+      summary: '🧪 Test Brevo Email Simulation',
+      description: `Simulate Brevo email processing with multiple file attachments without sending real emails.
+      
+      **Perfect for testing:**
+      - CV + Certificate combinations 
+      - Multiple certificate files
+      - File type detection (CV vs Certificate)
+      - Complete candidate processing workflow
+      
+      **Upload multiple files:**
+      - First file that looks like CV → Processed as resume
+      - Image files → Processed as certificates with OCR
+      - PDF files → Analyzed for content type
+      
+      **Simulates real email flow:**
+      - Downloads and analyzes all attachments
+      - Determines file types intelligently  
+      - Processes CV to create candidate + application
+      - Analyzes certificates with OCR
+      - Links all files to candidate profile`,
+   })
+   @ApiConsumes('multipart/form-data')
+   @ApiBody({
+      description: 'Multiple files simulating email attachments',
+      schema: {
+         type: 'object',
+         properties: {
+           files: {
+             type: 'array',
+             items: {
+               type: 'string',
+               format: 'binary'
+             },
+             description: 'Multiple files (CVs, certificates, etc.)'
+           },
+           jobId: {
+             type: 'number',
+             description: 'Job posting ID for application creation',
+             example: 123
+           },
+           senderEmail: {
+             type: 'string',
+             description: 'Simulated sender email',
+             example: 'candidate@example.com'
+           }
+         },
+         required: ['files', 'jobId']
+       }
+   })
+   @ApiResponse({
+      status: HttpStatus.OK,
+      description: 'Brevo simulation completed successfully',
+      schema: {
+         type: 'object',
+         properties: {
+            success: { type: 'boolean' },
+            processingTimeMs: { type: 'number' },
+            candidateId: { type: 'number' },
+            filesProcessed: { type: 'number' },
+            cvFile: { type: 'object' },
+            certificateFiles: { type: 'array' },
+            fileAnalysis: { type: 'object' }
+         }
+      }
+   })
+   @UseInterceptors(FilesInterceptor('files', 10, multerConfig))
+   async testBrevoSimulation(
+      @Body('jobId', ParseIntPipe) jobId: number,
+      @Body('senderEmail') senderEmail: string = 'test@example.com',
+      @UploadedFiles() files?: Express.Multer.File[],
+   ) {
+      if (!files || files.length === 0) {
+         throw new BadRequestException('No files provided for simulation');
+      }
+
+      const startTime = Date.now();
+
+      try {
+         // Simulate Brevo attachments structure
+         const mockAttachments = files.map((file, index) => ({
+            Name: file.originalname,
+            ContentType: file.mimetype,
+            DownloadToken: `mock-token-${index}`,
+            // We'll use file.path as the "downloaded" file path
+            mockFilePath: file.path
+         }));
+
+         // Simulate email metadata
+         const emailMetadata = {
+            messageId: `test-message-${Date.now()}`,
+            senderEmail: senderEmail,
+            subject: 'Test Application with Attachments', 
+            recipientEmail: `job${jobId}@techleet.me`
+         };
+
+         // Mock the download process by copying files
+         for (let i = 0; i < mockAttachments.length; i++) {
+            const attachment = mockAttachments[i];
+            const originalFile = files[i];
+            
+            // Copy file to temp location that processBrevoAttachments expects
+            const fs = require('fs');
+            const tempPath = `temp-uploads/${Date.now()}-${attachment.Name}`;
+            fs.copyFileSync(originalFile.path, tempPath);
+            attachment.mockFilePath = tempPath;
+         }
+
+         // Process using the same logic as Brevo webhooks
+         const processedFiles = await this.fileService['processBrevoAttachments'](
+            mockAttachments as any,
+            emailMetadata
+         );
+
+         const processingTime = Date.now() - startTime;
+
+         // Analyze results
+         const cvFiles = processedFiles.filter(f => f.fileType === FileType.CANDIDATE_RESUME);
+         const certificateFiles = processedFiles.filter(f => f.fileType === FileType.CANDIDATE_CERTIFICATE);
+         
+         return {
+            success: true,
+            processingTimeMs: processingTime,
+            simulation: {
+               emailMetadata,
+               filesUploaded: files.length,
+               filesProcessed: processedFiles.length,
+            },
+            results: {
+               candidateId: processedFiles[0]?.referenceId || null,
+               cvFiles: cvFiles.length,
+               certificateFiles: certificateFiles.length,
+               totalFiles: processedFiles.length
+            },
+            fileAnalysis: {
+               cvFile: cvFiles[0] ? {
+                  fileName: cvFiles[0].originalName,
+                  fileType: cvFiles[0].fileType,
+                  candidateId: cvFiles[0].referenceId
+               } : null,
+               certificates: certificateFiles.map(f => ({
+                  fileName: f.originalName,
+                  fileType: f.fileType,
+                  candidateId: f.referenceId,
+                  metadata: f.metadata
+               }))
+            },
+            processedFiles: processedFiles.map(f => ({
+               fileId: f.fileId,
+               originalName: f.originalName,
+               fileType: f.fileType,
+               referenceId: f.referenceId,
+               metadata: f.metadata
+            }))
+         };
+
+      } catch (error) {
+         const processingTime = Date.now() - startTime;
+         
+         return {
+            success: false,
+            processingTimeMs: processingTime,
+            error: error.message,
+            details: 'Brevo simulation failed - check files and job ID'
+         };
       }
    }
 }
