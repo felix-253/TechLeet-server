@@ -10,6 +10,7 @@ import { CvLlmSummaryService } from './cv-llm-summary.service';
 import { CvChunkingService } from './cv-chunking.service';
 import { SkillTaxonomyService } from './skill-taxonomy.service';
 import { CvQueueService } from './cv-queue.service';
+import { InformationService } from './information.service';
 import { CvScreeningResultEntity } from '../../../entities/recruitment/cv-screening-result.entity';
 import { CvEmbeddingEntity } from '../../../entities/recruitment/cv-embedding.entity';
 import { CvEmbeddingChunkEntity } from '../../../entities/recruitment/cv-embedding-chunk.entity';
@@ -17,6 +18,7 @@ import { SkillEntity } from '../../../entities/recruitment/skill.entity';
 import { SkillAliasEntity } from '../../../entities/recruitment/skill-alias.entity';
 import { ApplicationEntity } from '../../../entities/recruitment/application.entity';
 import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
+import { CandidateEntity } from '../../../entities/recruitment/candidate.entity';
 
 @Module({
    imports: [
@@ -28,6 +30,7 @@ import { JobPostingEntity } from '../../../entities/recruitment/job-posting.enti
          SkillAliasEntity,
          ApplicationEntity,
          JobPostingEntity,
+         CandidateEntity,
       ]),
    ],
    controllers: [CvScreeningController],
@@ -41,6 +44,7 @@ import { JobPostingEntity } from '../../../entities/recruitment/job-posting.enti
       CvChunkingService,
       SkillTaxonomyService,
       CvQueueService,
+      InformationService,
    ],
    exports: [
       CvScreeningService,
@@ -52,6 +56,7 @@ import { JobPostingEntity } from '../../../entities/recruitment/job-posting.enti
       CvChunkingService,
       SkillTaxonomyService,
       CvQueueService,
+      InformationService,
    ],
 })
 export class CvScreeningModule {}

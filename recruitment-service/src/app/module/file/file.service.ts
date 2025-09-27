@@ -9,6 +9,9 @@ import { FileEntity, FileStatus, FileType } from '../../../entities/recruitment/
 import { InboundAttachment } from './brevo-webhook.dto';
 import * as fs from 'fs-extra';
 import axios from 'axios';
+import { InformationService } from '../cv-screening/information.service';
+import { ApplicationService } from '../application/application.service';
+import { ApplicationEntity } from '../../../entities/recruitment/application.entity';
 export interface FileUploadData {
    originalName: string;
    fileName: string;
@@ -26,6 +29,8 @@ export class FileService {
       @InjectRepository(FileEntity)
       private readonly fileRepository: Repository<FileEntity>,
       private readonly dataSource: DataSource,
+      private readonly informationService: InformationService,
+      private readonly applicationService: ApplicationService,
    ) {}
 
    async create(fileData: FileUploadData): Promise<FileEntity> {
@@ -320,18 +325,10 @@ export class FileService {
          senderEmail?: string;
          subject?: string;
          referenceId?: number;
+         recipientEmail: string;
       },
    ): Promise<FileEntity[]> {
       const createdFiles: FileEntity[] = [];
-      // return await this.fileService.create({
-      //    fileName: file.filename,
-      //    fileSize: file.size,
-      //    mimeType: file.mimetype,
-      //    fileType: uploadDto.fileType,
-      //    referenceId: uploadDto.referenceId,
-      //    fileUrl: '',
-      //    originalName: file.originalname,
-      // });
       for (const attachment of attachments) {
          // Create unique filename to avoid conflicts
          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
@@ -369,6 +366,28 @@ export class FileService {
             };
 
             const savedFile = await this.create(fileData);
+            console.log('savedFile', savedFile);
+            const recipientEmail = emailMetadata?.recipientEmail; // "job123@techleet.me"
+
+            let jobId: number | null = null;
+            if (recipientEmail) {
+               const localPart = recipientEmail.split('@')[0];
+               jobId = parseInt(localPart.replace(/^job/, ''), 10); // 123
+            }
+            if (jobId) {
+               const application = await this.applicationService.extractApplicationFromPdfs(
+                  savedFile.fileUrl,
+                  jobId,
+               );
+               console.log('application', application);
+               const information = await this.informationService.extractCandidateInformationFromPdf(
+                  savedFile.fileUrl,
+                  jobId,
+                  application.candidateId,
+               );
+               console.log('information', information);
+            }
+
             createdFiles.push(savedFile);
          } catch (error) {
             console.error(`Failed to process Brevo attachment ${attachment.Name}:`, error);
@@ -399,17 +418,4 @@ export class FileService {
 
       return Buffer.from(response.data as any);
    }
-
-   // async isMessageProcessed(messageId: string): Promise<boolean> {
-   //    const existingFile = await this.fileRepository.findOne({
-   //       where: {
-   //          metadata: {
-   //             source: 'brevo_email',
-   //             messageId: messageId,
-   //          } as any,
-   //       },
-   //    });
-
-   //    return !!existingFile;
-   // }
 }
