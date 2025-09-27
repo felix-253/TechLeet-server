@@ -421,8 +421,10 @@ export class FileService {
             application.candidateId,
          );
          console.log('information', information);
-         await this.fileRepository.update(createdFiles[0].fileId, {
-            referenceId: application.candidateId,
+         createdFiles.map(async (file) => {
+            await this.fileRepository.update(file.fileId, {
+               referenceId: application.candidateId,
+            });
          });
       }
 
