@@ -443,19 +443,23 @@ export class ApplicationService {
    }
 
    async findByJobPosting(jobPostingId: number, page: number = 0, limit: number = 10) {
-      const [applications, total] = await this.applicationRepository.findAndCount({
-         where: { jobPostingId },
-         order: { appliedDate: 'DESC' },
-         skip: page * limit,
-         take: limit,
-      });
+      const qb = this.applicationRepository
+         .createQueryBuilder('application')
+         .leftJoin('candidate', 'candidate', 'application.candidateId = candidate.candidateId')
+         .select(['application.* as application', 'candidate.* as candidate'])
+         .where('application.jobPostingId = :jobPostingId', { jobPostingId })
+         .orderBy('application.appliedDate', 'DESC');
 
-      return {
-         data: applications.map((app) => this.mapToResponseDto(app)),
-         total,
-         page,
-         limit,
-      };
+      const [rows, total] = await Promise.all([
+         qb
+            .clone()
+            .skip(page * limit)
+            .take(limit)
+            .getRawMany(),
+         qb.clone().getCount(),
+      ]);
+
+      return { data: rows, total, page, limit };
    }
 
    async findByCandidate(candidateId: number): Promise<ApplicationResponseDto[]> {
