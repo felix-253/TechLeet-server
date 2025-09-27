@@ -128,6 +128,7 @@ export class InformationService {
          } catch (aiError) {
             this.logger.warn(`AI analysis failed: ${aiError.message}`);
             // Tiếp tục xử lý mà không có AI analysis
+            aiAnalysis = null;
          }
 
          // Bước 5: Tạo hoặc cập nhật candidate trong database
@@ -366,17 +367,29 @@ export class InformationService {
 
          // Cập nhật thông tin từ processed data
          if (processedData.personalInfo.name) {
-            const nameParts = processedData.personalInfo.name.split(' ');
-            candidate.firstName = nameParts[0] || '';
-            candidate.lastName = nameParts.slice(1).join(' ') || '';
+            const nameParts = processedData.personalInfo.name
+               .split(' ')
+               .filter((part) => part.trim());
+            candidate.firstName = nameParts[0] || 'Unknown';
+            candidate.lastName = nameParts.slice(1).join(' ') || 'Candidate';
+         } else {
+            // Fallback nếu không trích xuất được tên
+            candidate.firstName = 'Unknown';
+            candidate.lastName = 'Candidate';
          }
 
          if (processedData.personalInfo.email) {
             candidate.email = processedData.personalInfo.email;
+         } else {
+            // Fallback email nếu không trích xuất được
+            candidate.email = `candidate-${Date.now()}@unknown.com`;
          }
 
          if (processedData.personalInfo.phone) {
             candidate.phoneNumber = processedData.personalInfo.phone;
+         } else {
+            // Fallback phone nếu không trích xuất được
+            candidate.phoneNumber = '000-000-0000';
          }
 
          if (processedData.personalInfo.location) {

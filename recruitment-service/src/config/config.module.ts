@@ -33,12 +33,12 @@ import * as Joi from 'joi';
             // API Gateway
             API_GATEWAY_URL: Joi.string().default('http://localhost:3030'),
 
-            // OpenAI Configuration
-            OPENAI_API_KEY: Joi.string().optional(),
-            OPENAI_MODEL: Joi.string().default('gpt-4o-mini'),
-            OPENAI_EMBEDDING_MODEL: Joi.string().default('text-embedding-3-small'),
-            OPENAI_MAX_TOKENS: Joi.number().default(1500),
-            OPENAI_TEMPERATURE: Joi.number().default(0.3),
+            // Google Gemini Configuration
+            GEMINI_API_KEY: Joi.string().optional(),
+            GEMINI_MODEL: Joi.string().default('gemini-1.5-flash-latest'),
+            GEMINI_EMBEDDING_MODEL: Joi.string().default('text-embedding-004'),
+            GEMINI_MAX_TOKENS: Joi.number().default(1500),
+            GEMINI_TEMPERATURE: Joi.number().default(0.3),
 
             // CV Screening Configuration
             CV_SCREENING_ENABLED: Joi.boolean().default(true),
