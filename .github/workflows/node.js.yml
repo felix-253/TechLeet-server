@@ -6,7 +6,7 @@ on:
 
 jobs:
   deploy:
-    name: Deploy to 128.199.197.230
+    name: Deploy to 157.230.33.251
     runs-on: ubuntu-latest
 
     steps:
