@@ -3,15 +3,9 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { InterviewController } from './interview.controller';
 import { InterviewService } from './interview.service';
 import { InterviewEntity } from '../../../entities/recruitment/interview.entity';
-import { ApplicationEntity } from '../../../entities/recruitment/application.entity';
 
 @Module({
-   imports: [
-      TypeOrmModule.forFeature([
-         InterviewEntity,
-         ApplicationEntity,
-      ]),
-   ],
+   imports: [TypeOrmModule.forFeature([InterviewEntity])],
    controllers: [InterviewController],
    providers: [InterviewService],
    exports: [InterviewService],
