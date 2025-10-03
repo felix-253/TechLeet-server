@@ -4,7 +4,7 @@ export abstract class BaseEntity {
    @CreateDateColumn({
       type: 'timestamp',
       default: () => 'CURRENT_TIMESTAMP',
-      comment: 'Record creation timestamp'
+      comment: 'Record creation timestamp',
    })
    createdAt: Date;
 
@@ -12,28 +12,28 @@ export abstract class BaseEntity {
       type: 'timestamp',
       default: () => 'CURRENT_TIMESTAMP',
       onUpdate: 'CURRENT_TIMESTAMP',
-      comment: 'Record last update timestamp'
+      comment: 'Record last update timestamp',
    })
    updatedAt: Date;
 
    @DeleteDateColumn({
       type: 'timestamp',
       nullable: true,
-      comment: 'Soft delete timestamp'
+      comment: 'Soft delete timestamp',
    })
    deletedAt?: Date;
 
    @Column({
       type: 'boolean',
       default: true,
-      comment: 'Whether this record is active'
+      comment: 'Whether this record is active',
    })
    isActive: boolean;
 
    @Column({
       type: 'text',
       nullable: true,
-      comment: 'Additional notes or comments'
+      comment: 'Additional notes or comments',
    })
    notes?: string;
 }
