@@ -46,11 +46,65 @@ export class InterviewService {
       }
    }
 
-   async getInterviewById(id: number): Promise<InterviewEntity> {
-      const interview = await this.interviewRepository.findOne({ where: { interview_id: id } });
-      if (!interview) {
-         throw new NotFoundException(`Interview with ID ${id} not found`);
+   async getInterviewById(id: number): Promise<any> {
+      const row = await this.interviewRepository
+         .createQueryBuilder('i')
+         .leftJoin('candidate', 'c', 'i.candidate_id = c.candidateId')
+         .leftJoin('job_posting', 'j', 'i.job_id = j.jobPostingId')
+         .select([
+            'i.interview_id as i_id',
+            'i.scheduled_at as i_scheduled_at',
+            'i.duration_minutes as i_duration',
+            'i.meeting_link as i_meeting_link',
+            'i.location as i_location',
+            'i.status as i_status',
+            'i.interviewer_ids as i_interviewer_ids',
+
+            'c.candidateId as c_id',
+            'c.firstName as c_first_name',
+            'c.lastName as c_last_name',
+
+            'j.jobPostingId as j_id',
+            'j.title as j_title',
+         ])
+         .where('i.interview_id = :id', { id })
+         .getRawOne();
+
+      if (!row) return null;
+
+      let interviewers = [];
+      if (row.i_interviewer_ids && row.i_interviewer_ids.length > 0) {
+         interviewers = await this.entityManager.query(
+            `SELECT "employeeId", "firstName", "lastName"
+     FROM employee e
+     WHERE e."employeeId" = ANY($1)`,
+            [row.i_interviewer_ids],
+         );
       }
+
+      // build object nested
+      const interview = {
+         interview_id: row.i_id,
+         scheduled_at: row.i_scheduled_at,
+         duration_minutes: row.i_duration,
+         meeting_link: row.i_meeting_link,
+         location: row.i_location,
+         status: row.i_status,
+
+         candidate: {
+            candidate_id: row.c_id,
+            first_name: row.c_first_name,
+            last_name: row.c_last_name,
+         },
+
+         job: {
+            job_id: row.j_id,
+            title: row.j_title,
+         },
+
+         interviewers, // array object từ EmployeeEntity
+      };
+
       return interview;
    }
 
@@ -134,6 +188,7 @@ export class InterviewService {
       queryBuilder.skip(skip).take(filterDto.limit);
 
       const [data, total] = await queryBuilder.getManyAndCount();
+
       return { data, total };
    }
 }
