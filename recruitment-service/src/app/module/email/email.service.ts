@@ -42,7 +42,7 @@ export class RecruitmentEmailService {
             name: 'TechLeet HR Team' 
          };
          sendSmtpEmail.sender = { 
-            email: 'noreply@techleet.me', 
+            email: 'ldmhieu205@gmail.com', 
             name: 'TechLeet Recruitment' 
          };
          sendSmtpEmail.headers = { 
