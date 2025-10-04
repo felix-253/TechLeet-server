@@ -78,16 +78,9 @@ export class BrevoHandler {
             }
          }
          
-         // Send thank you email after processing attachments
-         if (processedFiles.some(file => !file.failed)) {
-            await this.sendApplicationThankYouEmail(
-               candidateEmail,
-               jobId,
-               candidateName,
-               processedFiles.filter(file => !file.failed)
-            );
-         }
-         
+         // NOTE: Thank you email will be sent AFTER candidate and application are created
+         // This happens in the information.service.ts or application.service.ts flow
+         // We don't send email here because candidate/application don't exist yet
          console.log(`✅ Brevo attachment processing complete: ${processedFiles.length} files processed`);
          
          return processedFiles;
@@ -100,6 +93,22 @@ export class BrevoHandler {
 
    /**
     * Send thank you email after processing Brevo application
+    * 
+    * ⚠️ DEPRECATED - DO NOT USE DIRECTLY
+    * 
+    * This method is no longer called because it sends emails with temporary objects
+    * that don't exist in the database. The thank you email should be sent AFTER:
+    * 1. The candidate is created/saved in the database
+    * 2. The application is created/saved in the database
+    * 
+    * The proper flow is:
+    * 1. Brevo webhook receives email with attachments
+    * 2. Files are saved to database (this handler)
+    * 3. CV extraction creates candidate (information.service.ts)
+    * 4. Application is created (application.service.ts or information.service.ts)
+    * 5. Thank you email is sent with real candidate/application data
+    * 
+    * This method remains here for reference only.
     */
    private async sendApplicationThankYouEmail(
       candidateEmail: string,

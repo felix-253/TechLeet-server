@@ -5,21 +5,112 @@ import { EntityManager, Repository, SelectQueryBuilder } from 'typeorm';
 import { CreateInterviewDto } from './dtos/createInterviewDto';
 import { UpdateInterviewDto } from './dtos/updateInterviewDto';
 import { FilterInterviewDto, SortBy } from './dtos/filterInterviewDto';
+import { RecruitmentEmailService } from '../email/email.service';
+import { CandidateEntity } from '../../../entities/recruitment/candidate.entity';
+import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
 
 @Injectable()
 export class InterviewService {
    constructor(
       @InjectRepository(InterviewEntity)
       private readonly interviewRepository: Repository<InterviewEntity>,
+      @InjectRepository(CandidateEntity)
+      private readonly candidateRepository: Repository<CandidateEntity>,
+      @InjectRepository(JobPostingEntity)
+      private readonly jobPostingRepository: Repository<JobPostingEntity>,
       private readonly entityManager: EntityManager,
+      private readonly emailService: RecruitmentEmailService,
    ) {}
 
    async createInterview(createInterviewDto: CreateInterviewDto): Promise<InterviewEntity> {
+      // Create the interview
       const interview = this.interviewRepository.create({
          ...createInterviewDto,
          scheduled_at: new Date(createInterviewDto.scheduled_at),
       });
-      return this.interviewRepository.save(interview);
+      const savedInterview = await this.interviewRepository.save(interview);
+
+      // Send confirmation email (async, don't wait for it)
+      this.sendInterviewConfirmationEmailAsync(
+         createInterviewDto.candidate_id,
+         createInterviewDto.job_id,
+         createInterviewDto.interviewer_ids,
+         new Date(createInterviewDto.scheduled_at),
+         createInterviewDto.meeting_link,
+         createInterviewDto.location,
+      ).catch(error => {
+         console.error('Failed to send interview confirmation email:', error);
+      });
+
+      return savedInterview;
+   }
+
+   /**
+    * Helper method to send interview confirmation email asynchronously
+    */
+   private async sendInterviewConfirmationEmailAsync(
+      candidateId: number,
+      jobId: number,
+      interviewerIds: number[],
+      scheduledAt: Date,
+      meetingLink?: string,
+      location?: string,
+   ): Promise<void> {
+      try {
+         // Fetch candidate information
+         const candidate = await this.candidateRepository.findOne({
+            where: { candidateId },
+         });
+
+         if (!candidate) {
+            console.error(`❌ Candidate with ID ${candidateId} not found`);
+            return;
+         }
+
+         // Fetch job posting information
+         const jobPosting = await this.jobPostingRepository.findOne({
+            where: { jobPostingId: jobId },
+         });
+
+         if (!jobPosting) {
+            console.error(`❌ Job posting with ID ${jobId} not found`);
+            return;
+         }
+
+         // Fetch interviewer information from employee table (company-service)
+         let interviewerNames: string[] = [];
+         let interviewerEmails: string[] = [];
+
+         if (interviewerIds && interviewerIds.length > 0) {
+            const interviewers = await this.entityManager.query(
+               `SELECT "employeeId", "firstName", "lastName", "email"
+                FROM employee e
+                WHERE e."employeeId" = ANY($1)`,
+               [interviewerIds],
+            );
+
+            interviewerNames = interviewers.map(
+               (interviewer: any) => `${interviewer.firstName} ${interviewer.lastName}`,
+            );
+            interviewerEmails = interviewers.map((interviewer: any) => interviewer.email);
+         }
+
+         // Send interview confirmation email
+         await this.emailService.sendInterviewConfirmationEmail(
+            candidate,
+            jobPosting,
+            {
+               scheduledAt,
+               meetingLink,
+               location,
+               interviewerNames,
+               interviewerEmails,
+            },
+         );
+      } catch (error) {
+         console.error('Error in sendInterviewConfirmationEmailAsync:', error);
+         throw error;
+      }
    }
 
    async updateInterview(
@@ -31,12 +122,134 @@ export class InterviewService {
          throw new NotFoundException(`Interview with ID ${id} not found`);
       }
 
+      // Track what changed for email notification
+      const changedFields: string[] = [];
+      const previousScheduledAt = interview.scheduled_at;
+      const previousMeetingLink = interview.meeting_link;
+      const previousLocation = interview.location;
+
+      // Check for date/time changes
+      if (updateInterviewDto.scheduled_at) {
+         const newDate = new Date(updateInterviewDto.scheduled_at);
+         if (newDate.getTime() !== interview.scheduled_at.getTime()) {
+            changedFields.push('date', 'time');
+         }
+      }
+
+      // Check for meeting link changes (offline to online or link change)
+      if (updateInterviewDto.meeting_link !== undefined && updateInterviewDto.meeting_link !== interview.meeting_link) {
+         changedFields.push('meetingLink');
+         if (!previousMeetingLink && updateInterviewDto.meeting_link) {
+            changedFields.push('format'); // Changed from offline to online
+         }
+      }
+
+      // Check for location changes (online to offline or location change)
+      if (updateInterviewDto.location !== undefined && updateInterviewDto.location !== interview.location) {
+         changedFields.push('location');
+         if (!previousLocation && updateInterviewDto.location) {
+            changedFields.push('format'); // Changed from online to offline
+         }
+      }
+
+      // Apply updates
       Object.assign(interview, updateInterviewDto);
       if (updateInterviewDto.scheduled_at) {
          interview.scheduled_at = new Date(updateInterviewDto.scheduled_at);
       }
 
-      return this.interviewRepository.save(interview);
+      const updatedInterview = await this.interviewRepository.save(interview);
+
+      // Send update email if significant changes occurred
+      if (changedFields.length > 0) {
+         this.sendInterviewUpdateEmailAsync(
+            updatedInterview.candidate_id,
+            updatedInterview.job_id,
+            updatedInterview.interviewer_ids,
+            updatedInterview.scheduled_at,
+            updatedInterview.meeting_link,
+            updatedInterview.location,
+            changedFields,
+            previousScheduledAt,
+         ).catch(error => {
+            console.error('Failed to send interview update email:', error);
+         });
+      }
+
+      return updatedInterview;
+   }
+
+   /**
+    * Helper method to send interview update email asynchronously
+    */
+   private async sendInterviewUpdateEmailAsync(
+      candidateId: number,
+      jobId: number,
+      interviewerIds: number[],
+      scheduledAt: Date,
+      meetingLink?: string,
+      location?: string,
+      changedFields?: string[],
+      previousScheduledAt?: Date,
+   ): Promise<void> {
+      try {
+         // Fetch candidate information
+         const candidate = await this.candidateRepository.findOne({
+            where: { candidateId },
+         });
+
+         if (!candidate) {
+            console.error(`❌ Candidate with ID ${candidateId} not found`);
+            return;
+         }
+
+         // Fetch job posting information
+         const jobPosting = await this.jobPostingRepository.findOne({
+            where: { jobPostingId: jobId },
+         });
+
+         if (!jobPosting) {
+            console.error(`❌ Job posting with ID ${jobId} not found`);
+            return;
+         }
+
+         // Fetch interviewer information
+         let interviewerNames: string[] = [];
+         let interviewerEmails: string[] = [];
+
+         if (interviewerIds && interviewerIds.length > 0) {
+            const interviewers = await this.entityManager.query(
+               `SELECT "employeeId", "firstName", "lastName", "email"
+                FROM employee e
+                WHERE e."employeeId" = ANY($1)`,
+               [interviewerIds],
+            );
+
+            interviewerNames = interviewers.map(
+               (interviewer: any) => `${interviewer.firstName} ${interviewer.lastName}`,
+            );
+            interviewerEmails = interviewers.map((interviewer: any) => interviewer.email);
+         }
+
+         // Send interview update email
+         await this.emailService.sendInterviewUpdateEmail(
+            candidate,
+            jobPosting,
+            {
+               scheduledAt,
+               meetingLink,
+               location,
+               interviewerNames,
+               interviewerEmails,
+               changedFields,
+               previousScheduledAt,
+               changeReason: 'Lịch phỏng vấn đã được điều chỉnh theo yêu cầu.',
+            },
+         );
+      } catch (error) {
+         console.error('Error in sendInterviewUpdateEmailAsync:', error);
+         throw error;
+      }
    }
 
    async softDeleteInterview(id: number): Promise<void> {
