@@ -12,6 +12,9 @@ import axios from 'axios';
 import { InformationService } from '../cv-screening/information.service';
 import { ApplicationService } from '../application/application.service';
 import { ApplicationEntity } from '../../../entities/recruitment/application.entity';
+import { RecruitmentEmailService } from '../email/email.service';
+import { CandidateEntity } from '../../../entities/recruitment/candidate.entity';
+import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
 
 // Import modular components
 import { OcrService } from './ocr/ocr.service';
@@ -36,9 +39,16 @@ export class FileService {
    constructor(
       @InjectRepository(FileEntity)
       private readonly fileRepository: Repository<FileEntity>,
+      @InjectRepository(ApplicationEntity)
+      private readonly applicationRepository: Repository<ApplicationEntity>,
+      @InjectRepository(CandidateEntity)
+      private readonly candidateRepository: Repository<CandidateEntity>,
+      @InjectRepository(JobPostingEntity)
+      private readonly jobPostingRepository: Repository<JobPostingEntity>,
       private readonly dataSource: DataSource,
       private readonly informationService: InformationService,
       private readonly applicationService: ApplicationService,
+      private readonly recruitmentEmailService: RecruitmentEmailService,
       // New modular services
       private readonly ocrService: OcrService,
       private readonly cvAnalyzer: CvAnalyzer,
@@ -346,7 +356,37 @@ export class FileService {
 
             if (extractionResult.success && extractionResult.applicationId) {
                console.log(`✅ Application created successfully with ID: ${extractionResult.applicationId}`);
-               console.log(`📧 Thank you email should have been sent by InformationService`);
+               
+               // Step 3: Send thank you email after successful processing
+               try {
+                  const application = await this.applicationRepository.findOne({
+                     where: { applicationId: extractionResult.applicationId }
+                  });
+
+                  if (application) {
+                     const candidate = await this.candidateRepository.findOne({
+                        where: { candidateId: application.candidateId }
+                     });
+                     const jobPosting = await this.jobPostingRepository.findOne({
+                        where: { jobPostingId: application.jobPostingId }
+                     });
+
+                     if (candidate && jobPosting) {
+                        console.log(`📧 Sending thank you email for application ${application.applicationId} (Brevo flow)`);
+                        await this.recruitmentEmailService.sendApplicationThankYouEmail(
+                           candidate,
+                           jobPosting,
+                           application
+                        );
+                        console.log(`✅ Thank you email sent successfully (Brevo flow)`);
+                     } else {
+                        console.warn(`⚠️ Cannot send email - missing candidate or job posting data`);
+                     }
+                  }
+               } catch (emailError) {
+                  console.error(`❌ Failed to send thank you email (Brevo flow):`, emailError);
+                  // Don't fail the entire process if email fails
+               }
             } else {
                console.warn(`⚠️ CV extraction succeeded but no application created for job ${jobId}`);
             }

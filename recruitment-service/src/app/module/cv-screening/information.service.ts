@@ -485,34 +485,8 @@ export class InformationService {
 
          const savedApplication = await this.applicationRepository.save(application);
 
-         // Send thank you email to candidate
-         try {
-            // Fetch candidate and job posting details for email
-            const candidate = await this.candidateRepository.findOne({
-               where: { candidateId }
-            });
-            const jobPosting = await this.jobPostingRepository.findOne({
-               where: { jobPostingId: jobPostingId }
-            });
-
-            if (candidate && jobPosting) {
-               this.logger.log(`Sending thank you email for application ${savedApplication.applicationId} (PDF flow)`);
-               await this.recruitmentEmailService.sendApplicationThankYouEmail(
-                  candidate,
-                  jobPosting,
-                  savedApplication
-               );
-               this.logger.log(`✅ Thank you email sent successfully for application ${savedApplication.applicationId} (PDF flow)`);
-            } else {
-               this.logger.warn(`Cannot send email - missing candidate or job posting data for application ${savedApplication.applicationId}`);
-            }
-         } catch (emailError) {
-            this.logger.error(
-               `❌ Failed to send thank you email for application ${savedApplication.applicationId} (PDF flow): ${emailError.message}`,
-               emailError.stack,
-            );
-            // Don't fail the application creation if email fails
-         }
+         // Note: Email sending moved to FileService after successful Brevo processing
+         // Direct uploads still send emails in ApplicationService
 
          return savedApplication;
       } catch (error) {
