@@ -6,6 +6,8 @@ import { CvNlpProcessingService, ProcessedCvData } from './cv-nlp-processing.ser
 import { CvLlmSummaryService } from './cv-llm-summary.service';
 import { CandidateEntity } from '../../../entities/recruitment/candidate.entity';
 import { ApplicationEntity } from '../../../entities/recruitment/application.entity';
+import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
+import { RecruitmentEmailService } from '../email/email.service';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -70,9 +72,12 @@ export class InformationService {
       private readonly candidateRepository: Repository<CandidateEntity>,
       @InjectRepository(ApplicationEntity)
       private readonly applicationRepository: Repository<ApplicationEntity>,
+      @InjectRepository(JobPostingEntity)
+      private readonly jobPostingRepository: Repository<JobPostingEntity>,
       private readonly textExtractionService: CvTextExtractionService,
       private readonly nlpProcessingService: CvNlpProcessingService,
       private readonly llmSummaryService: CvLlmSummaryService,
+      private readonly recruitmentEmailService: RecruitmentEmailService,
    ) {}
 
    /**
@@ -478,7 +483,38 @@ export class InformationService {
             application.screeningScore = aiAnalysis.fitScore;
          }
 
-         return await this.applicationRepository.save(application);
+         const savedApplication = await this.applicationRepository.save(application);
+
+         // Send thank you email to candidate
+         try {
+            // Fetch candidate and job posting details for email
+            const candidate = await this.candidateRepository.findOne({
+               where: { candidateId }
+            });
+            const jobPosting = await this.jobPostingRepository.findOne({
+               where: { jobPostingId: jobPostingId }
+            });
+
+            if (candidate && jobPosting) {
+               this.logger.log(`Sending thank you email for application ${savedApplication.applicationId} (PDF flow)`);
+               await this.recruitmentEmailService.sendApplicationThankYouEmail(
+                  candidate,
+                  jobPosting,
+                  savedApplication
+               );
+               this.logger.log(`✅ Thank you email sent successfully for application ${savedApplication.applicationId} (PDF flow)`);
+            } else {
+               this.logger.warn(`Cannot send email - missing candidate or job posting data for application ${savedApplication.applicationId}`);
+            }
+         } catch (emailError) {
+            this.logger.error(
+               `❌ Failed to send thank you email for application ${savedApplication.applicationId} (PDF flow): ${emailError.message}`,
+               emailError.stack,
+            );
+            // Don't fail the application creation if email fails
+         }
+
+         return savedApplication;
       } catch (error) {
          this.logger.error(`Lỗi khi tạo application: ${error.message}`, error.stack);
          throw error;

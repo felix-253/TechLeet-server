@@ -12,6 +12,7 @@ import {
 } from './dto/application.dto';
 import { CvScreeningService } from '../cv-screening/cv-screening.service';
 import { InformationService } from '../cv-screening/information.service';
+import { RecruitmentEmailService } from '../email/email.service';
 
 @Injectable()
 export class ApplicationService {
@@ -26,6 +27,7 @@ export class ApplicationService {
       private readonly candidateRepository: Repository<CandidateEntity>,
       private readonly cvScreeningService: CvScreeningService,
       private readonly informationService: InformationService,
+      private readonly recruitmentEmailService: RecruitmentEmailService,
    ) {}
 
    /**
@@ -174,6 +176,23 @@ export class ApplicationService {
             this.logger.warn(
                `No resume URL provided for application ${savedApplication.applicationId}, skipping CV screening`,
             );
+         }
+
+         // Send thank you email to candidate
+         try {
+            this.logger.log(`Sending thank you email for application ${savedApplication.applicationId}`);
+            await this.recruitmentEmailService.sendApplicationThankYouEmail(
+               candidate,
+               jobPosting,
+               savedApplication
+            );
+            this.logger.log(`✅ Thank you email sent successfully for application ${savedApplication.applicationId}`);
+         } catch (emailError) {
+            this.logger.error(
+               `❌ Failed to send thank you email for application ${savedApplication.applicationId}: ${emailError.message}`,
+               emailError.stack,
+            );
+            // Don't fail the application creation if email fails
          }
 
          return this.mapToResponseDto(savedApplication);

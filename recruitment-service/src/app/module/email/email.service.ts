@@ -30,7 +30,7 @@ export class RecruitmentEmailService {
          const sendSmtpEmail: brevo.SendSmtpEmail = new brevo.SendSmtpEmail();
 
          sendSmtpEmail.subject = `Cảm ơn bạn đã ứng tuyển vị trí ${jobPosting.title} - TechLeet`;
-         sendSmtpEmail.templateId = 6; // Create this template in Brevo
+         sendSmtpEmail.templateId = 7; // Create this template in Brevo
          sendSmtpEmail.to = [
             { 
                email: candidate.email, 

@@ -6,6 +6,7 @@ import { ApplicationEntity } from '../../../entities/recruitment/application.ent
 import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
 import { CandidateEntity } from '../../../entities/recruitment/candidate.entity';
 import { CvScreeningModule } from '../cv-screening/cv-screening.module';
+import { RecruitmentEmailModule } from '../email/email.module';
 
 @Module({
    imports: [
@@ -15,6 +16,7 @@ import { CvScreeningModule } from '../cv-screening/cv-screening.module';
          CandidateEntity,
       ]),
       CvScreeningModule,
+      RecruitmentEmailModule,
    ],
    controllers: [ApplicationController],
    providers: [ApplicationService],

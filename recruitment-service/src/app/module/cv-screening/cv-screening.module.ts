@@ -19,6 +19,7 @@ import { SkillAliasEntity } from '../../../entities/recruitment/skill-alias.enti
 import { ApplicationEntity } from '../../../entities/recruitment/application.entity';
 import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
 import { CandidateEntity } from '../../../entities/recruitment/candidate.entity';
+import { RecruitmentEmailModule } from '../email/email.module';
 
 @Module({
    imports: [
@@ -32,6 +33,7 @@ import { CandidateEntity } from '../../../entities/recruitment/candidate.entity'
          JobPostingEntity,
          CandidateEntity,
       ]),
+      RecruitmentEmailModule,
    ],
    controllers: [CvScreeningController],
    providers: [
