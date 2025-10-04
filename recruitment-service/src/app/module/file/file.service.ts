@@ -445,10 +445,16 @@ export class FileService {
 
    private async downloadBrevoAttachment(downloadToken: string): Promise<Buffer> {
       try {
-         const response = await axios.get(`https://files.sendinblue.com/${downloadToken}`, {
+         const url = `https://api.brevo.com/v3/inbound/attachments/${downloadToken}`;
+
+         const response = await axios.get<ArrayBuffer>(url, {
             responseType: 'arraybuffer',
+            headers: {
+               'api-key': process.env.SENDINBLUE_API_KEY!,
+            },
          });
-         return Buffer.from(response.data);
+
+         return Buffer.from(response.data as any);
       } catch (error) {
          throw new BadRequestException(`Failed to download attachment: ${error.message}`);
       }
