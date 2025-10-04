@@ -226,8 +226,6 @@ export class FileService {
          throw new BadRequestException('Unable to extract job ID or candidate email from Brevo data');
       }
 
-      console.log(`📧 Processing Brevo attachments for candidate ${jobInfo.candidateEmail}, job ${jobInfo.jobId}`);
-
       // Process attachments using BrevoHandler
       const processedFiles = await this.brevoHandler.processBrevoAttachments(
          attachments,
@@ -247,61 +245,7 @@ export class FileService {
          }
       }
 
-      // Trigger CV extraction and application creation for resume files
-      // This will automatically send thank you email
-      this.processResumeFilesAsync(fileEntities, jobInfo.jobId).catch(error => {
-         console.error('❌ Failed to process resume files from Brevo:', error);
-      });
-
       return fileEntities;
-   }
-
-   /**
-    * Process resume files asynchronously - extract CV info, create candidate and application
-    * This triggers the thank you email sending
-    */
-   private async processResumeFilesAsync(
-      files: FileEntity[],
-      jobId: number
-   ): Promise<void> {
-      try {
-         // Filter for resume/CV files (PDFs)
-         const resumeFiles = files.filter(file => 
-            file.fileType === FileType.CANDIDATE_RESUME &&
-            (file.mimeType === 'application/pdf' || file.originalName.toLowerCase().endsWith('.pdf'))
-         );
-
-         if (resumeFiles.length === 0) {
-            console.log('⚠️ No resume files found in Brevo attachments');
-            return;
-         }
-
-         console.log(`📄 Processing ${resumeFiles.length} resume file(s) from Brevo`);
-
-         for (const resumeFile of resumeFiles) {
-            try {
-               console.log(`🔍 Extracting CV information from: ${resumeFile.originalName}`);
-               
-               // Use the application service to extract CV and create application
-               // This will trigger the thank you email automatically
-               const application = await this.applicationService.extractApplicationFromPdfs(
-                  resumeFile.fileUrl,
-                  jobId
-               );
-
-               console.log(`✅ Successfully created application ${application.applicationId} from Brevo CV`);
-               console.log(`📧 Thank you email should have been sent automatically`);
-
-            } catch (fileError) {
-               console.error(`❌ Failed to process resume file ${resumeFile.originalName}:`, fileError);
-               // Continue processing other files
-            }
-         }
-
-      } catch (error) {
-         console.error('❌ Error in processResumeFilesAsync:', error);
-         throw error;
-      }
    }
 
    // Delegate methods to modular services

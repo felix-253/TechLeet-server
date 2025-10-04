@@ -78,12 +78,10 @@ export class BrevoHandler {
             }
          }
          
-         // NOTE: Thank you email will be sent automatically after this method returns
-         // Flow: processBrevoAttachments() -> file.service.processResumeFilesAsync()
-         //       -> application.service.extractApplicationFromPdfs()
-         //       -> application.service.create() -> sends thank you email
+         // NOTE: Thank you email will be sent AFTER candidate and application are created
+         // This happens in the information.service.ts or application.service.ts flow
+         // We don't send email here because candidate/application don't exist yet
          console.log(`✅ Brevo attachment processing complete: ${processedFiles.length} files processed`);
-         console.log(`📧 CV extraction and thank you email will be triggered automatically`);
          
          return processedFiles;
          
