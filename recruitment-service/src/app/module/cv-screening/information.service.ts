@@ -357,7 +357,7 @@ export class InformationService {
          let candidate: CandidateEntity;
 
          if (candidateId) {
-            // Cập nhật candidate hiện có
+            // Cập nhật candidate hiện có theo ID
             const existingCandidate = await this.candidateRepository.findOne({
                where: { candidateId },
             });
@@ -366,8 +366,27 @@ export class InformationService {
             }
             candidate = existingCandidate;
          } else {
-            // Tạo candidate mới
-            candidate = this.candidateRepository.create();
+            // Kiểm tra xem candidate có tồn tại với email này chưa
+            const extractedEmail = processedData.personalInfo.email;
+            
+            if (extractedEmail) {
+               const existingCandidateByEmail = await this.candidateRepository.findOne({
+                  where: { email: extractedEmail },
+               });
+               
+               if (existingCandidateByEmail) {
+                  this.logger.log(`Found existing candidate with email ${extractedEmail}, updating...`);
+                  candidate = existingCandidateByEmail;
+               } else {
+                  // Tạo candidate mới
+                  this.logger.log(`Creating new candidate with email ${extractedEmail}`);
+                  candidate = this.candidateRepository.create();
+               }
+            } else {
+               // Không có email, tạo candidate mới với fallback email
+               this.logger.log('No email extracted, creating new candidate with fallback email');
+               candidate = this.candidateRepository.create();
+            }
          }
 
          // Cập nhật thông tin từ processed data
@@ -386,15 +405,19 @@ export class InformationService {
          if (processedData.personalInfo.email) {
             candidate.email = processedData.personalInfo.email;
          } else {
-            // Fallback email nếu không trích xuất được
-            candidate.email = `candidate-${Date.now()}@unknown.com`;
+            // Fallback email nếu không trích xuất được (only for new candidates)
+            if (!candidate.candidateId) {
+               candidate.email = `candidate-${Date.now()}@unknown.com`;
+            }
          }
 
          if (processedData.personalInfo.phone) {
             candidate.phoneNumber = processedData.personalInfo.phone;
          } else {
-            // Fallback phone nếu không trích xuất được
-            candidate.phoneNumber = '000-000-0000';
+            // Fallback phone nếu không trích xuất được (only for new candidates)
+            if (!candidate.candidateId) {
+               candidate.phoneNumber = '000-000-0000';
+            }
          }
 
          if (processedData.personalInfo.location) {
