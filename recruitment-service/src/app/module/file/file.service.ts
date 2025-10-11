@@ -348,10 +348,13 @@ export class FileService {
             // Process first CV file (if multiple CVs, process the first one)
             const firstCvPath = downloadedFiles[0];
             console.log(`🔍 Processing CV: ${firstCvPath}`);
+            console.log(`📧 Using Brevo sender email: ${candidateEmail}`);
             
             const extractionResult = await this.informationService.extractCandidateInformationFromPdf(
                firstCvPath,
-               jobId
+               jobId,
+               undefined, // candidateId - let it find by email
+               candidateEmail // ✅ Pass sender email from Brevo
             );
 
             if (extractionResult.success && extractionResult.applicationId) {

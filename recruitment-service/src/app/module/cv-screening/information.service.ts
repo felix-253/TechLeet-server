@@ -85,12 +85,14 @@ export class InformationService {
     * @param pdfFilePath - Đường dẫn đến file PDF
     * @param jobPostingId - ID của job posting (optional)
     * @param candidateId - ID của candidate nếu đã tồn tại (optional)
+    * @param senderEmail - Email của người gửi (từ Brevo hoặc nguồn khác) - ưu tiên dùng email này (optional)
     * @returns Thông tin ứng viên đã được trích xuất và lưu vào database
     */
    async extractCandidateInformationFromPdf(
       pdfFilePath: string,
       jobPostingId?: number,
       candidateId?: number,
+      senderEmail?: string,
    ): Promise<CandidateInformationResult> {
       const startTime = Date.now();
 
@@ -137,7 +139,7 @@ export class InformationService {
          }
 
          // Bước 5: Tạo hoặc cập nhật candidate trong database
-         const candidate = await this.createOrUpdateCandidate(processedData, candidateId);
+         const candidate = await this.createOrUpdateCandidate(processedData, candidateId, senderEmail);
          this.logger.log(`Đã tạo/cập nhật candidate với ID: ${candidate.candidateId}`);
 
          // Bước 6: Tạo application nếu có jobPostingId
@@ -348,13 +350,20 @@ export class InformationService {
 
    /**
     * Tạo hoặc cập nhật candidate trong database
+    * @param processedData - Dữ liệu đã được xử lý từ CV
+    * @param candidateId - ID của candidate nếu đã tồn tại (optional)
+    * @param senderEmail - Email của người gửi từ Brevo (ưu tiên sử dụng) (optional)
     */
    private async createOrUpdateCandidate(
       processedData: ProcessedCvData,
       candidateId?: number,
+      senderEmail?: string,
    ): Promise<CandidateEntity> {
       try {
          let candidate: CandidateEntity;
+
+         // Ưu tiên dùng email từ Brevo sender, fallback về email từ CV
+         const emailToUse = senderEmail || processedData.personalInfo.email;
 
          if (candidateId) {
             // Cập nhật candidate hiện có theo ID
@@ -365,21 +374,26 @@ export class InformationService {
                throw new NotFoundException(`Candidate với ID ${candidateId} không tồn tại`);
             }
             candidate = existingCandidate;
+            this.logger.log(`Updating existing candidate by ID: ${candidateId}`);
          } else {
             // Kiểm tra xem candidate có tồn tại với email này chưa
-            const extractedEmail = processedData.personalInfo.email;
-            
-            if (extractedEmail) {
+            if (emailToUse) {
                const existingCandidateByEmail = await this.candidateRepository.findOne({
-                  where: { email: extractedEmail },
+                  where: { email: emailToUse },
                });
                
                if (existingCandidateByEmail) {
-                  this.logger.log(`Found existing candidate with email ${extractedEmail}, updating...`);
+                  this.logger.log(`Found existing candidate with email ${emailToUse}, updating...`);
+                  if (senderEmail) {
+                     this.logger.log(`✅ Using Brevo sender email: ${senderEmail}`);
+                  }
                   candidate = existingCandidateByEmail;
                } else {
                   // Tạo candidate mới
-                  this.logger.log(`Creating new candidate with email ${extractedEmail}`);
+                  this.logger.log(`Creating new candidate with email ${emailToUse}`);
+                  if (senderEmail) {
+                     this.logger.log(`✅ Using Brevo sender email: ${senderEmail}`);
+                  }
                   candidate = this.candidateRepository.create();
                }
             } else {
@@ -404,8 +418,11 @@ export class InformationService {
 
          if (processedData.personalInfo.email) {
             candidate.email = processedData.personalInfo.email;
+         } else if (senderEmail) {
+            // Ưu tiên dùng senderEmail nếu không extract được từ CV
+            candidate.email = senderEmail;
          } else {
-            // Fallback email nếu không trích xuất được (only for new candidates)
+            // Fallback email nếu không trích xuất được và không có senderEmail (only for new candidates)
             if (!candidate.candidateId) {
                candidate.email = `candidate-${Date.now()}@unknown.com`;
             }
