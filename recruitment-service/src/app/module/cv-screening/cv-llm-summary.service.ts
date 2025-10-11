@@ -2,37 +2,34 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { ProcessedCvData } from './cv-nlp-processing.service';
+import { GeminiModelName } from './enum';
 
 export interface ModelConfig {
-   modelName: string;
+   modelName: GeminiModelName;
    temperature: number;
    topK?: number;
    topP?: number;
    maxOutputTokens?: number;
 }
 
-// Predefined model configurations for different "models"
 export const MODEL_CONFIGS = {
    gemini: {
-      // Best configuration - using most powerful model
-      modelName: 'gemini-2.5-pro', // Latest and most powerful
-      temperature: 0.6, // Balanced for best results
+      modelName: GeminiModelName.GEMINI_2_5_PRO,
+      temperature: 0.6,
       topK: 40,
       topP: 0.95,
       maxOutputTokens: 4096,
    } as ModelConfig,
    chatgpt: {
-      // Mid-tier configuration - using Pro model
-      modelName: 'gemini-2.5-flash', // Powerful but slower
-      temperature: 0.5, // More deterministic
+      modelName: GeminiModelName.CHATGPT_4o,
+      temperature: 0.5,
       topK: 30,
       topP: 0.9,
       maxOutputTokens: 4096,
    } as ModelConfig,
    deepseek: {
-      // Basic configuration - using Flash model
-      modelName: 'gemini-2.0-flash', // Fastest, most basic
-      temperature: 0.7, // Standard creativity
+      modelName: GeminiModelName.DEEPSEEK_V3,
+      temperature: 0.7,
       topK: 40,
       topP: 0.95,
       maxOutputTokens: 4096,
@@ -73,7 +70,7 @@ export interface JobMatchAnalysis {
 export class CvLlmSummaryService {
    private readonly logger = new Logger(CvLlmSummaryService.name);
    private readonly genAI: GoogleGenerativeAI;
-   private readonly defaultModel = 'gemini-1.5-flash';
+   private readonly defaultModel = GeminiModelName.GEMINI_1_5_FLASH;
 
    constructor(private readonly configService: ConfigService) {
       const apiKey = this.configService.get<string>('GEMINI_API_KEY');
