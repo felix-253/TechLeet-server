@@ -320,4 +320,13 @@ export class TestLocalCvDto {
    @IsNumber()
    @Type(() => Number)
    mockApplicationId?: number;
+
+   @ApiPropertyOptional({
+      description: 'Model configuration to use (gemini, chatgpt, deepseek)',
+      example: 'gemini',
+      enum: ['gemini', 'chatgpt', 'deepseek']
+   })
+   @IsOptional()
+   @IsString()
+   modelConfig?: 'gemini' | 'chatgpt' | 'deepseek';
 }

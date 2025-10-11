@@ -270,6 +270,7 @@ export class CvScreeningController {
          testDto.filePath,
          testDto.jobPostingId,
          testDto.mockApplicationId,
+         testDto.modelConfig || 'gemini',
       );
    }
 

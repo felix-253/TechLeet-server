@@ -3,6 +3,42 @@ import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { ProcessedCvData } from './cv-nlp-processing.service';
 
+export interface ModelConfig {
+   modelName: string;
+   temperature: number;
+   topK?: number;
+   topP?: number;
+   maxOutputTokens?: number;
+}
+
+// Predefined model configurations for different "models"
+export const MODEL_CONFIGS = {
+   gemini: {
+      // Best configuration - using most powerful model
+      modelName: 'gemini-2.5-pro',  // Latest and most powerful
+      temperature: 0.6,  // Balanced for best results
+      topK: 40,
+      topP: 0.95,
+      maxOutputTokens: 4096,
+   } as ModelConfig,
+   chatgpt: {
+      // Mid-tier configuration - using Pro model
+      modelName: 'gemini-1.5-pro',  // Powerful but slower
+      temperature: 0.5,  // More deterministic
+      topK: 30,
+      topP: 0.9,
+      maxOutputTokens: 3072,
+   } as ModelConfig,
+   deepseek: {
+      // Basic configuration - using Flash model
+      modelName: 'gemini-1.5-flash',  // Fastest, most basic
+      temperature: 0.7,  // Standard creativity
+      topK: 40,
+      topP: 0.95,
+      maxOutputTokens: 2048,
+   } as ModelConfig,
+};
+
 export interface CvSummaryResult {
    summary: string;
    keyHighlights: string[];
@@ -16,6 +52,7 @@ export interface CvSummaryResult {
    fitScore: number; // 0-100
    recommendation: 'strong_fit' | 'good_fit' | 'moderate_fit' | 'poor_fit';
    processingTimeMs: number;
+   modelUsed?: string;  // Track which model config was used
 }
 
 export interface JobMatchAnalysis {
@@ -49,20 +86,35 @@ export class CvLlmSummaryService {
 
    /**
     * Generate comprehensive CV summary using LLM
+    * @param cvText - Raw CV text
+    * @param processedData - Processed CV data
+    * @param jobDescription - Optional job description for context
+    * @param modelConfigKey - Which model configuration to use (gemini, chatgpt, deepseek)
     */
    async generateCvSummary(
       cvText: string,
       processedData: ProcessedCvData,
-      jobDescription?: string
+      jobDescription?: string,
+      modelConfigKey: 'gemini' | 'chatgpt' | 'deepseek' = 'gemini'
    ): Promise<CvSummaryResult> {
       const startTime = Date.now();
       
       try {
-         this.logger.log('Generating CV summary using LLM');
+         const config = MODEL_CONFIGS[modelConfigKey];
+         this.logger.log(`Generating CV summary using ${modelConfigKey} config (model: ${config.modelName}, temp: ${config.temperature})`);
 
          const prompt = this.buildSummaryPrompt(cvText, processedData, jobDescription);
          
-         const model = this.genAI.getGenerativeModel({ model: this.defaultModel });
+         const model = this.genAI.getGenerativeModel({ 
+            model: config.modelName,
+            generationConfig: {
+               temperature: config.temperature,
+               topK: config.topK,
+               topP: config.topP,
+               maxOutputTokens: config.maxOutputTokens,
+            }
+         });
+         
          const systemPrompt = 'You are an expert HR professional and technical recruiter. Analyze CVs objectively and provide structured insights for hiring decisions.';
          const fullPrompt = `${systemPrompt}\n\n${prompt}`;
 
@@ -76,11 +128,12 @@ export class CvLlmSummaryService {
          const parsedResult = this.parseLlmResponse(content);
          const processingTime = Date.now() - startTime;
 
-         this.logger.log(`CV summary generated successfully in ${processingTime}ms`);
+         this.logger.log(`CV summary generated successfully using ${modelConfigKey} in ${processingTime}ms`);
 
          return {
             ...parsedResult,
             processingTimeMs: processingTime,
+            modelUsed: `${modelConfigKey} (${config.modelName})`,
          };
 
       } catch (error) {
@@ -92,19 +145,31 @@ export class CvLlmSummaryService {
 
    /**
     * Analyze job match between CV and job posting
+    * @param modelConfigKey - Which model configuration to use (gemini, chatgpt, deepseek)
     */
    async analyzeJobMatch(
       cvText: string,
       processedData: ProcessedCvData,
       jobDescription: string,
-      jobRequirements: string
+      jobRequirements: string,
+      modelConfigKey: 'gemini' | 'chatgpt' | 'deepseek' = 'gemini'
    ): Promise<JobMatchAnalysis> {
       try {
-         this.logger.log('Analyzing job match using LLM');
+         const config = MODEL_CONFIGS[modelConfigKey];
+         this.logger.log(`Analyzing job match using ${modelConfigKey} config`);
 
          const prompt = this.buildJobMatchPrompt(cvText, processedData, jobDescription, jobRequirements);
          
-         const model = this.genAI.getGenerativeModel({ model: this.defaultModel });
+         const model = this.genAI.getGenerativeModel({ 
+            model: config.modelName,
+            generationConfig: {
+               temperature: config.temperature,
+               topK: config.topK,
+               topP: config.topP,
+               maxOutputTokens: config.maxOutputTokens,
+            }
+         });
+         
          const systemPrompt = 'You are an expert technical recruiter. Analyze how well a candidate matches a specific job posting. Provide detailed, objective analysis with specific scores and recommendations.';
          const fullPrompt = `${systemPrompt}\n\n${prompt}`;
 

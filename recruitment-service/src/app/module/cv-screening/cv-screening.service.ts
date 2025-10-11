@@ -327,12 +327,13 @@ export class CvScreeningService {
    async testLocalCvScreening(
       filePath: string,
       jobPostingId?: number,
-      mockApplicationId?: number
+      mockApplicationId?: number,
+      modelConfig: 'gemini' | 'chatgpt' | 'deepseek' = 'gemini'
    ) {
       const startTime = Date.now();
       
       try {
-         this.logger.log(`Testing CV screening with local file: ${filePath}`);
+         this.logger.log(`Testing CV screening with local file: ${filePath} using ${modelConfig} config`);
 
          // Use the screening worker directly for testing
          const mockJobPosting = jobPostingId ? await this.getMockJobPosting(jobPostingId) : this.getDefaultMockJobPosting();
@@ -346,12 +347,12 @@ export class CvScreeningService {
          // Step 3: Calculate scores (simplified for testing)
          const scores = this.calculateTestScores(processedData, mockJobPosting);
          
-         // Step 4: Generate AI summary (if configured)
-         const summary = await this.generateTestSummary(extractedText, processedData, mockJobPosting);
+         // Step 4: Generate AI summary (if configured) with specified model config
+         const summary = await this.generateTestSummary(extractedText, processedData, mockJobPosting, modelConfig);
          
          const processingTime = Date.now() - startTime;
          
-         this.logger.log(`Test CV screening completed in ${processingTime}ms`);
+         this.logger.log(`Test CV screening completed in ${processingTime}ms using ${modelConfig}`);
          
          return {
             success: true,
@@ -368,7 +369,8 @@ export class CvScreeningService {
             testInfo: {
                filePath,
                jobPostingId: jobPostingId || 'mock',
-               mockApplicationId: mockApplicationId || 9999
+               mockApplicationId: mockApplicationId || 9999,
+               modelConfig
             }
          };
 
@@ -383,7 +385,8 @@ export class CvScreeningService {
             testInfo: {
                filePath,
                jobPostingId: jobPostingId || 'mock',
-               mockApplicationId: mockApplicationId || 9999
+               mockApplicationId: mockApplicationId || 9999,
+               modelConfig
             }
          };
       }
@@ -417,16 +420,22 @@ export class CvScreeningService {
       };
    }
 
-   private async generateTestSummary(text: string, processedData: any, jobPosting: any) {
+   private async generateTestSummary(
+      text: string, 
+      processedData: any, 
+      jobPosting: any,
+      modelConfig: 'gemini' | 'chatgpt' | 'deepseek' = 'gemini'
+   ) {
       try {
          // Use the actual AI service for better summary generation
-         this.logger.log('Generating AI summary for test CV');
+         this.logger.log(`Generating AI summary for test CV using ${modelConfig} config`);
          
          const jobDescription = this.createJobDescriptionText(jobPosting);
          const aiSummary = await this.llmSummaryService.generateCvSummary(
             text,
             processedData,
-            jobDescription
+            jobDescription,
+            modelConfig
          );
          
          return {
@@ -435,7 +444,8 @@ export class CvScreeningService {
             concerns: aiSummary.concerns,
             fitScore: aiSummary.fitScore,
             recommendation: aiSummary.recommendation,
-            skillsAssessment: aiSummary.skillsAssessment
+            skillsAssessment: aiSummary.skillsAssessment,
+            modelUsed: aiSummary.modelUsed
          };
       } catch (error) {
          this.logger.warn(`AI summary generation failed in test mode: ${error.message}`);
