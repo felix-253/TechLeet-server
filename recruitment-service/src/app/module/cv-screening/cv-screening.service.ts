@@ -344,8 +344,8 @@ export class CvScreeningService {
          // Step 2: Process with NLP
          const processedData = await this.processTextWithNlp(extractedText);
          
-         // Step 3: Calculate scores (simplified for testing)
-         const scores = this.calculateTestScores(processedData, mockJobPosting);
+         // Step 3: Calculate scores (simplified for testing) with model-specific adjustments
+         const scores = this.calculateTestScores(processedData, mockJobPosting, modelConfig);
          
          // Step 4: Generate AI summary (if configured) with specified model config
          const summary = await this.generateTestSummary(extractedText, processedData, mockJobPosting, modelConfig);
@@ -404,19 +404,36 @@ export class CvScreeningService {
       return this.nlpProcessingService.processCvText(text);
    }
 
-   private calculateTestScores(processedData: any, jobPosting: any) {
+   private calculateTestScores(
+      processedData: any, 
+      jobPosting: any,
+      modelConfig: 'gemini' | 'chatgpt' | 'deepseek' = 'gemini'
+   ) {
       // Simplified scoring for testing
       const skillsScore = this.calculateSkillsMatch(processedData.skills?.technical || [], jobPosting.skills);
       const experienceScore = this.calculateExperienceMatch(processedData.totalExperienceYears, jobPosting.minExperience, jobPosting.maxExperience);
       const educationScore = this.calculateEducationMatch(processedData.education || [], jobPosting.educationLevel);
       
-      const overallScore = (skillsScore * 0.4 + experienceScore * 0.3 + educationScore * 0.3) * 100;
+      const baseOverallScore = (skillsScore * 0.4 + experienceScore * 0.3 + educationScore * 0.3) * 100;
+      
+      // Apply model-specific score adjustments to simulate different models
+      let scoreModifier = 1.0;
+      if (modelConfig === 'chatgpt') {
+         // ChatGPT: slightly lower scores (90-95% of original)
+         scoreModifier = 0.90 + (Math.random() * 0.05);
+      } else if (modelConfig === 'deepseek') {
+         // DeepSeek: more variation (85-95% of original)
+         scoreModifier = 0.85 + (Math.random() * 0.10);
+      }
+      // Gemini keeps original scores (modifier = 1.0)
+      
+      const overallScore = baseOverallScore * scoreModifier;
       
       return {
          overallScore: Math.round(overallScore * 100) / 100,
-         skillsScore: Math.round(skillsScore * 100 * 100) / 100,
-         experienceScore: Math.round(experienceScore * 100 * 100) / 100,
-         educationScore: Math.round(educationScore * 100 * 100) / 100
+         skillsScore: Math.round(skillsScore * 100 * scoreModifier * 100) / 100,
+         experienceScore: Math.round(experienceScore * 100 * scoreModifier * 100) / 100,
+         educationScore: Math.round(educationScore * 100 * scoreModifier * 100) / 100
       };
    }
 

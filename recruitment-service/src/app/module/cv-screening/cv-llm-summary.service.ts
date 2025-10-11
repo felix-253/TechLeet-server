@@ -15,27 +15,27 @@ export interface ModelConfig {
 export const MODEL_CONFIGS = {
    gemini: {
       // Best configuration - using most powerful model
-      modelName: 'gemini-2.5-pro',  // Latest and most powerful
-      temperature: 0.6,  // Balanced for best results
+      modelName: 'gemini-2.5-pro', // Latest and most powerful
+      temperature: 0.6, // Balanced for best results
       topK: 40,
       topP: 0.95,
       maxOutputTokens: 4096,
    } as ModelConfig,
    chatgpt: {
       // Mid-tier configuration - using Pro model
-      modelName: 'gemini-2.5-flash',  // Powerful but slower
-      temperature: 0.5,  // More deterministic
+      modelName: 'gemini-2.5-flash-latest', // Powerful but slower
+      temperature: 0.5, // More deterministic
       topK: 30,
       topP: 0.9,
-      maxOutputTokens: 3072,
+      maxOutputTokens: 4096,
    } as ModelConfig,
    deepseek: {
       // Basic configuration - using Flash model
-      modelName: 'gemini-1.5-flash',  // Fastest, most basic
-      temperature: 0.7,  // Standard creativity
+      modelName: 'gemini-1.5-flash', // Fastest, most basic
+      temperature: 0.7, // Standard creativity
       topK: 40,
       topP: 0.95,
-      maxOutputTokens: 2048,
+      maxOutputTokens: 4096,
    } as ModelConfig,
 };
 
@@ -52,7 +52,7 @@ export interface CvSummaryResult {
    fitScore: number; // 0-100
    recommendation: 'strong_fit' | 'good_fit' | 'moderate_fit' | 'poor_fit';
    processingTimeMs: number;
-   modelUsed?: string;  // Track which model config was used
+   modelUsed?: string; // Track which model config was used
 }
 
 export interface JobMatchAnalysis {
@@ -95,27 +95,30 @@ export class CvLlmSummaryService {
       cvText: string,
       processedData: ProcessedCvData,
       jobDescription?: string,
-      modelConfigKey: 'gemini' | 'chatgpt' | 'deepseek' = 'gemini'
+      modelConfigKey: 'gemini' | 'chatgpt' | 'deepseek' = 'gemini',
    ): Promise<CvSummaryResult> {
       const startTime = Date.now();
-      
+
       try {
          const config = MODEL_CONFIGS[modelConfigKey];
-         this.logger.log(`Generating CV summary using ${modelConfigKey} config (model: ${config.modelName}, temp: ${config.temperature})`);
+         this.logger.log(
+            `Generating CV summary using ${modelConfigKey} config (model: ${config.modelName}, temp: ${config.temperature})`,
+         );
 
          const prompt = this.buildSummaryPrompt(cvText, processedData, jobDescription);
-         
-         const model = this.genAI.getGenerativeModel({ 
+
+         const model = this.genAI.getGenerativeModel({
             model: config.modelName,
             generationConfig: {
                temperature: config.temperature,
                topK: config.topK,
                topP: config.topP,
                maxOutputTokens: config.maxOutputTokens,
-            }
+            },
          });
-         
-         const systemPrompt = 'You are an expert HR professional and technical recruiter. Analyze CVs objectively and provide structured insights for hiring decisions.';
+
+         const systemPrompt =
+            'Bạn là một chuyên viên HR và nhà tuyển dụng kỹ thuật chuyên nghiệp. Phân tích CV một cách khách quan và cung cấp những hiểu biết có cấu trúc cho các quyết định tuyển dụng. Toàn bộ phân tích phải bằng tiếng Việt.';
          const fullPrompt = `${systemPrompt}\n\n${prompt}`;
 
          const response = await model.generateContent(fullPrompt);
@@ -128,17 +131,21 @@ export class CvLlmSummaryService {
          const parsedResult = this.parseLlmResponse(content);
          const processingTime = Date.now() - startTime;
 
-         this.logger.log(`CV summary generated successfully using ${modelConfigKey} in ${processingTime}ms`);
+         this.logger.log(
+            `CV summary generated successfully using ${modelConfigKey} in ${processingTime}ms`,
+         );
 
          return {
             ...parsedResult,
             processingTimeMs: processingTime,
             modelUsed: `${modelConfigKey} (${config.modelName})`,
          };
-
       } catch (error) {
          const processingTime = Date.now() - startTime;
-         this.logger.error(`CV summary generation failed after ${processingTime}ms: ${error.message}`, error.stack);
+         this.logger.error(
+            `CV summary generation failed after ${processingTime}ms: ${error.message}`,
+            error.stack,
+         );
          throw error;
       }
    }
@@ -152,25 +159,31 @@ export class CvLlmSummaryService {
       processedData: ProcessedCvData,
       jobDescription: string,
       jobRequirements: string,
-      modelConfigKey: 'gemini' | 'chatgpt' | 'deepseek' = 'gemini'
+      modelConfigKey: 'gemini' | 'chatgpt' | 'deepseek' = 'gemini',
    ): Promise<JobMatchAnalysis> {
       try {
          const config = MODEL_CONFIGS[modelConfigKey];
          this.logger.log(`Analyzing job match using ${modelConfigKey} config`);
 
-         const prompt = this.buildJobMatchPrompt(cvText, processedData, jobDescription, jobRequirements);
-         
-         const model = this.genAI.getGenerativeModel({ 
+         const prompt = this.buildJobMatchPrompt(
+            cvText,
+            processedData,
+            jobDescription,
+            jobRequirements,
+         );
+
+         const model = this.genAI.getGenerativeModel({
             model: config.modelName,
             generationConfig: {
                temperature: config.temperature,
                topK: config.topK,
                topP: config.topP,
                maxOutputTokens: config.maxOutputTokens,
-            }
+            },
          });
-         
-         const systemPrompt = 'You are an expert technical recruiter. Analyze how well a candidate matches a specific job posting. Provide detailed, objective analysis with specific scores and recommendations.';
+
+         const systemPrompt =
+            'Bạn là một chuyên viên tuyển dụng kỹ thuật chuyên nghiệp. Phân tích mức độ phù hợp của ứng viên với vị trí tuyển dụng cụ thể. Cung cấp phân tích chi tiết, khách quan với điểm số và khuyến nghị cụ thể. Toàn bộ phân tích phải bằng tiếng Việt.';
          const fullPrompt = `${systemPrompt}\n\n${prompt}`;
 
          const response = await model.generateContent(fullPrompt);
@@ -181,7 +194,6 @@ export class CvLlmSummaryService {
          }
 
          return this.parseJobMatchResponse(content);
-
       } catch (error) {
          this.logger.error(`Job match analysis failed: ${error.message}`, error.stack);
          throw error;
@@ -194,10 +206,10 @@ export class CvLlmSummaryService {
    private buildSummaryPrompt(
       cvText: string,
       processedData: ProcessedCvData,
-      jobDescription?: string
+      jobDescription?: string,
    ): string {
-      const jobContext = jobDescription 
-         ? `\n\nJob Context:\n${jobDescription}\n\nPlease evaluate the candidate's fit for this specific role.`
+      const jobContext = jobDescription
+         ? `\n\nBối cảnh Công việc:\n${jobDescription}\n\nVui lòng đánh giá mức độ phù hợp của ứng viên cho vị trí này.`
          : '';
 
       return `
@@ -210,8 +222,8 @@ Dữ liệu trích xuất:
 - Kinh nghiệm: ${processedData.totalExperienceYears} năm
 - Kỹ năng kỹ thuật: ${processedData.skills.technical.join(', ')}
 - Kỹ năng mềm: ${processedData.skills.soft.join(', ')}
-- Học vấn: ${processedData.education.map(e => `${e.degree} tại ${e.institution} (${e.graduationYear})`).join(', ')}
-- Lịch sử công việc: ${processedData.workExperience.map(w => `${w.position} tại ${w.company} (${w.duration})`).join(', ')}
+- Học vấn: ${processedData.education.map((e) => `${e.degree} tại ${e.institution} (${e.graduationYear})`).join(', ')}
+- Lịch sử công việc: ${processedData.workExperience.map((w) => `${w.position} tại ${w.company} (${w.duration})`).join(', ')}
 ${jobContext}
 
 Vui lòng cung cấp phân tích chi tiết theo định dạng JSON sau. Hãy viết toàn bộ bằng tiếng Việt và chi tiết, cụ thể:
@@ -284,41 +296,41 @@ Tập trung vào việc cung cấp những hiểu biết có thể hành động
       cvText: string,
       processedData: ProcessedCvData,
       jobDescription: string,
-      jobRequirements: string
+      jobRequirements: string,
    ): string {
       return `
-Analyze how well this candidate matches the specific job posting:
+Phân tích mức độ phù hợp của ứng viên này với vị trí tuyển dụng cụ thể. Hãy viết toàn bộ bằng tiếng Việt:
 
-Candidate CV:
+CV Ứng viên:
 ${cvText}
 
-Candidate Summary:
-- Experience: ${processedData.totalExperienceYears} years
-- Technical Skills: ${processedData.skills.technical.join(', ')}
-- Education: ${processedData.education.map(e => `${e.degree} from ${e.institution}`).join(', ')}
+Tóm tắt Ứng viên:
+- Kinh nghiệm: ${processedData.totalExperienceYears} năm
+- Kỹ năng kỹ thuật: ${processedData.skills.technical.join(', ')}
+- Học vấn: ${processedData.education.map((e) => `${e.degree} tại ${e.institution}`).join(', ')}
 
-Job Description:
+Mô tả Công việc:
 ${jobDescription}
 
-Job Requirements:
+Yêu cầu Công việc:
 ${jobRequirements}
 
-Please provide your analysis in the following JSON format:
+Vui lòng cung cấp phân tích của bạn theo định dạng JSON sau (toàn bộ nội dung bằng tiếng Việt):
 {
   "overallMatch": 85,
   "skillsMatch": 90,
   "experienceMatch": 80,
   "educationMatch": 85,
   "detailedAnalysis": {
-    "matchingSkills": ["skill1", "skill2"],
-    "missingSkills": ["skill1", "skill2"],
-    "experienceGap": "description of experience gap or fit",
-    "educationFit": "how education aligns with requirements"
+    "matchingSkills": ["kỹ năng1", "kỹ năng2"],
+    "missingSkills": ["kỹ năng1", "kỹ năng2"],
+    "experienceGap": "mô tả về khoảng cách hoặc sự phù hợp về kinh nghiệm",
+    "educationFit": "mức độ phù hợp về học vấn với yêu cầu"
   },
-  "recommendation": "detailed recommendation with specific reasons"
+  "recommendation": "khuyến nghị chi tiết với lý do cụ thể bằng tiếng Việt"
 }
 
-Provide scores out of 100 and be specific about matches and gaps.
+Cung cấp điểm từ 0 đến 100 và hãy cụ thể về những điểm phù hợp và khoảng cách. Tất cả nội dung phải bằng tiếng Việt.
 `;
    }
 
@@ -332,7 +344,7 @@ Provide scores out of 100 and be specific about matches and gaps.
          if (jsonMatch) {
             const parsed = JSON.parse(jsonMatch[0]);
             return {
-               summary: parsed.summary || 'Summary not available',
+               summary: parsed.summary || 'Không có tóm tắt',
                keyHighlights: parsed.keyHighlights || [],
                concerns: parsed.concerns || [],
                skillsAssessment: {
@@ -369,10 +381,10 @@ Provide scores out of 100 and be specific about matches and gaps.
                detailedAnalysis: {
                   matchingSkills: parsed.detailedAnalysis?.matchingSkills || [],
                   missingSkills: parsed.detailedAnalysis?.missingSkills || [],
-                  experienceGap: parsed.detailedAnalysis?.experienceGap || 'Analysis not available',
-                  educationFit: parsed.detailedAnalysis?.educationFit || 'Analysis not available',
+                  experienceGap: parsed.detailedAnalysis?.experienceGap || 'Không có phân tích',
+                  educationFit: parsed.detailedAnalysis?.educationFit || 'Không có phân tích',
                },
-               recommendation: parsed.recommendation || 'Further evaluation needed',
+               recommendation: parsed.recommendation || 'Cần đánh giá thêm',
             };
          }
       } catch (error) {
@@ -388,10 +400,10 @@ Provide scores out of 100 and be specific about matches and gaps.
          detailedAnalysis: {
             matchingSkills: [],
             missingSkills: [],
-            experienceGap: 'Analysis failed',
-            educationFit: 'Analysis failed',
+            experienceGap: 'Phân tích thất bại',
+            educationFit: 'Phân tích thất bại',
          },
-         recommendation: 'Manual review required due to analysis error',
+         recommendation: 'Cần xem xét thủ công do lỗi phân tích',
       };
    }
 
@@ -400,10 +412,10 @@ Provide scores out of 100 and be specific about matches and gaps.
     */
    private parseTextResponse(content: string): Omit<CvSummaryResult, 'processingTimeMs'> {
       // Extract key information from text response
-      const lines = content.split('\n').filter(line => line.trim());
-      
+      const lines = content.split('\n').filter((line) => line.trim());
+
       return {
-         summary: lines[0] || 'Summary not available',
+         summary: lines[0] || 'Không có tóm tắt',
          keyHighlights: this.extractListItems(content, 'highlights'),
          concerns: this.extractListItems(content, 'concerns'),
          skillsAssessment: {
@@ -423,15 +435,15 @@ Provide scores out of 100 and be specific about matches and gaps.
    private extractListItems(text: string, keyword: string): string[] {
       const regex = new RegExp(`${keyword}[:\\s]*([\\s\\S]*?)(?=\\n\\n|$)`, 'i');
       const match = text.match(regex);
-      
+
       if (match) {
          return match[1]
             .split('\n')
-            .map(line => line.replace(/^[-*•]\s*/, '').trim())
-            .filter(line => line.length > 0)
+            .map((line) => line.replace(/^[-*•]\s*/, '').trim())
+            .filter((line) => line.length > 0)
             .slice(0, 5); // Limit to 5 items
       }
-      
+
       return [];
    }
 }
