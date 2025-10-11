@@ -23,7 +23,7 @@ export const MODEL_CONFIGS = {
    } as ModelConfig,
    chatgpt: {
       // Mid-tier configuration - using Pro model
-      modelName: 'gemini-2.5-flash-latest', // Powerful but slower
+      modelName: 'gemini-2.5-flash', // Powerful but slower
       temperature: 0.5, // More deterministic
       topK: 30,
       topP: 0.9,
@@ -31,7 +31,7 @@ export const MODEL_CONFIGS = {
    } as ModelConfig,
    deepseek: {
       // Basic configuration - using Flash model
-      modelName: 'gemini-2.5-flash-lite', // Fastest, most basic
+      modelName: 'gemini-2.0-flash', // Fastest, most basic
       temperature: 0.7, // Standard creativity
       topK: 40,
       topP: 0.95,
@@ -353,7 +353,7 @@ Cung cấp điểm từ 0 đến 100 và hãy cụ thể về những điểm ph
                   strengthAreas: parsed.skillsAssessment?.strengthAreas || [],
                   improvementAreas: parsed.skillsAssessment?.improvementAreas || [],
                },
-               fitScore: parsed.fitScore || 50,
+               fitScore: Math.ceil(parsed.fitScore || 50),
                recommendation: parsed.recommendation || 'moderate_fit',
             };
          }
@@ -374,10 +374,10 @@ Cung cấp điểm từ 0 đến 100 và hãy cụ thể về những điểm ph
          if (jsonMatch) {
             const parsed = JSON.parse(jsonMatch[0]);
             return {
-               overallMatch: parsed.overallMatch || 50,
-               skillsMatch: parsed.skillsMatch || 50,
-               experienceMatch: parsed.experienceMatch || 50,
-               educationMatch: parsed.educationMatch || 50,
+               overallMatch: Math.ceil(parsed.overallMatch || 50),
+               skillsMatch: Math.ceil(parsed.skillsMatch || 50),
+               experienceMatch: Math.ceil(parsed.experienceMatch || 50),
+               educationMatch: Math.ceil(parsed.educationMatch || 50),
                detailedAnalysis: {
                   matchingSkills: parsed.detailedAnalysis?.matchingSkills || [],
                   missingSkills: parsed.detailedAnalysis?.missingSkills || [],

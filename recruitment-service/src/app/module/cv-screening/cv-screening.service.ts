@@ -430,10 +430,10 @@ export class CvScreeningService {
       const overallScore = baseOverallScore * scoreModifier;
       
       return {
-         overallScore: Math.round(overallScore * 100) / 100,
-         skillsScore: Math.round(skillsScore * 100 * scoreModifier * 100) / 100,
-         experienceScore: Math.round(experienceScore * 100 * scoreModifier * 100) / 100,
-         educationScore: Math.round(educationScore * 100 * scoreModifier * 100) / 100
+         overallScore: Math.ceil(overallScore),
+         skillsScore: Math.ceil(skillsScore * 100 * scoreModifier),
+         experienceScore: Math.ceil(experienceScore * 100 * scoreModifier),
+         educationScore: Math.ceil(educationScore * 100 * scoreModifier)
       };
    }
 
