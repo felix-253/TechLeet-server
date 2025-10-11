@@ -23,7 +23,7 @@ export const MODEL_CONFIGS = {
    } as ModelConfig,
    chatgpt: {
       // Mid-tier configuration - using Pro model
-      modelName: 'gemini-1.5-pro',  // Powerful but slower
+      modelName: 'gemini-2.5-flash',  // Powerful but slower
       temperature: 0.5,  // More deterministic
       topK: 30,
       topP: 0.9,
