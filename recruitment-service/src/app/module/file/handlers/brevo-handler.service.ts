@@ -29,10 +29,19 @@ export class BrevoHandler {
             try {
                console.log(`📎 Processing attachment: ${attachment.Name} (${attachment.Size} bytes)`);
                
+               // Generate unique filename to avoid conflicts
+               const timestamp = Date.now();
+               const randomSuffix = Math.random().toString(36).substring(2, 8);
+               const originalFileName = attachment.Name;
+               const fileExtension = originalFileName.includes('.') 
+                  ? originalFileName.substring(originalFileName.lastIndexOf('.'))
+                  : '';
+               const uniqueFileName = `${timestamp}_${randomSuffix}${fileExtension}`;
+               
                // Save file entity to database
                const fileEntity = new FileEntity();
                fileEntity.originalName = attachment.Name;
-               fileEntity.fileName = attachment.Name;
+               fileEntity.fileName = uniqueFileName; // Use unique filename to prevent duplicates
                fileEntity.fileUrl = attachment.DownloadToken || attachment.Url || '';
                fileEntity.fileSize = attachment.Size || 0;
                fileEntity.mimeType = attachment.ContentType || 'application/octet-stream';
