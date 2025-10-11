@@ -31,7 +31,7 @@ export const MODEL_CONFIGS = {
    } as ModelConfig,
    deepseek: {
       // Basic configuration - using Flash model
-      modelName: 'gemini-1.5-flash', // Fastest, most basic
+      modelName: 'gemini-2.5-flash-lite', // Fastest, most basic
       temperature: 0.7, // Standard creativity
       topK: 40,
       topP: 0.95,
