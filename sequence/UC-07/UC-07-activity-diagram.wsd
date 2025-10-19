@@ -1,0 +1,57 @@
+@startuml UC-07: Activity Diagram - Tạo Tin Tuyển Dụng
+
+
+
+title UC-07: Tạo Tin Tuyển Dụng - Activity Diagram
+
+|Hiring Manager|
+start
+
+:Truy cập trang tạo tin tuyển dụng;
+
+:Điền form thông tin:
+- Tiêu đề, mô tả công việc
+- Yêu cầu ứng viên
+- Mức lương (min-max)
+- Số lượng, hạn ứng tuyển
+- Phòng ban, vị trí;
+
+:Nhấn nút "Tạo tin";
+
+|System|
+:Validate dữ liệu;
+
+if (Dữ liệu hợp lệ?) then (Có)
+  :Lưu vào database\nvới trạng thái "Draft";
+  
+  :Ghi log audit;
+  
+  |Hiring Manager|
+  :Hiển thị thông báo\n"Tạo thành công";
+  
+  if (Xuất bản ngay?) then (Có)
+    |System|
+    if (Deadline hợp lệ?) then (Có)
+      :Cập nhật status = "Published";
+      :Gửi thông báo;
+      |Hiring Manager|
+      :Tin đã xuất bản;
+      stop
+    else (Không)
+      |Hiring Manager|
+      :Lỗi: "Hạn ứng tuyển không hợp lệ";
+      stop
+    endif
+  else (Không)
+    :Lưu nháp để chỉnh sửa sau;
+    stop
+  endif
+  
+else (Không)
+  |Hiring Manager|
+  :Hiển thị lỗi validation;
+  stop
+endif
+
+@enduml
+

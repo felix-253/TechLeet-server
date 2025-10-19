@@ -1,0 +1,67 @@
+@startuml UC-07: Tạo Tin Tuyển Dụng (Simplified)
+
+
+
+title UC-07: Tạo Tin Tuyển Dụng - Luồng Chính\n(Dành cho Báo cáo Khóa luận)
+
+actor "Hiring Manager" as HM
+participant "Frontend" as FE
+participant "API Gateway" as GW
+participant "Recruitment\nService" as RS
+database "PostgreSQL" as DB
+
+== Luồng Tạo Tin Tuyển Dụng ==
+
+HM -> FE: Điền form thông tin tin tuyển dụng
+activate FE
+
+FE -> FE: Validate dữ liệu client-side
+
+FE -> GW: POST /api/job-postings\n+ JWT Token
+activate GW
+
+GW -> GW: Xác thực Token
+GW -> GW: Kiểm tra quyền\n(ROLE_HIRING_MANAGER)
+
+GW -> RS: Forward request
+activate RS
+
+RS -> RS: Validate dữ liệu:\n- Tiêu đề không rỗng\n- Mức lương hợp lệ\n- Deadline > ngày hiện tại
+
+alt Validation failed
+    RS --> GW: 400 Bad Request
+    GW --> FE: Error message
+    FE --> HM: Hiển thị lỗi validation
+    
+else Validation success
+    RS -> DB: INSERT INTO job_postings\n(status = 'draft')
+    activate DB
+    DB --> RS: job_posting_id
+    deactivate DB
+    
+    RS -> DB: Log audit trail
+    activate DB
+    DB --> RS: OK
+    deactivate DB
+    
+    RS --> GW: 201 Created\n+ Job Posting Data
+    deactivate RS
+    
+    GW --> FE: Success response
+    deactivate GW
+    
+    FE --> HM: Hiển thị thông báo thành công\nChuyển đến trang chi tiết
+    deactivate FE
+end
+
+note right of DB
+  **Dữ liệu lưu trữ:**
+  - Thông tin cơ bản
+  - Yêu cầu ứng viên
+  - Mức lương
+  - Trạng thái: 'draft'
+  - Timestamp
+end note
+
+@enduml
+
