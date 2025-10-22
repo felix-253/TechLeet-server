@@ -293,8 +293,7 @@
 
 ### 🔹 Mức 2 - Essential Features (8 use cases):
 
-- **UC-02:** Quản lý phân quyền
-- **UC-03:** Quản lý hồ sơ nhân viên
+- **UC-02:** Quản lý hồ sơ nhân viên
 - **UC-05:** Quản lý phòng ban
 - **UC-06:** Quản lý vị trí công việc
 - **UC-09:** Xem danh sách tin tuyển dụng

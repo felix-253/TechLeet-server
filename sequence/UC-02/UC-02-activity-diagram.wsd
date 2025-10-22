@@ -1,0 +1,25 @@
+@startuml UC-02: Quản lý hồ sơ nhân viên
+
+|Admin|
+start
+:Truy cập trang tạo nhân viên;
+|System|
+:Hiện form điền thông tin;
+
+|Admin|
+:Điền thông tin nhân viên\n(firstName, lastName, email, phone);
+:Chọn department và position;
+:Nhấn "Tạo nhân viên";
+
+|System|
+:Validate dữ liệu đầu vào;
+:Kiểm tra email trùng lặp;
+:Lưu vào database;
+:Tạo employee code;
+
+|Admin|
+:Hiển thị thông báo thành công;
+:Hiển thị Employee ID;
+stop
+
+@enduml
