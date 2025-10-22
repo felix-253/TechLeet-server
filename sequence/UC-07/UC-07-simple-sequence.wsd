@@ -2,7 +2,6 @@
 
 
 
-title UC-07: Tạo Tin Tuyển Dụng - Luồng Chính\n(Dành cho Báo cáo Khóa luận)
 
 actor "Hiring Manager" as HM
 participant "Frontend" as FE
@@ -10,7 +9,6 @@ participant "API Gateway" as GW
 participant "Recruitment\nService" as RS
 database "PostgreSQL" as DB
 
-== Luồng Tạo Tin Tuyển Dụng ==
 
 HM -> FE: Điền form thông tin tin tuyển dụng
 activate FE

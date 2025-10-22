@@ -1,20 +1,10 @@
-@startuml UC-07: Activity Diagram - Tạo Tin Tuyển Dụng
-
-
-
-title UC-07: Tạo Tin Tuyển Dụng - Activity Diagram
-
+@startuml
 |Hiring Manager|
 start
 
 :Truy cập trang tạo tin tuyển dụng;
 
-:Điền form thông tin:
-- Tiêu đề, mô tả công việc
-- Yêu cầu ứng viên
-- Mức lương (min-max)
-- Số lượng, hạn ứng tuyển
-- Phòng ban, vị trí;
+:Điền form thông tin;
 
 :Nhấn nút "Tạo tin";
 
@@ -52,6 +42,4 @@ else (Không)
   :Hiển thị lỗi validation;
   stop
 endif
-
 @enduml
-

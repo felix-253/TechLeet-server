@@ -1,0 +1,24 @@
+@startuml UC-01: Đăng nhập hệ thống
+
+actor "User" as User
+participant "Frontend" as FE
+participant "API Gateway" as GW
+participant "User Service" as US
+database "PostgreSQL" as DB
+database "Redis" as Redis
+
+User -> FE: Nhập email, password
+FE -> GW: POST /api/auth/login
+GW -> US: Forward request
+US -> DB: employeeLogin(email)
+DB --> US: Employee data + permissions
+US -> US: bcrypt.compare(password)
+US -> US: Check permissions\n(FULL/EDIT/VIEW)
+US -> Redis: Store permissions\n(employeeId + permissions)
+US -> US: Generate JWT tokens
+US -> DB: Store refresh token
+US --> GW: { token, refreshToken, permissions }
+GW --> FE: Login response
+FE --> User: Redirect to dashboard\nbased on permissions
+
+@enduml
