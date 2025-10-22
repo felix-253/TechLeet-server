@@ -1,0 +1,47 @@
+@startuml UC-04: Xem hồ sơ cá nhân
+
+actor "Employee" as Employee
+participant "Frontend" as FE
+participant "API Gateway" as GW
+participant "User Service" as US
+database "PostgreSQL" as DB
+database "Redis" as Redis
+
+Employee -> FE: Truy cập trang hồ sơ cá nhân
+FE -> FE: Load profile template
+FE -> GW: GET /api/employee/my-profile\n+ JWT token
+activate GW
+
+GW -> GW: Extract JWT token
+GW -> GW: Validate token format
+GW -> US: Forward request to User Service
+activate US
+
+US -> US: Extract employeeId from token
+US -> Redis: Get employee permissions\n(REDIS_KEY_EMPLOYEE_PERMISSION + employeeId)
+activate Redis
+Redis --> US: Employee permissions
+deactivate Redis
+
+US -> DB: SELECT * FROM employee\nWHERE employeeId = ?
+activate DB
+DB --> US: Employee profile data
+deactivate DB
+
+alt Employee not found
+    US --> GW: 404 Not Found\n+ "Employee not found"
+    GW --> FE: Error response
+    FE --> Employee: Hiển thị lỗi không tìm thấy
+else Employee found
+    US -> US: Transform data to EmployeeResponseDto\n(exclude sensitive fields)
+    US --> GW: 200 OK\n+ employee profile data
+    deactivate US
+    
+    GW --> FE: Success response
+    deactivate GW
+    
+    FE -> FE: Render profile template
+    FE --> Employee: Hiển thị hồ sơ cá nhân\n(firstName, lastName, email, phone, department, position, salary)
+end
+
+@enduml

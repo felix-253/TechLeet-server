@@ -1,0 +1,28 @@
+@startuml UC-04: Xem hồ sơ cá nhân
+
+|Employee|
+start
+:Truy cập trang hồ sơ cá nhân;
+|System|
+:Hiển thị form profile;
+
+|Employee|
+:Nhấn "Xem hồ sơ";
+|System|
+:Validate JWT token;
+:Lấy employeeId từ token;
+:Lấy permissions từ Redis;
+:Tìm employee trong database;
+
+if (Employee tồn tại?) then (Có)
+  :Transform dữ liệu\n(exclude sensitive fields);
+  |Employee|
+  :Hiển thị hồ sơ cá nhân\n(firstName, lastName, email, phone, department, position, salary);
+  stop
+else (Không)
+  |Employee|
+  :Hiển thị lỗi "Không tìm thấy";
+  stop
+endif
+
+@enduml
