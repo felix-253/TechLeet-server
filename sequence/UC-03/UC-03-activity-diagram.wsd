@@ -1,0 +1,30 @@
+@startuml UC-03: Quản lý phòng ban
+
+|Admin|
+start
+:Truy cập trang quản lý phòng ban;
+|System|
+:Hiển thị danh sách phòng ban;
+
+|Admin|
+:Nhấn "Tạo phòng ban mới";
+|System|
+:Hiện form điền thông tin;
+
+|Admin|
+:Điền thông tin phòng ban\n(departmentName, description, budget);
+:Chọn headquarter và department type;
+:Nhấn "Tạo phòng ban";
+
+|System|
+:Validate dữ liệu đầu vào;
+:Kiểm tra tên phòng ban trùng lặp;
+:Lưu vào database;
+:Tạo department code;
+
+|Admin|
+:Hiển thị thông báo thành công;
+:Hiển thị Department ID;
+stop
+
+@enduml
