@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
 import { ApplicationEntity } from '../../../entities/recruitment/application.entity';
+import { FilterScoreEntity } from '../../../entities/recruitment/filter-score.entity';
 
 // Định nghĩa cấu trúc dữ liệu cho trạng thái sàng lọc
 export interface IScreeningState {
@@ -30,6 +31,8 @@ export class AdaptiveThresholdService {
       private readonly jobPostingRepository: Repository<JobPostingEntity>,
       @InjectRepository(ApplicationEntity)
       private readonly applicationRepository: Repository<ApplicationEntity>,
+      @InjectRepository(FilterScoreEntity)
+      private readonly filterScoreRepository: Repository<FilterScoreEntity>,
    ) {}
 
    /**
@@ -105,15 +108,13 @@ export class AdaptiveThresholdService {
          }
 
          // Lấy trạng thái hiện tại từ filter_score
-         const currentFilterScore = await this.jobPostingRepository
-            .createQueryBuilder('job')
-            .leftJoinAndSelect('job.filterScore', 'filter')
-            .where('job.jobPostingId = :jobPostingId', { jobPostingId })
-            .getOne();
+         const currentFilterScore = await this.filterScoreRepository.findOne({
+            where: { jobPostingId },
+         });
 
          let currentState: IScreeningState;
 
-         if (!currentFilterScore?.filterScore) {
+         if (!currentFilterScore) {
             // CV đầu tiên - tạo record filter_score mới
             this.logger.log(`Creating first filter_score record for job ${jobPostingId}`);
 
@@ -127,24 +128,19 @@ export class AdaptiveThresholdService {
             };
 
             // Tạo record filter_score mới
-            await this.jobPostingRepository
-               .createQueryBuilder()
-               .insert()
-               .into('filter_score')
-               .values({
-                  job_posting_id: jobPostingId,
-                  screening_n: 0,
-                  screening_mean: 0.0,
-                  screening_m2: 0.0,
-                  screening_threshold: 0.6,
-                  screening_k: 0.5,
-                  screening_min_threshold: 0.0,
-                  screening_max_threshold: 1.0,
-               })
-               .execute();
+            await this.filterScoreRepository.save({
+               jobPostingId,
+               screeningN: 0,
+               screeningMean: 0.0,
+               screeningM2: 0.0,
+               screeningThreshold: 0.6,
+               screeningK: 0.5,
+               screeningMinThreshold: 0.0,
+               screeningMaxThreshold: 1.0,
+            });
          } else {
             // Đã có record - lấy trạng thái hiện tại
-            const filter = currentFilterScore.filterScore;
+            const filter = currentFilterScore;
             currentState = {
                n: filter.screeningN || 0,
                mean: parseFloat(filter.screeningMean?.toString() || '0'),
@@ -159,18 +155,16 @@ export class AdaptiveThresholdService {
          const result = this.updateAdaptiveThreshold(currentState, cvScore);
 
          // Cập nhật filter_score với trạng thái mới
-         await this.jobPostingRepository
-            .createQueryBuilder()
-            .update('filter_score')
-            .set({
-               screening_n: result.newState.n,
-               screening_mean: result.newState.mean,
-               screening_m2: result.newState.m2,
-               screening_threshold: result.newThreshold,
-               updated_at: () => 'now()',
-            })
-            .where('job_posting_id = :jobPostingId', { jobPostingId })
-            .execute();
+         await this.filterScoreRepository.update(
+            { jobPostingId },
+            {
+               screeningN: result.newState.n,
+               screeningMean: result.newState.mean,
+               screeningM2: result.newState.m2,
+               screeningThreshold: result.newThreshold,
+               updatedAt: new Date(),
+            },
+         );
 
          this.logger.log(
             `Job ${jobPostingId}: CV score ${cvScore.toFixed(3)} → ${result.decision.toUpperCase()} | threshold=${result.newThreshold.toFixed(3)} | mean=${result.newState.mean.toFixed(3)} | n=${result.newState.n}`,
@@ -196,23 +190,13 @@ export class AdaptiveThresholdService {
       std: number;
    } | null> {
       try {
-         const result = await this.jobPostingRepository
-            .createQueryBuilder('job')
-            .leftJoin('job.filterScore', 'filter')
-            .select([
-               'filter.screening_n',
-               'filter.screening_mean',
-               'filter.screening_m2',
-               'filter.screening_threshold',
-            ])
-            .where('job.jobPostingId = :jobPostingId', { jobPostingId })
-            .getOne();
+         const filter = await this.filterScoreRepository.findOne({
+            where: { jobPostingId },
+         });
 
-         if (!result?.filterScore) {
+         if (!filter) {
             return null;
          }
-
-         const filter = result.filterScore;
          const n = filter.screeningN || 0;
          const mean = parseFloat(filter.screeningMean?.toString() || '0');
          const m2 = parseFloat(filter.screeningM2?.toString() || '0');
@@ -301,18 +285,16 @@ export class AdaptiveThresholdService {
     */
    async resetScreeningStats(jobPostingId: number): Promise<void> {
       try {
-         await this.jobPostingRepository
-            .createQueryBuilder()
-            .update('filter_score')
-            .set({
-               screening_n: 0,
-               screening_mean: 0.0,
-               screening_m2: 0.0,
-               screening_threshold: 0.6,
-               updated_at: () => 'now()',
-            })
-            .where('job_posting_id = :jobPostingId', { jobPostingId })
-            .execute();
+         await this.filterScoreRepository.update(
+            { jobPostingId },
+            {
+               screeningN: 0,
+               screeningMean: 0.0,
+               screeningM2: 0.0,
+               screeningThreshold: 0.6,
+               updatedAt: new Date(),
+            },
+         );
 
          this.logger.log(`Reset screening stats for job posting ${jobPostingId}`);
       } catch (error) {
@@ -330,15 +312,13 @@ export class AdaptiveThresholdService {
       }
 
       try {
-         await this.jobPostingRepository
-            .createQueryBuilder()
-            .update('filter_score')
-            .set({
-               screening_k: k,
-               updated_at: () => 'now()',
-            })
-            .where('job_posting_id = :jobPostingId', { jobPostingId })
-            .execute();
+         await this.filterScoreRepository.update(
+            { jobPostingId },
+            {
+               screeningK: k,
+               updatedAt: new Date(),
+            },
+         );
 
          this.logger.log(`Updated screening K coefficient to ${k} for job posting ${jobPostingId}`);
       } catch (error) {
