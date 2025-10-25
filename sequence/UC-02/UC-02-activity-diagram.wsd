@@ -5,15 +5,6 @@ start
 :Đăng nhập hệ thống;
 :Truy cập trang tạo tin tuyển dụng;
 :Nhập thông tin chi tiết;
-note right
-  - Tiêu đề công việc
-  - Mô tả công việc
-  - Yêu cầu ứng viên
-  - Mức lương min-max
-  - Số lượng cần tuyển
-  - Hạn ứng tuyển
-  - Hình thức làm việc
-end note
 
 |System|
 :Validate dữ liệu đầu vào;

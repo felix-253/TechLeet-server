@@ -1,0 +1,70 @@
+@startuml UC-016: Luồng xử lý tự động tuyển dụng
+hide footbox
+skinparam ParticipantPadding 10
+skinparam BoxPadding 5
+
+actor "Ứng viên" as Candidate
+boundary "Giao diện ứng viên" as CandidateUI
+control "ApplicationController" as ApplicationController
+control "InformationService" as InformationService
+control "AIService" as AIService
+control "ScreeningService" as ScreeningService
+entity "FileService" as FileService
+entity "PotentialCandidateRepository" as PotentialCandidateRepo
+entity "ApplicationRepository" as AppRepo
+database "Cơ sở dữ liệu" as Database
+database "Redis Cache" as Redis
+
+Candidate -> CandidateUI: Upload CV và thông tin ứng tuyển
+CandidateUI -> ApplicationController: Gửi CV và dữ liệu ứng tuyển
+ApplicationController -> FileService: Lưu file CV
+FileService -> FileService: Xử lý và lưu file CV
+FileService --> ApplicationController: CV đã được lưu
+
+ApplicationController -> InformationService: Trích xuất thông tin từ CV
+InformationService -> FileService: Đọc và xử lý file CV
+FileService -> FileService: Trích xuất text từ PDF
+FileService --> InformationService: Text đã được trích xuất
+
+InformationService -> AIService: Phân tích CV bằng AI
+AIService -> AIService: Xử lý NLP và trích xuất thông tin
+AIService -> AIService: Tạo AI summary và đánh giá
+AIService --> InformationService: Kết quả phân tích AI
+
+InformationService -> ScreeningService: Thực hiện sàng lọc tự động
+ScreeningService -> ScreeningService: Áp dụng tiêu chí sàng lọc
+ScreeningService -> ScreeningService: Tính điểm phù hợp
+ScreeningService --> InformationService: Kết quả sàng lọc
+
+alt [CV đạt tiêu chí sàng lọc]
+    InformationService -> CandidateRepo: Tạo thông tin candidate
+    CandidateRepo -> Database: Lưu thông tin candidate
+    Database --> CandidateRepo: Candidate đã được tạo
+    CandidateRepo --> InformationService: Candidate ID
+    
+    InformationService -> AppRepo: Tạo application
+    AppRepo -> Database: Lưu application với trạng thái SCREENING_PASSED
+    Database --> AppRepo: Application đã được tạo
+    AppRepo --> InformationService: Application ID
+    
+    InformationService -> Redis: Lưu kết quả sàng lọc vào cache
+    Redis --> InformationService: Lưu cache thành công
+    
+    InformationService -> ApplicationController: Trả về thông tin ứng viên đã được phân tích
+    ApplicationController -> CandidateUI: Hiển thị thông tin ứng viên với AI analysis
+    CandidateUI -> Candidate: Hiển thị kết quả phân tích CV và thông tin ứng viên
+else [CV không đạt tiêu chí sàng lọc]
+    InformationService -> PotentialCandidateRepo: Lưu CV vào danh sách ứng viên tiềm năng
+    PotentialCandidateRepo -> Database: Lưu thông tin ứng viên tiềm năng
+    Database --> PotentialCandidateRepo: Đã lưu vào danh sách tiềm năng
+    PotentialCandidateRepo --> InformationService: CV đã được lưu vào tiềm năng
+    
+    InformationService -> Redis: Lưu thông tin ứng viên tiềm năng vào cache
+    Redis --> InformationService: Lưu cache thành công
+    
+    InformationService -> ApplicationController: CV không đạt tiêu chí nhưng đã lưu vào tiềm năng
+    ApplicationController -> CandidateUI: Thông báo CV đã được lưu vào danh sách tiềm năng
+    CandidateUI -> Candidate: Thông báo CV chưa phù hợp hiện tại nhưng đã được lưu vào danh sách ứng viên tiềm năng
+end
+
+@enduml

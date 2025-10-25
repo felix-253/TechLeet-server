@@ -1,51 +1,58 @@
 @startuml UC-07: Quản lý đơn ứng tuyển
+hide footbox
+skinparam ParticipantPadding 10
+skinparam BoxPadding 5
 
-actor "Nhà tuyển dụng" as R
-participant "Giao diện quản trị" as FE
-participant "Hệ thống" as System
-database "Cơ sở dữ liệu" as DB
+actor "Nhà tuyển dụng" as Recruiter
+boundary "Giao diện quản lý đơn ứng tuyển" as ApplicationUI
+control "ApplicationController" as ApplicationController
+entity "ApplicationRepository" as ApplicationRepo
+entity "AuthService" as AuthService
+entity "EmailService" as EmailService
+database "Cơ sở dữ liệu" as Database
 
-R -> FE: Truy cập trang quản lý đơn ứng tuyển
-FE -> System: Yêu cầu hiển thị danh sách đơn
-System -> System: Kiểm tra quyền truy cập
-System -> DB: Lấy danh sách đơn ứng tuyển
-DB --> System: Trả về danh sách đơn ứng tuyển
-System -> FE: Hiển thị danh sách đơn ứng tuyển
+Recruiter -> ApplicationUI: Truy cập trang quản lý đơn ứng tuyển
+ApplicationUI -> ApplicationController: Yêu cầu hiển thị danh sách đơn
+ApplicationController -> AuthService: Kiểm tra quyền truy cập
+AuthService -> AuthService: Xác thực quyền nhà tuyển dụng
+AuthService --> ApplicationController: Kết quả xác thực quyền
+ApplicationController -> ApplicationRepo: Lấy danh sách đơn ứng tuyển
+ApplicationRepo -> Database: Truy vấn danh sách đơn ứng tuyển
+Database --> ApplicationRepo: Trả về danh sách đơn ứng tuyển
+ApplicationRepo --> ApplicationController: Dữ liệu danh sách đơn
+ApplicationController -> ApplicationUI: Hiển thị danh sách đơn ứng tuyển
 
-R -> FE: Nhập bộ lọc/tìm kiếm (nếu có)
-note right
-  - Lọc theo trạng thái
-  - Lọc theo tin tuyển dụng
-  - Lọc theo ứng viên
-  - Lọc theo ngày nộp đơn
-end note
+Recruiter -> ApplicationUI: Nhập bộ lọc/tìm kiếm (nếu có)
 
-FE -> System: Gửi yêu cầu lọc/tìm kiếm
-System -> System: Apply filters
-System -> DB: Lấy kết quả đã lọc
-DB --> System: Trả về kết quả đã lọc
-System -> FE: Hiển thị kết quả đã lọc
+ApplicationUI -> ApplicationController: Gửi yêu cầu lọc/tìm kiếm
+ApplicationController -> ApplicationController: Áp dụng bộ lọc và tìm kiếm
+ApplicationController -> ApplicationRepo: Lấy kết quả đã lọc
+ApplicationRepo -> Database: Truy vấn kết quả đã lọc
+Database --> ApplicationRepo: Trả về kết quả đã lọc
+ApplicationRepo --> ApplicationController: Dữ liệu kết quả đã lọc
+ApplicationController -> ApplicationUI: Hiển thị kết quả đã lọc
 
 alt [Cần thay đổi trạng thái]
-    R -> FE: Chọn đơn và thay đổi trạng thái
-    note right
-      - SCREENING: Đang sàng lọc
-      - INTERVIEWING: Đang phỏng vấn
-      - REJECTED: Từ chối
-      - HIRED: Tuyển dụng
-    end note
+    Recruiter -> ApplicationUI: Chọn đơn và thay đổi trạng thái
     
-    FE -> System: Gửi yêu cầu cập nhật trạng thái
-    System -> System: Kiểm tra tính hợp lệ
-    System -> DB: Cập nhật trạng thái đơn ứng tuyển
-    DB --> System: Xác nhận cập nhật thành công
-    System -> DB: Lưu lịch sử thay đổi
-    DB --> System: Xác nhận lưu lịch sử
-    System -> System: Gửi thông báo đến ứng viên
-    System -> FE: Hiển thị thông báo thành công
-    FE -> R: Chuyển đến trang quản lý đơn
+    ApplicationUI -> ApplicationController: Gửi yêu cầu cập nhật trạng thái
+    ApplicationController -> ApplicationController: Kiểm tra tính hợp lệ của dữ liệu
+    ApplicationController -> ApplicationRepo: Cập nhật trạng thái đơn ứng tuyển
+    ApplicationRepo -> Database: Cập nhật trạng thái trong cơ sở dữ liệu
+    Database --> ApplicationRepo: Xác nhận cập nhật thành công
+    ApplicationRepo --> ApplicationController: Trạng thái đã được cập nhật
+    
+    ApplicationController -> ApplicationRepo: Lưu lịch sử thay đổi
+    ApplicationRepo -> Database: Lưu lịch sử thay đổi
+    Database --> ApplicationRepo: Xác nhận lưu lịch sử thành công
+    ApplicationRepo --> ApplicationController: Lịch sử đã được lưu
+    
+    ApplicationController -> EmailService: Gửi thông báo đến ứng viên
+    EmailService -> EmailService: Xử lý và gửi thông báo
+    ApplicationController -> ApplicationUI: Thông báo cập nhật thành công
+    ApplicationUI -> Recruiter: Chuyển đến trang quản lý đơn ứng tuyển
 else [Tiếp tục duyệt]
-    FE -> R: Hiển thị danh sách đơn ứng tuyển
+    ApplicationUI -> Recruiter: Hiển thị danh sách đơn ứng tuyển
 end
 
 @enduml

@@ -1,56 +1,32 @@
-@startuml UC-015: Cập nhật trụ sở
+@startuml UC-15: Luồng tuyển dụng tự động
 
-|Admin|
+||Hệ thống AI|
 start
-:Truy cập trang quản lý trụ sở;
-:Chọn trụ sở cần cập nhật;
+:Kích hoạt luồng tuyển dụng tự động;
+:Lấy danh sách tin tuyển dụng đang mở;
 
-|System|
-:Kiểm tra quyền Admin;
-:Load thông tin trụ sở;
+||AI Service|
+:Phân tích yêu cầu công việc;
+:Xử lý job requirements;
+:Tạo profile ứng viên lý tưởng;
 
-if (Có quyền Admin?) then (Có)
-  :Lấy thông tin trụ sở từ DB;
-  :Lấy lịch sử thay đổi;
-  
-  |Admin|
-  :Hiển thị form chỉnh sửa;
-  :Cập nhật thông tin trụ sở;
-  note right
-    - Tên trụ sở
-    - Địa chỉ mới
-    - Số điện thoại
-    - Email liên hệ
-    - Mô tả trụ sở
-    - Trạng thái hoạt động
-  end note
-  
-  |System|
-  :Validate thông tin đã cập nhật;
-  :Kiểm tra tên trụ sở không trùng lặp;
-  
-  if (Thông tin hợp lệ?) then (Có)
-    :Cập nhật thông tin trong DB;
-    :Lưu lịch sử thay đổi;
-    
-    if (Thay đổi quan trọng?) then (Có)
-      :Cập nhật thông tin nhân viên liên quan;
-      :Gửi thông báo đến nhân viên;
-      :Gửi thông báo đến Admin;
-    endif
-    
-    |Admin|
-    :Hiển thị thông báo cập nhật thành công;
-    stop
-  else (Không)
-    |Admin|
-    :Hiển thị lỗi validation;
-    :Cho phép chỉnh sửa lại;
-    stop
-  endif
+||Matching Service|
+:Lấy danh sách ứng viên từ database;
+:Thực hiện matching tự động;
+:Tính toán điểm số phù hợp;
+
+if (Có ứng viên phù hợp?) then (Có)
+  :Tạo đơn ứng tuyển tự động;
+  :Gửi email mời ứng tuyển;
+  :Gửi thông báo đến nhà tuyển dụng;
+  :Lưu kết quả vào cache;
+  |Hệ thống AI|
+  :Hiển thị báo cáo kết quả;
+  stop
 else (Không)
-  |Admin|
-  :Hiển thị lỗi không có quyền Admin;
+  |Hệ thống AI|
+  :Gửi thông báo không tìm thấy ứng viên;
+  :Hiển thị thông báo không có kết quả;
   stop
 endif
 

@@ -1,50 +1,75 @@
-@startuml UC-012: Tạo nhân viên
+@startuml UC-12: Tạo nhân viên
+hide footbox
+skinparam ParticipantPadding 10
+skinparam BoxPadding 5
 
-actor "HR Manager" as HR
-participant "Giao diện quản trị" as FE
-participant "Hệ thống" as System
-database "Cơ sở dữ liệu" as DB
+actor "HR Manager" as HRManager
+boundary "Giao diện tạo nhân viên" as EmployeeUI
+control "EmployeeController" as EmployeeController
+entity "EmployeeRepository" as EmployeeRepo
+entity "ApplicationRepository" as ApplicationRepo
+entity "DepartmentRepository" as DepartmentRepo
+entity "EmailService" as EmailService
+entity "AuthService" as AuthService
+database "Cơ sở dữ liệu" as Database
 
-HR -> FE: Click "Tạo nhân viên mới" từ đánh giá PASS
-FE -> System: Yêu cầu hiển thị màn hình tạo nhân viên
-System -> System: Kiểm tra quyền tạo nhân viên
-System -> DB: Lấy thông tin ứng viên
-DB --> System: Trả về thông tin ứng viên
-System -> DB: Lấy thông tin phòng ban và vị trí
-DB --> System: Trả về thông tin phòng ban và vị trí
-System -> FE: Hiển thị form tạo nhân viên
+HRManager -> EmployeeUI: Click "Tạo nhân viên mới" từ đánh giá PASS
+EmployeeUI -> EmployeeController: Yêu cầu hiển thị màn hình tạo nhân viên
+EmployeeController -> AuthService: Kiểm tra quyền tạo nhân viên
+AuthService -> AuthService: Xác thực quyền tạo nhân viên
+AuthService --> EmployeeController: Kết quả xác thực quyền
+EmployeeController -> ApplicationRepo: Lấy thông tin ứng viên
+ApplicationRepo -> Database: Truy vấn thông tin ứng viên
+Database --> ApplicationRepo: Trả về thông tin ứng viên
+ApplicationRepo --> EmployeeController: Dữ liệu ứng viên
 
-HR -> FE: Điền thông tin nhân viên và nhấn "Tạo nhân viên"
-note right
-  - Thông tin cá nhân (từ ứng viên)
-  - Mã nhân viên (auto-generate)
-  - Phòng ban và vị trí
-  - Ngày bắt đầu làm việc
-  - Mức lương và phúc lợi
-  - Thông tin tài khoản hệ thống
-end note
+EmployeeController -> DepartmentRepo: Lấy thông tin phòng ban và vị trí
+DepartmentRepo -> Database: Truy vấn thông tin phòng ban và vị trí
+Database --> DepartmentRepo: Trả về thông tin phòng ban và vị trí
+DepartmentRepo --> EmployeeController: Dữ liệu phòng ban và vị trí
+EmployeeController -> EmployeeUI: Hiển thị form tạo nhân viên
 
-FE -> System: Gửi dữ liệu tạo nhân viên
-System -> System: Kiểm tra tính hợp lệ
-System -> System: Generate mã nhân viên duy nhất
-System -> System: Kiểm tra email không trùng lặp
+HRManager -> EmployeeUI: Điền thông tin nhân viên và nhấn "Tạo nhân viên"
+
+EmployeeUI -> EmployeeController: Gửi dữ liệu tạo nhân viên
+EmployeeController -> EmployeeController: Kiểm tra tính hợp lệ của dữ liệu
+EmployeeController -> EmployeeController: Tạo mã nhân viên duy nhất
+EmployeeController -> EmployeeRepo: Kiểm tra email không trùng lặp
+EmployeeRepo -> Database: Kiểm tra email trong cơ sở dữ liệu
+Database --> EmployeeRepo: Kết quả kiểm tra email
+EmployeeRepo --> EmployeeController: Email không trùng lặp
 
 alt [Dữ liệu hợp lệ]
-    System -> DB: Tạo tài khoản nhân viên
-    DB --> System: Xác nhận tạo tài khoản thành công
-    System -> DB: Lưu thông tin nhân viên
-    DB --> System: Xác nhận lưu thông tin thành công
-    System -> DB: Gán quyền truy cập mặc định
-    DB --> System: Xác nhận gán quyền thành công
-    System -> DB: Cập nhật trạng thái đơn ứng tuyển
-    DB --> System: Xác nhận cập nhật trạng thái
-    System -> System: Gửi email chào mừng đến nhân viên mới
-    System -> System: Gửi thông báo đến HR Manager
-    System -> FE: Hiển thị thông báo thành công
-    FE -> HR: Hiển thị thông tin tài khoản đã tạo
+    EmployeeController -> EmployeeRepo: Tạo tài khoản nhân viên
+    EmployeeRepo -> Database: Lưu tài khoản nhân viên
+    Database --> EmployeeRepo: Xác nhận tạo tài khoản thành công
+    EmployeeRepo --> EmployeeController: Tài khoản đã được tạo
+    
+    EmployeeController -> EmployeeRepo: Lưu thông tin nhân viên
+    EmployeeRepo -> Database: Lưu thông tin nhân viên
+    Database --> EmployeeRepo: Xác nhận lưu thông tin thành công
+    EmployeeRepo --> EmployeeController: Thông tin đã được lưu
+    
+    EmployeeController -> EmployeeRepo: Gán quyền truy cập mặc định
+    EmployeeRepo -> Database: Lưu quyền truy cập
+    Database --> EmployeeRepo: Xác nhận gán quyền thành công
+    EmployeeRepo --> EmployeeController: Quyền đã được gán
+    
+    EmployeeController -> ApplicationRepo: Cập nhật trạng thái đơn ứng tuyển
+    ApplicationRepo -> Database: Cập nhật trạng thái đơn ứng tuyển
+    Database --> ApplicationRepo: Xác nhận cập nhật trạng thái
+    ApplicationRepo --> EmployeeController: Trạng thái đã được cập nhật
+    
+    EmployeeController -> EmailService: Gửi email chào mừng đến nhân viên mới
+    EmailService -> EmailService: Xử lý và gửi email chào mừng
+    EmployeeController -> EmailService: Gửi thông báo đến HR Manager
+    EmailService -> EmailService: Xử lý và gửi thông báo
+    
+    EmployeeController -> EmployeeUI: Thông báo tạo nhân viên thành công
+    EmployeeUI -> HRManager: Hiển thị thông tin tài khoản đã tạo
 else [Dữ liệu không hợp lệ]
-    System -> FE: Hiển thị thông báo lỗi
-    FE -> HR: Quay lại màn hình nhập liệu
+    EmployeeController -> EmployeeUI: Thông báo lỗi validation
+    EmployeeUI -> HRManager: Quay lại màn hình nhập liệu với thông báo lỗi
 end
 
 @enduml

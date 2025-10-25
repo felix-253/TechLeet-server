@@ -1,49 +1,61 @@
-@startuml UC-010: Quản lý lịch phỏng vấn
+@startuml UC-10: Quản lý lịch phỏng vấn
+hide footbox
+skinparam ParticipantPadding 10
+skinparam BoxPadding 5
 
-actor "Người dùng" as U
-participant "Giao diện quản trị" as FE
-participant "Hệ thống" as System
-database "Cơ sở dữ liệu" as DB
+actor "Người dùng" as User
+boundary "Giao diện quản lý lịch phỏng vấn" as InterviewUI
+control "InterviewController" as InterviewController
+entity "InterviewRepository" as InterviewRepo
+entity "AuthService" as AuthService
+entity "EmailService" as EmailService
+database "Cơ sở dữ liệu" as Database
 
-U -> FE: Truy cập trang quản lý lịch phỏng vấn
-FE -> System: Yêu cầu hiển thị danh sách lịch
-System -> System: Kiểm tra quyền truy cập
-System -> DB: Lấy danh sách lịch phỏng vấn
-DB --> System: Trả về danh sách lịch phỏng vấn
-System -> FE: Hiển thị danh sách lịch phỏng vấn
+User -> InterviewUI: Truy cập trang quản lý lịch phỏng vấn
+InterviewUI -> InterviewController: Yêu cầu hiển thị danh sách lịch
+InterviewController -> AuthService: Kiểm tra quyền truy cập
+AuthService -> AuthService: Xác thực quyền người dùng
+AuthService --> InterviewController: Kết quả xác thực quyền
+InterviewController -> InterviewRepo: Lấy danh sách lịch phỏng vấn
+InterviewRepo -> Database: Truy vấn danh sách lịch phỏng vấn
+Database --> InterviewRepo: Trả về danh sách lịch phỏng vấn
+InterviewRepo --> InterviewController: Dữ liệu danh sách lịch
+InterviewController -> InterviewUI: Hiển thị danh sách lịch phỏng vấn
 
-U -> FE: Nhập bộ lọc/tìm kiếm (nếu có)
-note right
-  - Lọc theo trạng thái
-  - Lọc theo thời gian
-  - Lọc theo loại phỏng vấn
-  - Lọc theo người phỏng vấn
-end note
+User -> InterviewUI: Nhập bộ lọc/tìm kiếm (nếu có)
 
-FE -> System: Gửi yêu cầu lọc/tìm kiếm
-System -> System: Apply filters
-System -> DB: Lấy kết quả đã lọc
-DB --> System: Trả về kết quả đã lọc
-System -> FE: Hiển thị kết quả đã lọc
+InterviewUI -> InterviewController: Gửi yêu cầu lọc/tìm kiếm
+InterviewController -> InterviewController: Áp dụng bộ lọc và tìm kiếm
+InterviewController -> InterviewRepo: Lấy kết quả đã lọc
+InterviewRepo -> Database: Truy vấn kết quả đã lọc
+Database --> InterviewRepo: Trả về kết quả đã lọc
+InterviewRepo --> InterviewController: Dữ liệu kết quả đã lọc
+InterviewController -> InterviewUI: Hiển thị kết quả đã lọc
 
 alt [Cần xem chi tiết]
-    U -> FE: Click vào lịch phỏng vấn
-    FE -> System: Yêu cầu hiển thị chi tiết
-    System -> DB: Lấy thông tin chi tiết lịch
-    DB --> System: Trả về chi tiết lịch phỏng vấn
-    System -> FE: Hiển thị chi tiết lịch phỏng vấn
-    FE -> U: Chuyển đến trang chi tiết
+    User -> InterviewUI: Click vào lịch phỏng vấn
+    InterviewUI -> InterviewController: Yêu cầu hiển thị chi tiết
+    InterviewController -> InterviewRepo: Lấy thông tin chi tiết lịch
+    InterviewRepo -> Database: Truy vấn thông tin chi tiết lịch
+    Database --> InterviewRepo: Trả về chi tiết lịch phỏng vấn
+    InterviewRepo --> InterviewController: Dữ liệu chi tiết lịch
+    InterviewController -> InterviewUI: Hiển thị chi tiết lịch phỏng vấn
+    InterviewUI -> User: Chuyển đến trang chi tiết lịch phỏng vấn
 else [Cần thực hiện hành động]
-    U -> FE: Chọn hành động (sửa/hủy/xác nhận)
-    FE -> System: Gửi yêu cầu thực hiện hành động
-    System -> System: Kiểm tra tính hợp lệ
-    System -> DB: Cập nhật lịch phỏng vấn
-    DB --> System: Xác nhận cập nhật thành công
-    System -> System: Gửi thông báo đến các bên liên quan
-    System -> FE: Hiển thị thông báo thành công
-    FE -> U: Chuyển đến trang quản lý lịch
+    User -> InterviewUI: Chọn hành động (sửa/hủy/xác nhận)
+    InterviewUI -> InterviewController: Gửi yêu cầu thực hiện hành động
+    InterviewController -> InterviewController: Kiểm tra tính hợp lệ của dữ liệu
+    InterviewController -> InterviewRepo: Cập nhật lịch phỏng vấn
+    InterviewRepo -> Database: Cập nhật lịch phỏng vấn trong cơ sở dữ liệu
+    Database --> InterviewRepo: Xác nhận cập nhật thành công
+    InterviewRepo --> InterviewController: Lịch đã được cập nhật
+    
+    InterviewController -> EmailService: Gửi thông báo đến các bên liên quan
+    EmailService -> EmailService: Xử lý và gửi thông báo
+    InterviewController -> InterviewUI: Thông báo thực hiện hành động thành công
+    InterviewUI -> User: Chuyển đến trang quản lý lịch phỏng vấn
 else [Tiếp tục duyệt]
-    FE -> U: Hiển thị danh sách lịch phỏng vấn
+    InterviewUI -> User: Hiển thị danh sách lịch phỏng vấn
 end
 
 @enduml

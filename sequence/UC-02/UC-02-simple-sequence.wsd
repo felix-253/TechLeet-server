@@ -1,36 +1,42 @@
 @startuml UC-02: Tạo tin tuyển dụng thủ công
+hide footbox
+skinparam ParticipantPadding 10
+skinparam BoxPadding 5
 
-actor "Nhà tuyển dụng" as HM
-participant "Giao diện quản trị" as FE
-participant "Hệ thống" as System
-database "Cơ sở dữ liệu" as DB
+actor "Nhà tuyển dụng" as HiringManager
+boundary "Giao diện tạo tin tuyển dụng" as JobPostingUI
+control "JobPostingController" as JobPostingController
+entity "JobPostingRepository" as JobPostingRepo
+entity "CompanyRepository" as CompanyRepo
+database "Cơ sở dữ liệu" as Database
 
-HM -> FE: Chọn "Tạo tin tuyển dụng"
-FE -> System: Yêu cầu hiển thị form tạo tin
-System -> FE: Hiển thị form nhập thông tin
+HiringManager -> JobPostingUI: Chọn "Tạo tin tuyển dụng"
+JobPostingUI -> JobPostingController: Yêu cầu hiển thị form tạo tin
+JobPostingController -> CompanyRepo: Lấy danh sách phòng ban
+CompanyRepo -> Database: Truy vấn danh sách phòng ban
+Database --> CompanyRepo: Trả về danh sách phòng ban
+CompanyRepo --> JobPostingController: Dữ liệu phòng ban
+JobPostingController -> JobPostingUI: Hiển thị form nhập thông tin
 
-HM -> FE: Nhập thông tin chi tiết và nhấn "Lưu"
-note right
-  - Tiêu đề công việc
-  - Mô tả công việc
-  - Yêu cầu ứng viên
-  - Mức lương min-max
-  - Số lượng cần tuyển
-  - Hạn ứng tuyển
-  - Hình thức làm việc
-end note
+HiringManager -> JobPostingUI: Nhập thông tin chi tiết và nhấn "Lưu"
 
-FE -> System: Gửi dữ liệu tin tuyển dụng
-System -> System: Kiểm tra tính hợp lệ
+JobPostingUI -> JobPostingController: Gửi dữ liệu tin tuyển dụng
+JobPostingController -> JobPostingController: Kiểm tra tính hợp lệ của dữ liệu
 
 alt [Dữ liệu hợp lệ]
-    System -> DB: Lưu tin tuyển dụng mới
-    DB --> System: Xác nhận lưu thành công
-    System -> FE: Hiển thị thông báo thành công
-    FE -> HM: Chuyển đến trang chỉnh sửa
+    JobPostingController -> JobPostingRepo: Tạo tin tuyển dụng mới
+    JobPostingRepo -> Database: Lưu tin tuyển dụng vào cơ sở dữ liệu
+    Database --> JobPostingRepo: Xác nhận lưu thành công
+    JobPostingRepo --> JobPostingController: Tin tuyển dụng đã được tạo
+    
+    JobPostingController -> JobPostingController: Tạo mã tin tuyển dụng duy nhất
+    JobPostingController -> JobPostingController: Đặt trạng thái DRAFT
+    
+    JobPostingController -> JobPostingUI: Thông báo tạo tin thành công
+    JobPostingUI -> HiringManager: Chuyển đến trang chỉnh sửa tin tuyển dụng
 else [Dữ liệu không hợp lệ]
-    System -> FE: Hiển thị thông báo lỗi
-    FE -> HM: Quay lại màn hình nhập liệu
+    JobPostingController -> JobPostingUI: Thông báo lỗi validation
+    JobPostingUI -> HiringManager: Quay lại màn hình nhập liệu với thông báo lỗi
 end
 
 @enduml

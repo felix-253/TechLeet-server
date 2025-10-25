@@ -141,6 +141,20 @@
 - **Mô tả:** Quản trị viên cần thay đổi thông tin hoặc tình trạng hoạt động của một trụ sở hiện có
 - **Chức năng:** Cho phép chỉnh sửa thông tin chi tiết của trụ sở (địa chỉ mới, tên mới, v.v.)
 
+### G. MODULE TỰ ĐỘNG HÓA TUYỂN DỤNG (1 use case)
+
+#### UC016: Luồng xử lý tự động tuyển dụng
+
+- **Actor:** Ứng viên
+- **Mô tả:** Ứng viên upload CV và hệ thống tự động phân tích, sàng lọc CV. Nếu đạt tiêu chí thì tạo candidate và application, nếu không đạt thì lưu vào danh sách ứng viên tiềm năng
+- **Chức năng:** AI phân tích CV tự động, sàng lọc ứng viên, tạo candidate và application khi CV đạt tiêu chí, lưu vào danh sách tiềm năng khi không đạt, hiển thị thông tin ứng viên đã được AI phân tích
+
+#### UC017: Gợi ý ứng viên phù hợp
+
+- **Actor:** Nhà tuyển dụng
+- **Mô tả:** Nhà tuyển dụng yêu cầu gợi ý ứng viên phù hợp cho vị trí tuyển dụng từ danh sách ứng viên tiềm năng đã được lưu trữ
+- **Chức năng:** AI phân tích độ phù hợp, tính điểm matching, tạo lý do gợi ý, cho phép tạo application từ ứng viên tiềm năng được chọn
+
 ---
 
 ## IV. LUỒNG QUY TRÌNH NGHIỆP VỤ CHÍNH
@@ -310,23 +324,24 @@
 
 ## IX. KẾT LUẬN
 
-Hệ thống HRM TechLeet bao gồm **15 use cases chính** được tổ chức thành 6 module, phục vụ 7 loại actor khác nhau. Hệ thống tập trung vào:
+Hệ thống HRM TechLeet bao gồm **17 use cases chính** được tổ chức thành 7 module, phục vụ 7 loại actor khác nhau. Hệ thống tập trung vào:
 
 1. **Quản lý tuyển dụng hiệu quả** với quy trình từ đăng tin đến tuyển dụng
 2. **Quản lý nhân sự và tổ chức** toàn diện
 3. **Kiến trúc Microservices** linh hoạt và dễ mở rộng
-4. **Tự động hóa** các quy trình thủ công
+4. **Tự động hóa** các quy trình thủ công và AI-powered recruitment
 
 ### Thống kê Use Cases:
 
-- **Core Features:** 6 use cases (40%)
-- **Essential Features:** 6 use cases (40%)
-- **Supporting Features:** 3 use cases (20%)
+- **Core Features:** 6 use cases (35.3%)
+- **Essential Features:** 6 use cases (35.3%)
+- **Supporting Features:** 3 use cases (17.6%)
+- **Automation Features:** 2 use cases (11.8%)
 
 ### Điểm nhấn công nghệ:
 
 - **Microservices:** 4 services độc lập, API Gateway
-- **Automation:** Email tự động, workflow tự động
+- **AI & Automation:** AI phân tích CV, tự động sàng lọc, gợi ý ứng viên thông minh, workflow tự động
 - **Real-time:** Thống kê và báo cáo real-time
 - **Scalable:** Hỗ trợ mở rộng theo nhu cầu
 

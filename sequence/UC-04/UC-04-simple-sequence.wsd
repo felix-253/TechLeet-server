@@ -1,41 +1,50 @@
 @startuml UC-04: Cập nhật thông tin tuyển dụng
+hide footbox
+skinparam ParticipantPadding 10
+skinparam BoxPadding 5
 
-actor "Nhà tuyển dụng" as HM
-participant "Giao diện quản trị" as FE
-participant "Hệ thống" as System
-database "Cơ sở dữ liệu" as DB
+actor "Nhà tuyển dụng" as HiringManager
+boundary "Giao diện chỉnh sửa tin tuyển dụng" as EditJobUI
+control "JobPostingController" as JobPostingController
+entity "JobPostingRepository" as JobPostingRepo
+entity "JobHistoryRepository" as JobHistoryRepo
+entity "NotificationService" as NotificationService
+database "Cơ sở dữ liệu" as Database
 
-HM -> FE: Chọn tin tuyển dụng cần chỉnh sửa
-FE -> System: Yêu cầu hiển thị màn hình chỉnh sửa
-System -> FE: Hiển thị form chỉnh sửa
+HiringManager -> EditJobUI: Chọn tin tuyển dụng cần chỉnh sửa
+EditJobUI -> JobPostingController: Yêu cầu hiển thị màn hình chỉnh sửa
+JobPostingController -> JobPostingRepo: Lấy thông tin tin tuyển dụng
+JobPostingRepo -> Database: Truy vấn thông tin tin tuyển dụng
+Database --> JobPostingRepo: Trả về thông tin tin tuyển dụng
+JobPostingRepo --> JobPostingController: Dữ liệu tin tuyển dụng
+JobPostingController -> EditJobUI: Hiển thị form chỉnh sửa
 
-HM -> FE: Chỉnh sửa thông tin và nhấn "Cập nhật"
-note right
-  - Tiêu đề và mô tả
-  - Yêu cầu ứng viên
-  - Mức lương
-  - Số lượng và hạn ứng tuyển
-  - Trạng thái tin tuyển dụng
-end note
+HiringManager -> EditJobUI: Chỉnh sửa thông tin và nhấn "Cập nhật"
 
-FE -> System: Gửi dữ liệu cập nhật
-System -> System: Kiểm tra tính hợp lệ
+EditJobUI -> JobPostingController: Gửi dữ liệu cập nhật
+JobPostingController -> JobPostingController: Kiểm tra tính hợp lệ của dữ liệu
 
 alt [Dữ liệu hợp lệ]
-    System -> DB: Cập nhật tin tuyển dụng
-    DB --> System: Xác nhận cập nhật thành công
-    System -> DB: Lưu lịch sử thay đổi
-    DB --> System: Xác nhận lưu lịch sử
+    JobPostingController -> JobPostingRepo: Cập nhật tin tuyển dụng
+    JobPostingRepo -> Database: Cập nhật tin tuyển dụng trong cơ sở dữ liệu
+    Database --> JobPostingRepo: Xác nhận cập nhật thành công
+    JobPostingRepo --> JobPostingController: Tin tuyển dụng đã được cập nhật
+    
+    JobPostingController -> JobHistoryRepo: Lưu lịch sử thay đổi
+    JobHistoryRepo -> Database: Lưu lịch sử thay đổi vào cơ sở dữ liệu
+    Database --> JobHistoryRepo: Xác nhận lưu lịch sử thành công
+    JobHistoryRepo --> JobPostingController: Lịch sử đã được lưu
     
     alt [Trạng thái = PUBLISHED]
-        System -> System: Gửi thông báo đến ứng viên
+        JobPostingController -> NotificationService: Gửi thông báo đến ứng viên
+        NotificationService -> NotificationService: Xử lý và gửi thông báo
     end
     
-    System -> FE: Hiển thị thông báo thành công
-    FE -> HM: Chuyển đến trang quản lý tin
+    JobPostingController -> EditJobUI: Thông báo cập nhật thành công
+    EditJobUI -> HiringManager: Chuyển đến trang quản lý tin tuyển dụng
 else [Dữ liệu không hợp lệ]
-    System -> FE: Hiển thị thông báo lỗi
-    FE -> HM: Quay lại màn hình nhập liệu
+    JobPostingController -> EditJobUI: Thông báo lỗi validation
+    EditJobUI -> HiringManager: Quay lại màn hình nhập liệu với thông báo lỗi
 end
 
 @enduml

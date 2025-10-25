@@ -1,55 +1,78 @@
-@startuml UC-011: Đánh giá ứng viên
+@startuml UC-11: Đánh giá ứng viên
+hide footbox
+skinparam ParticipantPadding 10
+skinparam BoxPadding 5
 
-actor "Người phỏng vấn" as I
-participant "Giao diện quản trị" as FE
-participant "Hệ thống" as System
-database "Cơ sở dữ liệu" as DB
+actor "Người phỏng vấn" as Interviewer
+boundary "Giao diện đánh giá ứng viên" as EvaluationUI
+control "EvaluationController" as EvaluationController
+entity "InterviewRepository" as InterviewRepo
+entity "ApplicationRepository" as ApplicationRepo
+entity "CandidateRepository" as CandidateRepo
+entity "JobPostingRepository" as JobPostingRepo
+entity "EmailService" as EmailService
+entity "AuthService" as AuthService
+database "Cơ sở dữ liệu" as Database
 
-I -> FE: Click "Đánh giá ứng viên" từ lịch phỏng vấn
-FE -> System: Yêu cầu hiển thị màn hình đánh giá
-System -> System: Kiểm tra quyền đánh giá
-System -> DB: Lấy thông tin phỏng vấn
-DB --> System: Trả về thông tin phỏng vấn
-System -> DB: Lấy thông tin ứng viên
-DB --> System: Trả về thông tin ứng viên
-System -> DB: Lấy thông tin tin tuyển dụng
-DB --> System: Trả về thông tin tin tuyển dụng
-System -> FE: Hiển thị form đánh giá ứng viên
+Interviewer -> EvaluationUI: Click "Đánh giá ứng viên" từ lịch phỏng vấn
+EvaluationUI -> EvaluationController: Yêu cầu hiển thị màn hình đánh giá
+EvaluationController -> AuthService: Kiểm tra quyền đánh giá
+AuthService -> AuthService: Xác thực quyền đánh giá ứng viên
+AuthService --> EvaluationController: Kết quả xác thực quyền
+EvaluationController -> InterviewRepo: Lấy thông tin phỏng vấn
+InterviewRepo -> Database: Truy vấn thông tin phỏng vấn
+Database --> InterviewRepo: Trả về thông tin phỏng vấn
+InterviewRepo --> EvaluationController: Dữ liệu phỏng vấn
 
-I -> FE: Nhập kết quả đánh giá và nhấn "Lưu đánh giá"
-note right
-  - Điểm số tổng thể (1-10)
-  - Kết quả (PASS/FAIL/MAYBE)
-  - Điểm mạnh/yếu
-  - Nhận xét chi tiết
-  - Đề xuất vòng tiếp theo
-end note
+EvaluationController -> CandidateRepo: Lấy thông tin ứng viên
+CandidateRepo -> Database: Truy vấn thông tin ứng viên
+Database --> CandidateRepo: Trả về thông tin ứng viên
+CandidateRepo --> EvaluationController: Dữ liệu ứng viên
 
-FE -> System: Gửi dữ liệu đánh giá
-System -> System: Kiểm tra tính hợp lệ
-System -> System: Tính toán điểm số tổng hợp
+EvaluationController -> JobPostingRepo: Lấy thông tin tin tuyển dụng
+JobPostingRepo -> Database: Truy vấn thông tin tin tuyển dụng
+Database --> JobPostingRepo: Trả về thông tin tin tuyển dụng
+JobPostingRepo --> EvaluationController: Dữ liệu tin tuyển dụng
+EvaluationController -> EvaluationUI: Hiển thị form đánh giá ứng viên
+
+Interviewer -> EvaluationUI: Nhập kết quả đánh giá và nhấn "Lưu đánh giá"
+
+EvaluationUI -> EvaluationController: Gửi dữ liệu đánh giá
+EvaluationController -> EvaluationController: Kiểm tra tính hợp lệ của dữ liệu
+EvaluationController -> EvaluationController: Tính toán điểm số tổng hợp
 
 alt [Dữ liệu hợp lệ]
-    System -> DB: Lưu kết quả đánh giá
-    DB --> System: Xác nhận lưu đánh giá thành công
-    System -> DB: Cập nhật trạng thái phỏng vấn
-    DB --> System: Xác nhận cập nhật trạng thái
-    System -> DB: Cập nhật trạng thái đơn ứng tuyển
-    DB --> System: Xác nhận cập nhật trạng thái đơn
+    EvaluationController -> InterviewRepo: Lưu kết quả đánh giá
+    InterviewRepo -> Database: Lưu kết quả đánh giá vào cơ sở dữ liệu
+    Database --> InterviewRepo: Xác nhận lưu đánh giá thành công
+    InterviewRepo --> EvaluationController: Đánh giá đã được lưu
+    
+    EvaluationController -> InterviewRepo: Cập nhật trạng thái phỏng vấn
+    InterviewRepo -> Database: Cập nhật trạng thái phỏng vấn
+    Database --> InterviewRepo: Xác nhận cập nhật trạng thái
+    InterviewRepo --> EvaluationController: Trạng thái phỏng vấn đã được cập nhật
+    
+    EvaluationController -> ApplicationRepo: Cập nhật trạng thái đơn ứng tuyển
+    ApplicationRepo -> Database: Cập nhật trạng thái đơn ứng tuyển
+    Database --> ApplicationRepo: Xác nhận cập nhật trạng thái đơn
+    ApplicationRepo --> EvaluationController: Trạng thái đơn đã được cập nhật
     
     alt [Kết quả = PASS]
-        System -> System: Gửi thông báo đến Hiring Manager
+        EvaluationController -> EmailService: Gửi thông báo đến Hiring Manager
+        EmailService -> EmailService: Xử lý và gửi thông báo đến Hiring Manager
     else [Kết quả = FAIL]
-        System -> System: Gửi thông báo từ chối đến ứng viên
+        EvaluationController -> EmailService: Gửi thông báo từ chối đến ứng viên
+        EmailService -> EmailService: Xử lý và gửi thông báo từ chối
     else [Kết quả = MAYBE]
-        System -> System: Gửi thông báo đến Hiring Manager
+        EvaluationController -> EmailService: Gửi thông báo đến Hiring Manager
+        EmailService -> EmailService: Xử lý và gửi thông báo đến Hiring Manager
     end
     
-    System -> FE: Hiển thị thông báo thành công
-    FE -> I: Chuyển đến trang quản lý lịch
+    EvaluationController -> EvaluationUI: Thông báo lưu đánh giá thành công
+    EvaluationUI -> Interviewer: Chuyển đến trang quản lý lịch phỏng vấn
 else [Dữ liệu không hợp lệ]
-    System -> FE: Hiển thị thông báo lỗi
-    FE -> I: Quay lại màn hình nhập liệu
+    EvaluationController -> EvaluationUI: Thông báo lỗi validation
+    EvaluationUI -> Interviewer: Quay lại màn hình nhập liệu với thông báo lỗi
 end
 
 @enduml

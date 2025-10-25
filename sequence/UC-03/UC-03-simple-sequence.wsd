@@ -1,47 +1,56 @@
 @startuml UC-03: Tạo tin tuyển dụng tự động
+hide footbox
+skinparam ParticipantPadding 10
+skinparam BoxPadding 5
 
-actor "Nhà tuyển dụng" as HM
-participant "Giao diện quản trị" as FE
-participant "Hệ thống" as System
-database "Cơ sở dữ liệu" as DB
+actor "Nhà tuyển dụng" as HiringManager
+boundary "Giao diện tạo tin tự động" as AutoJobUI
+control "JobPostingController" as JobPostingController
+control "AIService" as AIService
+entity "JobPostingRepository" as JobPostingRepo
+entity "TemplateRepository" as TemplateRepo
+entity "CompanyRepository" as CompanyRepo
+database "Cơ sở dữ liệu" as Database
 
-HM -> FE: Chọn "Tạo tin tự động"
-FE -> System: Yêu cầu hiển thị màn hình tạo tự động
-System -> FE: Hiển thị form tạo tự động
+HiringManager -> AutoJobUI: Chọn "Tạo tin tự động"
+AutoJobUI -> JobPostingController: Yêu cầu hiển thị màn hình tạo tự động
+JobPostingController -> CompanyRepo: Lấy danh sách phòng ban
+CompanyRepo -> Database: Truy vấn danh sách phòng ban
+Database --> CompanyRepo: Trả về danh sách phòng ban
+CompanyRepo --> JobPostingController: Dữ liệu phòng ban
+JobPostingController -> AutoJobUI: Hiển thị form tạo tự động
 
 alt [Sử dụng mẫu có sẵn]
-    HM -> FE: Chọn template và nhập thông tin cơ bản
-    note right
-      - Tên vị trí
-      - Phòng ban
-      - Mức lương dự kiến
-      - Số lượng cần tuyển
-    end note
+    HiringManager -> AutoJobUI: Chọn template và nhập thông tin cơ bản
+    AutoJobUI -> JobPostingController: Gửi dữ liệu template
+    JobPostingController -> TemplateRepo: Lấy nội dung template
+    TemplateRepo -> Database: Truy vấn template
+    Database --> TemplateRepo: Trả về nội dung template
+    TemplateRepo --> JobPostingController: Nội dung template
 else [Sử dụng AI]
-    HM -> FE: Nhập mô tả ngắn và kích hoạt AI
-    note right
-      - Mô tả vị trí
-      - Phòng ban và level
-      - Yêu cầu cơ bản
-    end note
+    HiringManager -> AutoJobUI: Nhập mô tả ngắn và kích hoạt AI
+    AutoJobUI -> JobPostingController: Gửi dữ liệu tạo tin tự động
+    JobPostingController -> AIService: Gọi AI service tạo nội dung
+    AIService -> AIService: Xử lý và tạo nội dung tin tuyển dụng
+    AIService --> JobPostingController: Nội dung tin tuyển dụng được tạo
 end
 
-FE -> System: Gửi dữ liệu tạo tin tự động
-System -> System: Kiểm tra tính hợp lệ
-
-alt [Sử dụng AI]
-    System -> System: Gọi AI service
-    System -> System: Generate nội dung tin tuyển dụng
-end
+JobPostingController -> JobPostingController: Kiểm tra tính hợp lệ của dữ liệu
 
 alt [Dữ liệu hợp lệ]
-    System -> DB: Lưu tin tuyển dụng mới
-    DB --> System: Xác nhận lưu thành công
-    System -> FE: Hiển thị thông báo thành công
-    FE -> HM: Hiển thị preview và cho phép chỉnh sửa
+    JobPostingController -> JobPostingRepo: Tạo tin tuyển dụng mới
+    JobPostingRepo -> Database: Lưu tin tuyển dụng vào cơ sở dữ liệu
+    Database --> JobPostingRepo: Xác nhận lưu thành công
+    JobPostingRepo --> JobPostingController: Tin tuyển dụng đã được tạo
+    
+    JobPostingController -> JobPostingController: Tạo mã tin tuyển dụng duy nhất
+    JobPostingController -> JobPostingController: Đặt trạng thái DRAFT
+    
+    JobPostingController -> AutoJobUI: Thông báo tạo tin thành công
+    AutoJobUI -> HiringManager: Hiển thị preview và cho phép chỉnh sửa
 else [Dữ liệu không hợp lệ]
-    System -> FE: Hiển thị thông báo lỗi
-    FE -> HM: Quay lại màn hình nhập liệu
+    JobPostingController -> AutoJobUI: Thông báo lỗi validation
+    AutoJobUI -> HiringManager: Quay lại màn hình nhập liệu với thông báo lỗi
 end
 
 @enduml

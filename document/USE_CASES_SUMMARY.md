@@ -12,8 +12,8 @@
 
 | Chỉ số                | Số lượng |
 | --------------------- | -------- |
-| **Tổng số Use Cases** | 20       |
-| **Số Module**         | 8        |
+| **Tổng số Use Cases** | 17       |
+| **Số Module**         | 7        |
 | **Số Actor**          | 7        |
 | **Số Microservice**   | 4        |
 
@@ -224,12 +224,13 @@ graph TD
 
 ## THỐNG KÊ
 
-- **Tổng số Use Cases:** 20
-- **Use Cases Core:** 8 (40%)
-- **Use Cases Essential:** 8 (40%)
-- **Use Cases Supporting:** 4 (20%)
+- **Tổng số Use Cases:** 17
+- **Use Cases Core:** 6 (35.3%)
+- **Use Cases Essential:** 6 (35.3%)
+- **Use Cases Supporting:** 3 (17.6%)
+- **Use Cases Automation:** 2 (11.8%)
 - **Số Actor:** 7
-- **Số Module:** 8
+- **Số Module:** 7
 - **Số API Endpoints:** 100+
 - **Số Microservices:** 4
 
