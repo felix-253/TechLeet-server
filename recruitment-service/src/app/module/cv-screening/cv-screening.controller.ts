@@ -20,6 +20,7 @@ import {
 } from '@nestjs/swagger';
 import { CvScreeningService } from './cv-screening.service';
 import { InformationService } from './information.service';
+import { AdaptiveThresholdService } from './adaptive-threshold.service';
 import {
    TriggerScreeningDto,
    ScreeningResultDto,
@@ -38,6 +39,7 @@ export class CvScreeningController {
    constructor(
       private readonly screeningService: CvScreeningService,
       private readonly informationService: InformationService,
+      private readonly adaptiveThresholdService: AdaptiveThresholdService,
    ) {}
 
    @Post('trigger')
@@ -588,5 +590,128 @@ export class CvScreeningController {
    })
    async getCandidateStatistics() {
       return this.informationService.getCandidateStatistics();
+   }
+
+   // ========== ADAPTIVE THRESHOLD ENDPOINTS ==========
+
+   @Get('adaptive-threshold/stats/:jobPostingId')
+   @ApiOperation({
+      summary: 'Lấy thống kê Adaptive Threshold cho job posting',
+      description: 'Lấy thống kê về ngưỡng sàng lọc động cho một job posting cụ thể',
+   })
+   @ApiParam({
+      name: 'jobPostingId',
+      description: 'ID của job posting',
+      example: 1,
+   })
+   @ApiResponse({
+      status: HttpStatus.OK,
+      description: 'Thống kê Adaptive Threshold',
+      schema: {
+         type: 'object',
+         properties: {
+            n: { type: 'number', example: 25, description: 'Số CV đã xử lý' },
+            mean: { type: 'number', example: 0.72, description: 'Trung bình điểm số' },
+            threshold: { type: 'number', example: 0.68, description: 'Ngưỡng hiện tại' },
+            std: { type: 'number', example: 0.15, description: 'Độ lệch chuẩn' },
+         },
+      },
+   })
+   async getAdaptiveThresholdStats(@Param('jobPostingId', ParseIntPipe) jobPostingId: number) {
+      const stats = await this.adaptiveThresholdService.getScreeningStats(jobPostingId);
+      if (!stats) {
+         throw new NotFoundException(`Job posting ${jobPostingId} not found`);
+      }
+      return stats;
+   }
+
+   @Get('adaptive-threshold/passed-cvs/:jobPostingId')
+   @ApiOperation({
+      summary: 'Lấy danh sách CV đã pass screening',
+      description: 'Lấy danh sách ứng viên đã vượt qua sàng lọc cho job posting',
+   })
+   @ApiParam({
+      name: 'jobPostingId',
+      description: 'ID của job posting',
+      example: 1,
+   })
+   @ApiQuery({
+      name: 'limit',
+      required: false,
+      description: 'Số lượng kết quả tối đa',
+      example: 50,
+   })
+   @ApiQuery({
+      name: 'offset',
+      required: false,
+      description: 'Vị trí bắt đầu',
+      example: 0,
+   })
+   async getPassedCVs(
+      @Param('jobPostingId', ParseIntPipe) jobPostingId: number,
+      @Query('limit', new ParseIntPipe({ optional: true })) limit = 50,
+      @Query('offset', new ParseIntPipe({ optional: true })) offset = 0,
+   ) {
+      return this.adaptiveThresholdService.getPassedCVs(jobPostingId, limit, offset);
+   }
+
+   @Post('adaptive-threshold/reset/:jobPostingId')
+   @ApiOperation({
+      summary: 'Reset thống kê Adaptive Threshold',
+      description: 'Reset lại thống kê sàng lọc cho một job posting',
+   })
+   @ApiParam({
+      name: 'jobPostingId',
+      description: 'ID của job posting',
+      example: 1,
+   })
+   async resetAdaptiveThreshold(@Param('jobPostingId', ParseIntPipe) jobPostingId: number) {
+      await this.adaptiveThresholdService.resetScreeningStats(jobPostingId);
+      return {
+         success: true,
+         message: 'Screening stats reset successfully',
+      };
+   }
+
+   @Post('adaptive-threshold/update-k/:jobPostingId')
+   @ApiOperation({
+      summary: 'Cập nhật hệ số điều chỉnh K',
+      description: 'Cập nhật hệ số điều chỉnh ngưỡng cho job posting',
+   })
+   @ApiParam({
+      name: 'jobPostingId',
+      description: 'ID của job posting',
+      example: 1,
+   })
+   async updateAdaptiveThresholdK(
+      @Param('jobPostingId', ParseIntPipe) jobPostingId: number,
+      @Body() body: { k: number },
+   ) {
+      await this.adaptiveThresholdService.updateScreeningK(jobPostingId, body.k);
+      return {
+         success: true,
+         message: 'K coefficient updated successfully',
+      };
+   }
+
+   @Post('adaptive-threshold/test/:jobPostingId')
+   @ApiOperation({
+      summary: 'Test thuật toán Adaptive Threshold',
+      description: 'Test thuật toán với dữ liệu mẫu',
+   })
+   @ApiParam({
+      name: 'jobPostingId',
+      description: 'ID của job posting',
+      example: 1,
+   })
+   async testAdaptiveThreshold(
+      @Param('jobPostingId', ParseIntPipe) jobPostingId: number,
+      @Body() body: { testScores: number[] },
+   ) {
+      const results = await this.adaptiveThresholdService.testAdaptiveThreshold(
+         jobPostingId,
+         body.testScores,
+      );
+      return { results: results as any };
    }
 }

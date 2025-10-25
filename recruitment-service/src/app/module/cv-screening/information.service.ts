@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { CvTextExtractionService } from './cv-text-extraction.service';
 import { CvNlpProcessingService, ProcessedCvData } from './cv-nlp-processing.service';
 import { CvLlmSummaryService } from './cv-llm-summary.service';
+import { AdaptiveThresholdService } from './adaptive-threshold.service';
 import { CandidateEntity } from '../../../entities/recruitment/candidate.entity';
 import { ApplicationEntity } from '../../../entities/recruitment/application.entity';
 import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
@@ -77,6 +78,7 @@ export class InformationService {
       private readonly textExtractionService: CvTextExtractionService,
       private readonly nlpProcessingService: CvNlpProcessingService,
       private readonly llmSummaryService: CvLlmSummaryService,
+      private readonly adaptiveThresholdService: AdaptiveThresholdService,
       private readonly recruitmentEmailService: RecruitmentEmailService,
    ) {}
 
@@ -139,7 +141,11 @@ export class InformationService {
          }
 
          // Bước 5: Tạo hoặc cập nhật candidate trong database
-         const candidate = await this.createOrUpdateCandidate(processedData, candidateId, senderEmail);
+         const candidate = await this.createOrUpdateCandidate(
+            processedData,
+            candidateId,
+            senderEmail,
+         );
          this.logger.log(`Đã tạo/cập nhật candidate với ID: ${candidate.candidateId}`);
 
          // Bước 6: Tạo application nếu có jobPostingId
@@ -381,7 +387,7 @@ export class InformationService {
                const existingCandidateByEmail = await this.candidateRepository.findOne({
                   where: { email: emailToUse },
                });
-               
+
                if (existingCandidateByEmail) {
                   this.logger.log(`Found existing candidate with email ${emailToUse}, updating...`);
                   if (senderEmail) {
@@ -518,9 +524,28 @@ export class InformationService {
             screeningCompletedAt: new Date(),
          });
 
-         // Cập nhật screening score nếu có AI analysis
+         // Cập nhật screening score và áp dụng Adaptive Threshold
          if (aiAnalysis) {
             application.screeningScore = aiAnalysis.fitScore;
+
+            // Áp dụng Adaptive Threshold để xác định pass/fail
+            const screeningResult = await this.adaptiveThresholdService.processNewCV(
+               jobPostingId,
+               aiAnalysis.fitScore,
+            );
+
+            // Cập nhật trạng thái application dựa trên kết quả sàng lọc
+            if (screeningResult.decision === 'pass') {
+               application.status = 'screening_passed';
+               application.screeningStatus = 'passed';
+            } else {
+               application.status = 'screening_failed';
+               application.screeningStatus = 'failed';
+            }
+
+            this.logger.log(
+               `Adaptive Threshold Result for Job ${jobPostingId}: Score ${aiAnalysis.fitScore.toFixed(3)} → ${screeningResult.decision.toUpperCase()} | Threshold: ${screeningResult.newThreshold.toFixed(3)} | Mean: ${screeningResult.newState.mean.toFixed(3)} | Std: ${Math.sqrt(screeningResult.newState.m2 / (screeningResult.newState.n - 1)).toFixed(3)}`,
+            );
          }
 
          const savedApplication = await this.applicationRepository.save(application);
