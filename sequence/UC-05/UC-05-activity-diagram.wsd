@@ -1,0 +1,42 @@
+@startuml UC-05: Xem danh sách tin tuyển dụng
+
+|User|
+start
+:Đăng nhập hệ thống;
+:Truy cập trang danh sách tin tuyển dụng;
+
+|System|
+:Kiểm tra quyền truy cập;
+:Load danh sách tin tuyển dụng;
+
+if (Có quyền xem?) then (Có)
+  :Lấy danh sách từ DB;
+  :Apply filters nếu có;
+  note right
+    - Lọc theo trạng thái
+    - Lọc theo phòng ban
+    - Lọc theo vị trí
+    - Tìm kiếm theo từ khóa
+  end note
+  
+  :Phân trang kết quả;
+  
+  |User|
+  :Hiển thị danh sách tin tuyển dụng;
+  :Cho phép tìm kiếm và lọc;
+  
+  if (Cần xem chi tiết?) then (Có)
+    :Click vào tin tuyển dụng;
+    :Chuyển đến trang chi tiết;
+    stop
+  else (Không)
+    :Tiếp tục duyệt danh sách;
+    stop
+  endif
+else (Không)
+  |User|
+  :Hiển thị lỗi không có quyền;
+  stop
+endif
+
+@enduml

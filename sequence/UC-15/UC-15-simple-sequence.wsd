@@ -1,0 +1,57 @@
+@startuml UC-015: Cập nhật trụ sở
+
+actor "Quản trị viên" as A
+participant "Giao diện quản trị" as FE
+participant "Hệ thống" as System
+database "Cơ sở dữ liệu" as DB
+
+A -> FE: Truy cập trang quản lý trụ sở
+FE -> System: Yêu cầu hiển thị danh sách trụ sở
+System -> DB: Lấy danh sách trụ sở
+DB --> System: Trả về danh sách trụ sở
+System -> FE: Hiển thị danh sách trụ sở
+
+A -> FE: Chọn trụ sở cần cập nhật
+FE -> System: Yêu cầu hiển thị màn hình chỉnh sửa
+System -> System: Kiểm tra quyền Admin
+System -> DB: Lấy thông tin trụ sở
+DB --> System: Trả về thông tin trụ sở
+System -> DB: Lấy lịch sử thay đổi
+DB --> System: Trả về lịch sử thay đổi
+System -> FE: Hiển thị form chỉnh sửa trụ sở
+
+A -> FE: Cập nhật thông tin trụ sở và nhấn "Cập nhật"
+note right
+  - Tên trụ sở
+  - Địa chỉ mới
+  - Số điện thoại
+  - Email liên hệ
+  - Mô tả trụ sở
+  - Trạng thái hoạt động
+end note
+
+FE -> System: Gửi dữ liệu cập nhật
+System -> System: Kiểm tra tính hợp lệ
+System -> System: Kiểm tra tên trụ sở không trùng lặp
+
+alt [Dữ liệu hợp lệ]
+    System -> DB: Cập nhật thông tin trụ sở
+    DB --> System: Xác nhận cập nhật thành công
+    System -> DB: Lưu lịch sử thay đổi
+    DB --> System: Xác nhận lưu lịch sử thành công
+    
+    alt [Có thay đổi quan trọng]
+        System -> DB: Cập nhật thông tin nhân viên liên quan
+        DB --> System: Xác nhận cập nhật nhân viên
+        System -> System: Gửi thông báo đến nhân viên
+        System -> System: Gửi thông báo đến Admin
+    end
+    
+    System -> FE: Hiển thị thông báo thành công
+    FE -> A: Chuyển đến trang quản lý trụ sở
+else [Dữ liệu không hợp lệ]
+    System -> FE: Hiển thị thông báo lỗi
+    FE -> A: Quay lại màn hình nhập liệu
+end
+
+@enduml

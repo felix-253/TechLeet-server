@@ -1,0 +1,50 @@
+@startuml UC-012: Tạo nhân viên
+
+actor "HR Manager" as HR
+participant "Giao diện quản trị" as FE
+participant "Hệ thống" as System
+database "Cơ sở dữ liệu" as DB
+
+HR -> FE: Click "Tạo nhân viên mới" từ đánh giá PASS
+FE -> System: Yêu cầu hiển thị màn hình tạo nhân viên
+System -> System: Kiểm tra quyền tạo nhân viên
+System -> DB: Lấy thông tin ứng viên
+DB --> System: Trả về thông tin ứng viên
+System -> DB: Lấy thông tin phòng ban và vị trí
+DB --> System: Trả về thông tin phòng ban và vị trí
+System -> FE: Hiển thị form tạo nhân viên
+
+HR -> FE: Điền thông tin nhân viên và nhấn "Tạo nhân viên"
+note right
+  - Thông tin cá nhân (từ ứng viên)
+  - Mã nhân viên (auto-generate)
+  - Phòng ban và vị trí
+  - Ngày bắt đầu làm việc
+  - Mức lương và phúc lợi
+  - Thông tin tài khoản hệ thống
+end note
+
+FE -> System: Gửi dữ liệu tạo nhân viên
+System -> System: Kiểm tra tính hợp lệ
+System -> System: Generate mã nhân viên duy nhất
+System -> System: Kiểm tra email không trùng lặp
+
+alt [Dữ liệu hợp lệ]
+    System -> DB: Tạo tài khoản nhân viên
+    DB --> System: Xác nhận tạo tài khoản thành công
+    System -> DB: Lưu thông tin nhân viên
+    DB --> System: Xác nhận lưu thông tin thành công
+    System -> DB: Gán quyền truy cập mặc định
+    DB --> System: Xác nhận gán quyền thành công
+    System -> DB: Cập nhật trạng thái đơn ứng tuyển
+    DB --> System: Xác nhận cập nhật trạng thái
+    System -> System: Gửi email chào mừng đến nhân viên mới
+    System -> System: Gửi thông báo đến HR Manager
+    System -> FE: Hiển thị thông báo thành công
+    FE -> HR: Hiển thị thông tin tài khoản đã tạo
+else [Dữ liệu không hợp lệ]
+    System -> FE: Hiển thị thông báo lỗi
+    FE -> HR: Quay lại màn hình nhập liệu
+end
+
+@enduml

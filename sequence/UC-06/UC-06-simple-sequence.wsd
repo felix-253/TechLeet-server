@@ -1,0 +1,60 @@
+@startuml UC-06: Nộp đơn ứng tuyển
+
+actor "Ứng viên" as C
+participant "Giao diện ứng viên" as FE
+participant "Hệ thống" as System
+database "Cơ sở dữ liệu" as DB
+
+C -> FE: Truy cập trang tin tuyển dụng
+FE -> System: Yêu cầu hiển thị tin tuyển dụng
+System -> DB: Lấy thông tin tin tuyển dụng
+DB --> System: Trả về thông tin tin tuyển dụng
+System -> FE: Hiển thị tin tuyển dụng
+FE -> C: Hiển thị chi tiết vị trí
+
+C -> FE: Quyết định nộp đơn và click "Ứng tuyển"
+
+alt [Chưa có tài khoản]
+    C -> FE: Đăng ký tài khoản mới
+    FE -> System: Gửi thông tin đăng ký
+    System -> DB: Tạo tài khoản ứng viên
+    DB --> System: Xác nhận tạo tài khoản
+    System -> System: Gửi email xác thực
+    System -> FE: Hiển thị thông báo xác thực
+    FE -> C: Yêu cầu xác thực email
+else [Đã có tài khoản]
+    C -> FE: Đăng nhập
+    FE -> System: Gửi thông tin đăng nhập
+    System -> DB: Xác thực đăng nhập
+    DB --> System: Xác nhận đăng nhập thành công
+    System -> FE: Hiển thị thông báo đăng nhập thành công
+end
+
+C -> FE: Điền thông tin ứng tuyển và upload CV
+note right
+  - Thông tin cá nhân
+  - Kinh nghiệm làm việc
+  - Học vấn
+  - Kỹ năng
+  - Thư xin việc
+  - CV/Resume
+end note
+
+FE -> System: Gửi đơn ứng tuyển
+System -> System: Kiểm tra tính hợp lệ
+System -> System: Kiểm tra định dạng CV
+
+alt [Dữ liệu hợp lệ]
+    System -> DB: Lưu hồ sơ ứng viên
+    DB --> System: Xác nhận lưu hồ sơ
+    System -> DB: Tạo đơn ứng tuyển
+    DB --> System: Xác nhận tạo đơn
+    System -> System: Gửi email xác nhận
+    System -> FE: Hiển thị thông báo thành công
+    FE -> C: Chuyển đến trang theo dõi đơn
+else [Dữ liệu không hợp lệ]
+    System -> FE: Hiển thị thông báo lỗi
+    FE -> C: Quay lại màn hình nhập liệu
+end
+
+@enduml

@@ -1,24 +1,55 @@
 @startuml UC-01: Đăng nhập hệ thống
+hide footbox
+skinparam ParticipantPadding 10
+skinparam BoxPadding 5
+actor "Nhân viên/Quản trị viên" as User
+boundary "Giao diện đăng nhập" as LoginUI
+control "AuthController" as AuthController
+entity "EmployeeRepository" as EmployeeRepo
+entity "PermissionRepository" as PermissionRepo
+database "Cơ sở dữ liệu" as Database
+database "Redis Cache" as Redis
 
-actor "User" as User
-participant "Frontend" as FE
-participant "API Gateway" as GW
-participant "User Service" as US
-database "PostgreSQL" as DB
-database "Redis" as Redis
+User -> LoginUI: Nhập email và mật khẩu
+User -> LoginUI: Nhấn "Đăng nhập"
 
-User -> FE: Nhập email, password
-FE -> GW: POST /api/auth/login
-GW -> US: Forward request
-US -> DB: employeeLogin(email)
-DB --> US: Employee data + permissions
-US -> US: bcrypt.compare(password)
-US -> US: Check permissions\n(FULL/EDIT/VIEW)
-US -> Redis: Store permissions\n(employeeId + permissions)
-US -> US: Generate JWT tokens
-US -> DB: Store refresh token
-US --> GW: { token, refreshToken, permissions }
-GW --> FE: Login response
-FE --> User: Redirect to dashboard\nbased on permissions
+LoginUI -> AuthController: Gửi thông tin đăng nhập
+
+AuthController -> EmployeeRepo: Tìm nhân viên theo email
+EmployeeRepo -> Database: Truy vấn thông tin nhân viên
+Database --> EmployeeRepo: Trả về thông tin nhân viên
+EmployeeRepo --> AuthController: Dữ liệu nhân viên
+
+AuthController -> AuthController: Xác thực mật khẩu
+
+alt [Đăng nhập thành công]
+    AuthController -> PermissionRepo: Lấy danh sách quyền của nhân viên
+    PermissionRepo -> Database: Truy vấn quyền truy cập
+    Database --> PermissionRepo: Danh sách quyền
+    PermissionRepo --> AuthController: Dữ liệu quyền
+    
+    AuthController -> Redis: Lưu quyền vào bộ nhớ đệm
+    Redis --> AuthController: Lưu thành công
+    
+    AuthController -> AuthController: Tạo token truy cập
+    AuthController -> AuthController: Tạo token làm mới
+    
+    AuthController -> Database: Lưu token làm mới
+    Database --> AuthController: Lưu token thành công
+    
+    alt [Quyền quản trị viên]
+        AuthController -> LoginUI: Trả về token và quyền admin
+        LoginUI -> User: Chuyển đến trang quản trị
+    else [Quyền nhân viên]
+        AuthController -> LoginUI: Trả về token và quyền nhân viên
+        LoginUI -> User: Chuyển đến trang nhân viên
+    else [Không có quyền]
+        AuthController -> LoginUI: Thông báo không có quyền truy cập
+        LoginUI -> User: Hiển thị lỗi quyền truy cập
+    end
+else [Đăng nhập thất bại]
+    AuthController -> LoginUI: Thông báo đăng nhập thất bại
+    LoginUI -> User: Hiển thị lỗi đăng nhập
+end
 
 @enduml

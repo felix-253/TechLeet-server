@@ -19,205 +19,127 @@
 
 1. **Ứng viên (Candidate)** - Người nộp đơn ứng tuyển
 2. **Nhân viên (Employee)** - Nhân viên trong công ty
-3. **Nhà tuyển dụng (Recruiter)** - Người phụ trách tuyển dụng
-4. **Quản lý tuyển dụng (Hiring Manager)** - Người quản lý quy trình tuyển dụng
-5. **Người phỏng vấn (Interviewer)** - Người thực hiện phỏng vấn
-6. **Quản trị viên (Admin)** - Quản trị hệ thống
+3. **Quản trị viên (Admin)** - Quản trị hệ thống
+4. **Nhà tuyển dụng (Recruiter)** - Người phụ trách tuyển dụng
+5. **Quản lý tuyển dụng (Hiring Manager)** - Người quản lý quy trình tuyển dụng
+6. **Người phỏng vấn (Interviewer)** - Người thực hiện phỏng vấn
 7. **HR Manager** - Quản lý nhân sự cấp cao
 
 ---
 
-## III. DANH SÁCH 20 USE CASE CHÍNH
+## III. DANH SÁCH 15 USE CASE CHÍNH
 
-### A. MODULE XÁC THỰC VÀ PHÂN QUYỀN (2 use cases)
+### A. MODULE XÁC THỰC VÀ TRUY CẬP (1 use case)
 
-#### UC-01: Đăng nhập hệ thống
+#### UC001: Đăng nhập
 
-- **Actor:** Tất cả người dùng
-- **Mô tả:** Người dùng đăng nhập vào hệ thống bằng email và mật khẩu
-- **Luồng chính:**
-  1. Người dùng nhập email và mật khẩu
-  2. Hệ thống xác thực thông tin
-  3. Hệ thống tạo JWT token (access token + refresh token)
-  4. Người dùng nhận được token để sử dụng các chức năng
-
-#### UC-02: Quản lý phân quyền
-
-- **Actor:** Admin
-- **Mô tả:** Quản trị viên quản lý các quyền truy cập của người dùng trong hệ thống
+- **Actor:** Nhân viên, Quản trị viên
+- **Mô tả:** Nhân viên/Quản trị viên sử dụng tài khoản cá nhân để truy cập vào hệ thống
+- **Chức năng:** Xác thực tài khoản, kiểm tra vai trò người dùng và tạo phiên đăng nhập an toàn
 
 ---
 
-### B. MODULE QUẢN LÝ NHÂN VIÊN (2 use cases)
+### B. MODULE QUẢN LÝ TIN TUYỂN DỤNG (4 use cases)
 
-#### UC-03: Quản lý hồ sơ nhân viên
+#### UC002: Tạo tin tuyển dụng thủ công
 
-- **Actor:** Admin, HR Manager
-- **Mô tả:** Tạo, cập nhật thông tin nhân viên trong hệ thống
-- **Dữ liệu chính:**
-  - Thông tin cá nhân (họ tên, email, số điện thoại)
-  - Thông tin công việc (phòng ban, vị trí, mã nhân viên)
-  - Thông tin tài khoản (quyền truy cập)
-- **Chức năng:**
-  - Tạo hồ sơ nhân viên mới
-  - Cập nhật thông tin nhân viên
-  - Xem danh sách nhân viên (tìm kiếm, lọc, phân trang)
+- **Actor:** Nhân viên, Quản trị viên
+- **Mô tả:** Nhà tuyển dụng cần đăng một vị trí mới, tự nhập liệu các thông tin chi tiết về yêu cầu công việc
+- **Chức năng:** Lưu trữ thông tin tuyển dụng mới và tạo bản nháp tin tuyển dụng trong hệ thống
 
-#### UC-04: Xem hồ sơ cá nhân
+#### UC003: Tạo tin tuyển dụng tự động
 
-- **Actor:** Employee
-- **Mô tả:** Nhân viên xem và quản lý thông tin hồ sơ cá nhân của mình
+- **Actor:** Nhân viên, Quản trị viên
+- **Mô tả:** Nhà tuyển dụng sử dụng mẫu có sẵn hoặc tính năng AI để điền tự động nội dung tin tuyển dụng
+- **Chức năng:** Sử dụng dữ liệu đầu vào/AI để tạo nhanh một bản nháp tin tuyển dụng hoàn chỉnh
 
----
+#### UC004: Cập nhật thông tin tuyển dụng
 
-### C. MODULE QUẢN LÝ TỔ CHỨC (2 use cases)
+- **Actor:** Nhân viên, Quản trị viên
+- **Mô tả:** Nhà tuyển dụng cần chỉnh sửa, bổ sung hoặc thay đổi trạng thái của một tin tuyển dụng đang hoạt động
+- **Chức năng:** Cho phép chỉnh sửa thông tin đã lưu
 
-#### UC-05: Quản lý phòng ban
+#### UC005: Xem danh sách tin tuyển dụng
 
-- **Actor:** Admin, HR Manager
-- **Mô tả:** Quản lý các phòng ban trong công ty
-- **Chức năng:** CRUD phòng ban, lọc theo trụ sở, tìm kiếm
-
-#### UC-06: Quản lý vị trí công việc
-
-- **Actor:** Admin, HR Manager
-- **Mô tả:** Quản lý các vị trí công việc trong công ty
-- **Chức năng:** CRUD vị trí, tìm kiếm, phân loại theo level
+- **Actor:** Nhân viên, Quản trị viên
+- **Mô tả:** Người dùng truy cập vào trang tổng quan để tìm kiếm hoặc xem các vị trí đang được tuyển dụng
+- **Chức năng:** Hiển thị danh sách tất cả các tin tuyển dụng đang hoạt động hoặc đã lưu trữ, kèm theo chức năng tìm kiếm/lọc
 
 ---
 
-### D. MODULE QUẢN LÝ TIN TUYỂN DỤNG (3 use cases)
+### C. MODULE QUẢN LÝ ĐƠN ỨNG TUYỂN (3 use cases)
 
-#### UC-07: Tạo và quản lý tin tuyển dụng
+#### UC006: Nộp đơn ứng tuyển
 
-- **Actor:** Hiring Manager, Recruiter
-- **Mô tả:** Tạo, cập nhật tin tuyển dụng mới cho vị trí cần tuyển
-- **Dữ liệu chính:**
-  - Tiêu đề và mô tả công việc
-  - Yêu cầu ứng viên (kinh nghiệm, kỹ năng, trình độ)
-  - Mức lương (min-max), số lượng, hạn ứng tuyển
-  - Hình thức làm việc (full-time, part-time, contract)
-- **Chức năng:** Tạo, cập nhật, xóa tin tuyển dụng
+- **Actor:** Ứng viên
+- **Mô tả:** Ứng viên hoàn thành thông tin và đính kèm CV/hồ sơ để gửi đi cho vị trí đã chọn
+- **Chức năng:** Tiếp nhận, kiểm tra định dạng và lưu trữ hồ sơ ứng viên vào cơ sở dữ liệu
 
-#### UC-08: Xuất bản tin tuyển dụng
+#### UC007: Quản lý đơn ứng tuyển
 
-- **Actor:** Hiring Manager
-- **Mô tả:** Đưa tin tuyển dụng từ trạng thái "draft" sang "published"
-- **Điều kiện:** Hạn nộp đơn phải là ngày trong tương lai
+- **Actor:** Nhân viên, Quản trị viên
+- **Mô tả:** Nhà tuyển dụng muốn xem, phân loại, hoặc thay đổi trạng thái của các đơn ứng tuyển đã nộp
+- **Chức năng:** Cung cấp giao diện để xem tất cả đơn ứng tuyển, gán nhãn/trạng thái (Sàng lọc, Phỏng vấn, Từ chối) và lọc/sắp xếp
 
-#### UC-09: Xem danh sách tin tuyển dụng
+#### UC008: Xem chi tiết đơn ứng tuyển
 
-- **Actor:** Hiring Manager, Recruiter, Candidate
-- **Mô tả:** Xem danh sách tin tuyển dụng với lọc theo trạng thái, phòng ban, vị trí
+- **Actor:** Nhân viên, Quản trị viên
+- **Mô tả:** Nhà tuyển dụng nhấp vào một hồ sơ cụ thể để đọc chi tiết thông tin, CV và các tài liệu đính kèm
+- **Chức năng:** Hiển thị đầy đủ thông tin hồ sơ, bao gồm dữ liệu đã trích xuất (nếu có) và CV gốc
 
 ---
 
-### E. MODULE QUẢN LÝ ỨNG VIÊN (2 use cases)
+### D. MODULE QUẢN LÝ PHỎNG VẤN (3 use cases)
 
-#### UC-10: Quản lý hồ sơ ứng viên
+#### UC009: Tạo lịch phỏng vấn
 
-- **Actor:** Recruiter, System
-- **Mô tả:** Tạo, cập nhật hồ sơ ứng viên trong hệ thống
-- **Dữ liệu chính:**
-  - Thông tin cá nhân (họ tên, email, SĐT, ngày sinh, địa chỉ)
-  - Thông tin nghề nghiệp (kinh nghiệm, công ty hiện tại, vị trí)
-  - Học vấn, kỹ năng, CV/Resume URL
-  - Mức lương mong muốn, nguồn ứng viên
-- **Chức năng:** Tạo, cập nhật, cập nhật trạng thái
+- **Actor:** Nhân viên, Quản trị viên
+- **Mô tả:** Nhà tuyển dụng muốn lên lịch cho một buổi phỏng vấn (chọn người, thời gian, địa điểm) cho một ứng viên
+- **Chức năng:** Thiết lập sự kiện lịch, kiểm tra sự khả dụng của người phỏng vấn và gửi thông báo tự động (email) đến các bên liên quan
 
-#### UC-11: Tìm kiếm ứng viên
+#### UC010: Quản lý lịch phỏng vấn
 
-- **Actor:** Recruiter, Hiring Manager
-- **Mô tả:** Tìm kiếm ứng viên với bộ lọc theo trạng thái, kỹ năng, kinh nghiệm
+- **Actor:** Nhân viên, Quản trị viên
+- **Mô tả:** Người dùng muốn xem, thay đổi, hủy bỏ hoặc xác nhận các sự kiện phỏng vấn đã được tạo
+- **Chức năng:** Cung cấp giao diện lịch tổng quan để theo dõi và quản lý tất cả các buổi phỏng vấn sắp diễn ra hoặc đã hoàn thành
 
----
+#### UC011: Đánh giá ứng viên
 
-### F. MODULE QUẢN LÝ ĐƠN ỨNG TUYỂN (3 use cases)
-
-#### UC-12: Nộp đơn ứng tuyển
-
-- **Actor:** Candidate
-- **Mô tả:** Ứng viên nộp đơn ứng tuyển cho một vị trí
-- **Dữ liệu:**
-  - ID tin tuyển dụng, thư xin việc, CV/Resume
-  - Ngày bắt đầu dự kiến
-- **Quy tắc:** Một ứng viên chỉ được nộp một đơn cho mỗi vị trí
-
-#### UC-13: Quản lý đơn ứng tuyển
-
-- **Actor:** Recruiter, Hiring Manager
-- **Mô tả:** Xem, cập nhật trạng thái đơn ứng tuyển
-- **Bộ lọc:** Trạng thái, tin tuyển dụng, ứng viên, ngày nộp đơn
-- **Chức năng:** Xem danh sách, xem chi tiết, cập nhật trạng thái
-
-#### UC-14: Gửi và phản hồi thư mời làm việc
-
-- **Actor:** Hiring Manager, Candidate
-- **Mô tả:**
-  - Hiring Manager gửi lời mời làm việc (mức lương, deadline)
-  - Ứng viên chấp nhận hoặc từ chối lời mời
+- **Actor:** Nhân viên, Quản trị viên
+- **Mô tả:** Người phỏng vấn nhập kết quả, nhận xét và điểm số của ứng viên sau khi phỏng vấn kết thúc
+- **Chức năng:** Lưu trữ kết quả đánh giá theo mẫu chuẩn, tính toán điểm số tổng hợp và lưu lại nhận xét cá nhân
 
 ---
 
-### G. MODULE QUẢN LÝ PHỎNG VẤN (3 use cases)
+### E. MODULE QUẢN LÝ NHÂN VIÊN (2 use cases)
 
-#### UC-15: Lên lịch phỏng vấn
+#### UC012: Tạo nhân viên
 
-- **Actor:** Recruiter, Hiring Manager
-- **Mô tả:** Tạo và quản lý lịch phỏng vấn cho ứng viên
-- **Dữ liệu:**
-  - ID đơn ứng tuyển, loại phỏng vấn, thời gian, địa điểm/link meeting
-  - Người phỏng vấn chính, người phỏng vấn phụ
-- **Quy tắc:** Không được trùng lịch của người phỏng vấn
+- **Actor:** Nhân viên, Quản trị viên
+- **Mô tả:** Khi một ứng viên được tuyển dụng thành công, Quản lý Nhân sự tiến hành khởi tạo hồ sơ nhân viên chính thức
+- **Chức năng:** Lập hồ sơ nhân sự mới, gán mã nhân viên, và thiết lập các thông tin cơ bản (phòng ban, vị trí)
 
-#### UC-16: Xem và quản lý lịch phỏng vấn
+#### UC013: Cập nhật thông tin nhân viên
 
-- **Actor:** Recruiter, Hiring Manager, Interviewer
-- **Mô tả:** Xem danh sách lịch phỏng vấn với bộ lọc
-- **Bộ lọc:** Trạng thái, thời gian, loại PV, người phỏng vấn
-- **Chức năng:** Xem lịch sắp tới, xem theo đơn ứng tuyển, hủy lịch
-
-#### UC-17: Hoàn thành phỏng vấn và đánh giá
-
-- **Actor:** Interviewer
-- **Mô tả:** Kết thúc buổi phỏng vấn và ghi nhận kết quả
-- **Dữ liệu:**
-  - Điểm số (1-10), kết quả (pass/fail/maybe)
-  - Phản hồi chi tiết, điểm mạnh/yếu
-  - Đề xuất vòng tiếp theo
+- **Actor:** Nhân viên, Quản trị viên
+- **Mô tả:** Cần thay đổi các thông tin liên quan đến nhân viên (chức vụ, phòng ban, thông tin liên hệ, lương thưởng)
+- **Chức năng:** Cho phép sửa đổi dữ liệu hồ sơ nhân sự và lưu lại lịch sử thay đổi
 
 ---
 
-### H. MODULE SÀNG LỌC CV TỰ ĐỘNG - AI ⭐ (3 use cases)
+### F. MODULE QUẢN LÝ TỔ CHỨC (2 use cases)
 
-#### UC-18: Sàng lọc CV tự động bằng AI
+#### UC014: Tạo trụ sở
 
-- **Actor:** Recruiter, System
-- **Mô tả:** Kích hoạt quá trình sàng lọc CV tự động cho đơn ứng tuyển
-- **Dữ liệu:** ID đơn ứng tuyển, đường dẫn file CV, độ ưu tiên
-- **Quy trình:**
-  - Upload CV (PDF, DOC, DOCX)
-  - OCR trích xuất văn bản (tiếng Việt/Anh)
-  - NLP xử lý và phân tích
-  - AI đánh giá và cho điểm
-- **Chức năng:** Sàng lọc đơn lẻ hoặc hàng loạt
+- **Actor:** Quản trị viên
+- **Mô tả:** Quản trị viên muốn thêm một địa điểm làm việc/văn phòng/chi nhánh mới vào cơ cấu tổ chức công ty
+- **Chức năng:** Lưu trữ thông tin chi tiết về trụ sở mới (tên, địa chỉ, số điện thoại)
 
-#### UC-19: Xem kết quả sàng lọc CV
+#### UC015: Cập nhật trụ sở
 
-- **Actor:** Recruiter, Hiring Manager
-- **Mô tả:** Xem kết quả phân tích CV của AI
-- **Thông tin hiển thị:**
-  - Điểm tổng thể và điểm chi tiết (kỹ năng, kinh nghiệm, học vấn)
-  - Thông tin được trích xuất tự động
-  - Độ phù hợp với yêu cầu công việc
-  - Đề xuất của AI
-- **Bộ lọc:** Trạng thái, điểm số, tin tuyển dụng
-
-#### UC-20: Xem thống kê sàng lọc CV
-
-- **Actor:** Hiring Manager, HR Manager
-- **Mô tả:** Xem báo cáo và số liệu thống kê về quá trình sàng lọc CV
-- **Thông tin:** Tổng số CV, điểm TB, phân bố điểm, tỷ lệ đạt/không đạt
+- **Actor:** Quản trị viên
+- **Mô tả:** Quản trị viên cần thay đổi thông tin hoặc tình trạng hoạt động của một trụ sở hiện có
+- **Chức năng:** Cho phép chỉnh sửa thông tin chi tiết của trụ sở (địa chỉ mới, tên mới, v.v.)
 
 ---
 
@@ -226,114 +148,92 @@
 ### 1. QUY TRÌNH TUYỂN DỤNG HOÀN CHỈNH
 
 ```
-1. Hiring Manager tạo tin tuyển dụng (UC-D1)
+1. Nhân viên/Quản trị viên đăng nhập hệ thống (UC001)
    ↓
-2. Hiring Manager xuất bản tin tuyển dụng (UC-D3)
+2. Tạo tin tuyển dụng (UC002 hoặc UC003)
    ↓
-3. Ứng viên nộp đơn ứng tuyển (UC-F1)
+3. Cập nhật và xuất bản tin tuyển dụng (UC004)
    ↓
-4. Hệ thống tự động:
-   - Tạo hồ sơ ứng viên (UC-E1)
-   - Gửi email xác nhận (UC-J4)
-   - Kích hoạt sàng lọc CV (UC-H1)
+4. Ứng viên nộp đơn ứng tuyển (UC006)
    ↓
-5. AI sàng lọc và đánh giá CV (UC-H3)
+5. Nhà tuyển dụng quản lý đơn ứng tuyển (UC007)
    ↓
-6. Recruiter xem kết quả sàng lọc (UC-H4)
+6. Xem chi tiết đơn ứng tuyển (UC008)
    ↓
-7. Recruiter cập nhật trạng thái đơn: screening → interviewing (UC-F5)
+7. Tạo lịch phỏng vấn (UC009)
    ↓
-8. Recruiter lên lịch phỏng vấn (UC-G1)
+8. Quản lý lịch phỏng vấn (UC010)
    ↓
-9. Hệ thống gửi email thông báo phỏng vấn (UC-J1)
+9. Đánh giá ứng viên (UC011)
    ↓
-10. Interviewer thực hiện phỏng vấn
-    ↓
-11. Interviewer hoàn thành và đánh giá (UC-G8)
-    ↓
-12a. Nếu PASS: Hiring Manager gửi thư mời (UC-F6)
-    ↓
-    Ứng viên phản hồi chấp nhận (UC-F7)
-    ↓
-    Cập nhật trạng thái: hired (UC-F5)
+10a. Nếu PASS: Tạo nhân viên mới (UC012)
+     ↓
+     Cập nhật thông tin nhân viên (UC013)
 
-12b. Nếu FAIL: Cập nhật trạng thái: rejected (UC-F5)
-    ↓
-    Gửi email từ chối (UC-J3)
+10b. Nếu FAIL: Cập nhật trạng thái từ chối
 ```
 
-### 2. QUY TRÌNH ONBOARDING NHÂN VIÊN MỚI
+### 2. QUY TRÌNH QUẢN LÝ TỔ CHỨC
 
 ```
-1. Admin tạo hồ sơ nhân viên (UC-B1)
+1. Quản trị viên đăng nhập hệ thống (UC001)
    ↓
-2. Hệ thống tự động tạo tài khoản và gửi email
+2. Tạo trụ sở mới (UC014)
    ↓
-3. Nhân viên tạo mật khẩu lần đầu (UC-A3)
+3. Cập nhật thông tin trụ sở (UC015)
    ↓
-4. Admin gán phân quyền (UC-A4)
-   ↓
-5. Nhân viên đăng nhập và xem hồ sơ (UC-A1, UC-B4)
+4. Tạo nhân viên và gán vào trụ sở (UC012)
 ```
 
 ---
 
-## V. PHÂN LOẠI 20 USE CASE THEO MỨC ĐỘ ƯU TIÊN
+## V. PHÂN LOẠI 15 USE CASE THEO MỨC ĐỘ ƯU TIÊN
 
-### ⭐ Mức 1 - Core Features (8 use cases):
+### ⭐ Mức 1 - Core Features (6 use cases):
 
-- **UC-01:** Đăng nhập hệ thống
-- **UC-07:** Tạo và quản lý tin tuyển dụng
-- **UC-08:** Xuất bản tin tuyển dụng
-- **UC-10:** Quản lý hồ sơ ứng viên
-- **UC-12:** Nộp đơn ứng tuyển
-- **UC-15:** Lên lịch phỏng vấn
-- **UC-18:** Sàng lọc CV tự động bằng AI ⭐
-- **UC-19:** Xem kết quả sàng lọc CV
+- **UC001:** Đăng nhập
+- **UC002:** Tạo tin tuyển dụng thủ công
+- **UC006:** Nộp đơn ứng tuyển
+- **UC007:** Quản lý đơn ứng tuyển
+- **UC009:** Tạo lịch phỏng vấn
+- **UC011:** Đánh giá ứng viên
 
-### 🔹 Mức 2 - Essential Features (8 use cases):
+### 🔹 Mức 2 - Essential Features (6 use cases):
 
-- **UC-02:** Quản lý hồ sơ nhân viên
-- **UC-05:** Quản lý phòng ban
-- **UC-06:** Quản lý vị trí công việc
-- **UC-09:** Xem danh sách tin tuyển dụng
-- **UC-11:** Tìm kiếm ứng viên
-- **UC-13:** Quản lý đơn ứng tuyển
-- **UC-17:** Hoàn thành phỏng vấn và đánh giá
+- **UC003:** Tạo tin tuyển dụng tự động
+- **UC004:** Cập nhật thông tin tuyển dụng
+- **UC005:** Xem danh sách tin tuyển dụng
+- **UC008:** Xem chi tiết đơn ứng tuyển
+- **UC010:** Quản lý lịch phỏng vấn
+- **UC012:** Tạo nhân viên
 
-### 🔸 Mức 3 - Supporting Features (4 use cases):
+### 🔸 Mức 3 - Supporting Features (3 use cases):
 
-- **UC-04:** Xem hồ sơ cá nhân
-- **UC-14:** Gửi và phản hồi thư mời làm việc
-- **UC-16:** Xem và quản lý lịch phỏng vấn
-- **UC-20:** Xem thống kê sàng lọc CV
+- **UC013:** Cập nhật thông tin nhân viên
+- **UC014:** Tạo trụ sở
+- **UC015:** Cập nhật trụ sở
 
 ---
 
-## VI. MA TRẬN ACTOR - USE CASE (20 Use Cases)
+## VI. MA TRẬN ACTOR - USE CASE (15 Use Cases)
 
-| Use Case | Candidate | Employee | Recruiter | Hiring Mgr | Interviewer | Admin | HR Mgr | System |
-| -------- | --------- | -------- | --------- | ---------- | ----------- | ----- | ------ | ------ |
-| UC-01    | ✓         | ✓        | ✓         | ✓          | ✓           | ✓     | ✓      |        |
-| UC-02    |           |          |           |            |             | ✓     |        |        |
-| UC-03    |           |          |           |            |             | ✓     | ✓      |        |
-| UC-04    |           | ✓        |           |            |             |       |        |        |
-| UC-05    |           |          |           |            |             | ✓     | ✓      |        |
-| UC-06    |           |          |           |            |             | ✓     | ✓      |        |
-| UC-07    |           |          | ✓         | ✓          |             |       |        |        |
-| UC-08    |           |          |           | ✓          |             |       |        |        |
-| UC-09    | ✓         |          | ✓         | ✓          |             |       |        |        |
-| UC-10    |           |          | ✓         |            |             |       |        | ✓      |
-| UC-11    |           |          | ✓         | ✓          |             |       |        |        |
-| UC-12    | ✓         |          |           |            |             |       |        |        |
-| UC-13    |           |          | ✓         | ✓          |             |       |        |        |
-| UC-14    | ✓         |          |           | ✓          |             |       |        |        |
-| UC-15    |           |          | ✓         | ✓          |             |       |        |        |
-| UC-16    |           |          | ✓         | ✓          | ✓           |       |        |        |
-| UC-17    |           |          |           |            | ✓           |       |        |        |
-| UC-18    |           |          | ✓         |            |             |       |        | ✓      |
-| UC-19    |           |          | ✓         | ✓          |             |       |        |        |
-| UC-20    |           |          |           | ✓          |             |       | ✓      |        |
+| Use Case | Ứng viên | Nhân viên | Quản trị viên | Nhà tuyển dụng | Quản lý tuyển dụng | Người phỏng vấn | HR Manager |
+| -------- | -------- | --------- | ------------- | -------------- | ------------------ | --------------- | ---------- |
+| UC001    |          | ✓         | ✓             |                |                    |                 |            |
+| UC002    |          | ✓         | ✓             |                |                    |                 |            |
+| UC003    |          | ✓         | ✓             |                |                    |                 |            |
+| UC004    |          | ✓         | ✓             |                |                    |                 |            |
+| UC005    |          | ✓         | ✓             |                |                    |                 |            |
+| UC006    | ✓        |           |               |                |                    |                 |            |
+| UC007    |          | ✓         | ✓             |                |                    |                 |            |
+| UC008    |          | ✓         | ✓             |                |                    |                 |            |
+| UC009    |          | ✓         | ✓             |                |                    |                 |            |
+| UC010    |          | ✓         | ✓             |                |                    |                 |            |
+| UC011    |          | ✓         | ✓             |                |                    |                 |            |
+| UC012    |          | ✓         | ✓             |                |                    |                 |            |
+| UC013    |          | ✓         | ✓             |                |                    |                 |            |
+| UC014    |          |           | ✓             |                |                    |                 |            |
+| UC015    |          |           | ✓             |                |                    |                 |            |
 
 ---
 
@@ -342,8 +242,8 @@
 ### 1. Hiệu năng (Performance)
 
 - Thời gian phản hồi API: < 500ms (90% requests)
-- Xử lý sàng lọc CV: < 30 giây/CV
 - Hỗ trợ 1000+ concurrent users
+- Thời gian tải trang: < 3 giây
 
 ### 2. Bảo mật (Security)
 
@@ -372,15 +272,7 @@
 - RESTful API
 - Swagger documentation
 - Webhook support
-- Email service integration (Brevo)
-
-### 6. Bản địa hóa (Localization)
-
-- Hỗ trợ định dạng số Việt Nam
-- Định dạng tiền tệ VND
-- Múi giờ Việt Nam (Asia/Ho_Chi_Minh)
-- Xử lý số điện thoại Việt Nam (+84)
-- OCR tiếng Việt và tiếng Anh
+- Email service integration
 
 ---
 
@@ -400,13 +292,6 @@
 
 - Apache Kafka
 
-### AI/ML:
-
-- NLP processing cho phân tích CV
-- Text embedding
-- LLM integration
-- Tesseract OCR
-
 ### Email Service:
 
 - Brevo (SendinBlue)
@@ -425,31 +310,29 @@
 
 ## IX. KẾT LUẬN
 
-Hệ thống HRM TechLeet bao gồm **20 use cases chính** được tổ chức thành 8 module, phục vụ 7 loại actor khác nhau. Hệ thống tập trung vào:
+Hệ thống HRM TechLeet bao gồm **15 use cases chính** được tổ chức thành 6 module, phục vụ 7 loại actor khác nhau. Hệ thống tập trung vào:
 
-1. **Quản lý tuyển dụng thông minh** với AI-powered CV screening ⭐
-2. **Quy trình tuyển dụng hoàn chỉnh** từ đăng tin đến tuyển dụng
-3. **Quản lý nhân sự và tổ chức** hiệu quả
-4. **Kiến trúc Microservices** linh hoạt và dễ mở rộng
-5. **Tự động hóa** các quy trình thủ công
+1. **Quản lý tuyển dụng hiệu quả** với quy trình từ đăng tin đến tuyển dụng
+2. **Quản lý nhân sự và tổ chức** toàn diện
+3. **Kiến trúc Microservices** linh hoạt và dễ mở rộng
+4. **Tự động hóa** các quy trình thủ công
 
 ### Thống kê Use Cases:
 
-- **Core Features:** 8 use cases (40%)
-- **Essential Features:** 8 use cases (40%)
-- **Supporting Features:** 4 use cases (20%)
+- **Core Features:** 6 use cases (40%)
+- **Essential Features:** 6 use cases (40%)
+- **Supporting Features:** 3 use cases (20%)
 
 ### Điểm nhấn công nghệ:
 
-- **AI/ML:** Sàng lọc CV tự động, NLP, OCR đa ngôn ngữ
 - **Microservices:** 4 services độc lập, API Gateway
 - **Automation:** Email tự động, workflow tự động
 - **Real-time:** Thống kê và báo cáo real-time
+- **Scalable:** Hỗ trợ mở rộng theo nhu cầu
 
 Hệ thống được thiết kế để:
 
-- ✅ Giảm 70% thời gian sàng lọc CV thủ công
-- ✅ Tăng 50% chất lượng ứng viên được chọn
 - ✅ Tự động hóa 80% quy trình tuyển dụng
 - ✅ Quản lý tập trung toàn bộ quy trình
 - ✅ Tích hợp dễ dàng với các hệ thống khác
+- ✅ Đảm bảo tính nhất quán và bảo mật dữ liệu

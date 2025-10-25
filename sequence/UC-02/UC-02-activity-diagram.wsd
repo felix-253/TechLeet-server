@@ -1,25 +1,38 @@
-@startuml UC-02: Quản lý hồ sơ nhân viên
+@startuml UC-02: Tạo tin tuyển dụng thủ công
 
-|Admin|
+|Hiring Manager|
 start
-:Truy cập trang tạo nhân viên;
-|System|
-:Hiện form điền thông tin;
-
-|Admin|
-:Điền thông tin nhân viên\n(firstName, lastName, email, phone);
-:Chọn department và position;
-:Nhấn "Tạo nhân viên";
+:Đăng nhập hệ thống;
+:Truy cập trang tạo tin tuyển dụng;
+:Nhập thông tin chi tiết;
+note right
+  - Tiêu đề công việc
+  - Mô tả công việc
+  - Yêu cầu ứng viên
+  - Mức lương min-max
+  - Số lượng cần tuyển
+  - Hạn ứng tuyển
+  - Hình thức làm việc
+end note
 
 |System|
 :Validate dữ liệu đầu vào;
-:Kiểm tra email trùng lặp;
-:Lưu vào database;
-:Tạo employee code;
+:Kiểm tra quyền tạo tin tuyển dụng;
 
-|Admin|
-:Hiển thị thông báo thành công;
-:Hiển thị Employee ID;
-stop
+if (Dữ liệu hợp lệ?) then (Có)
+  :Lưu tin tuyển dụng vào DB;
+  :Tạo bản nháp (status: DRAFT);
+  :Gán ID tin tuyển dụng;
+  
+  |Hiring Manager|
+  :Hiển thị thông báo thành công;
+  :Chuyển đến trang chỉnh sửa;
+  stop
+else (Không)
+  |Hiring Manager|
+  :Hiển thị lỗi validation;
+  :Cho phép chỉnh sửa lại;
+  stop
+endif
 
 @enduml

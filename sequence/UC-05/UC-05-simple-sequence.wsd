@@ -1,0 +1,40 @@
+@startuml UC-05: Xem danh sách tin tuyển dụng
+
+actor "Người dùng" as User
+participant "Giao diện quản trị" as FE
+participant "Hệ thống" as System
+database "Cơ sở dữ liệu" as DB
+
+User -> FE: Truy cập trang danh sách tin tuyển dụng
+FE -> System: Yêu cầu hiển thị danh sách tin
+System -> System: Kiểm tra quyền truy cập
+System -> DB: Lấy danh sách tin từ DB
+DB --> System: Trả về danh sách tin tuyển dụng
+System -> FE: Hiển thị danh sách tin tuyển dụng
+
+User -> FE: Nhập bộ lọc/tìm kiếm (nếu có)
+note right
+  - Lọc theo trạng thái
+  - Lọc theo phòng ban
+  - Lọc theo vị trí
+  - Tìm kiếm theo từ khóa
+end note
+
+FE -> System: Gửi yêu cầu lọc/tìm kiếm
+System -> System: Apply filters
+System -> DB: Lấy kết quả đã lọc
+DB --> System: Trả về kết quả đã lọc
+System -> FE: Hiển thị kết quả đã lọc
+
+alt [Cần xem chi tiết]
+    User -> FE: Click vào tin tuyển dụng
+    FE -> System: Yêu cầu hiển thị chi tiết
+    System -> DB: Lấy thông tin chi tiết
+    DB --> System: Trả về chi tiết tin tuyển dụng
+    System -> FE: Hiển thị chi tiết tin tuyển dụng
+    FE -> User: Chuyển đến trang chi tiết
+else [Tiếp tục duyệt]
+    FE -> User: Hiển thị danh sách tin tuyển dụng
+end
+
+@enduml

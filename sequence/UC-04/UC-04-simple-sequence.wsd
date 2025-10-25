@@ -1,47 +1,41 @@
-@startuml UC-04: Xem hồ sơ cá nhân
+@startuml UC-04: Cập nhật thông tin tuyển dụng
 
-actor "Employee" as Employee
-participant "Frontend" as FE
-participant "API Gateway" as GW
-participant "User Service" as US
-database "PostgreSQL" as DB
-database "Redis" as Redis
+actor "Nhà tuyển dụng" as HM
+participant "Giao diện quản trị" as FE
+participant "Hệ thống" as System
+database "Cơ sở dữ liệu" as DB
 
-Employee -> FE: Truy cập trang hồ sơ cá nhân
-FE -> FE: Load profile template
-FE -> GW: GET /api/employee/my-profile\n+ JWT token
-activate GW
+HM -> FE: Chọn tin tuyển dụng cần chỉnh sửa
+FE -> System: Yêu cầu hiển thị màn hình chỉnh sửa
+System -> FE: Hiển thị form chỉnh sửa
 
-GW -> GW: Extract JWT token
-GW -> GW: Validate token format
-GW -> US: Forward request to User Service
-activate US
+HM -> FE: Chỉnh sửa thông tin và nhấn "Cập nhật"
+note right
+  - Tiêu đề và mô tả
+  - Yêu cầu ứng viên
+  - Mức lương
+  - Số lượng và hạn ứng tuyển
+  - Trạng thái tin tuyển dụng
+end note
 
-US -> US: Extract employeeId from token
-US -> Redis: Get employee permissions\n(REDIS_KEY_EMPLOYEE_PERMISSION + employeeId)
-activate Redis
-Redis --> US: Employee permissions
-deactivate Redis
+FE -> System: Gửi dữ liệu cập nhật
+System -> System: Kiểm tra tính hợp lệ
 
-US -> DB: SELECT * FROM employee\nWHERE employeeId = ?
-activate DB
-DB --> US: Employee profile data
-deactivate DB
-
-alt Employee not found
-    US --> GW: 404 Not Found\n+ "Employee not found"
-    GW --> FE: Error response
-    FE --> Employee: Hiển thị lỗi không tìm thấy
-else Employee found
-    US -> US: Transform data to EmployeeResponseDto\n(exclude sensitive fields)
-    US --> GW: 200 OK\n+ employee profile data
-    deactivate US
+alt [Dữ liệu hợp lệ]
+    System -> DB: Cập nhật tin tuyển dụng
+    DB --> System: Xác nhận cập nhật thành công
+    System -> DB: Lưu lịch sử thay đổi
+    DB --> System: Xác nhận lưu lịch sử
     
-    GW --> FE: Success response
-    deactivate GW
+    alt [Trạng thái = PUBLISHED]
+        System -> System: Gửi thông báo đến ứng viên
+    end
     
-    FE -> FE: Render profile template
-    FE --> Employee: Hiển thị hồ sơ cá nhân\n(firstName, lastName, email, phone, department, position, salary)
+    System -> FE: Hiển thị thông báo thành công
+    FE -> HM: Chuyển đến trang quản lý tin
+else [Dữ liệu không hợp lệ]
+    System -> FE: Hiển thị thông báo lỗi
+    FE -> HM: Quay lại màn hình nhập liệu
 end
 
 @enduml

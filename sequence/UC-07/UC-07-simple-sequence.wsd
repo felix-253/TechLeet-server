@@ -1,65 +1,51 @@
-@startuml UC-07: Tạo Tin Tuyển Dụng (Simplified)
+@startuml UC-07: Quản lý đơn ứng tuyển
 
+actor "Nhà tuyển dụng" as R
+participant "Giao diện quản trị" as FE
+participant "Hệ thống" as System
+database "Cơ sở dữ liệu" as DB
 
+R -> FE: Truy cập trang quản lý đơn ứng tuyển
+FE -> System: Yêu cầu hiển thị danh sách đơn
+System -> System: Kiểm tra quyền truy cập
+System -> DB: Lấy danh sách đơn ứng tuyển
+DB --> System: Trả về danh sách đơn ứng tuyển
+System -> FE: Hiển thị danh sách đơn ứng tuyển
 
-
-actor "Hiring Manager" as HM
-participant "Frontend" as FE
-participant "API Gateway" as GW
-participant "Recruitment\nService" as RS
-database "PostgreSQL" as DB
-
-
-HM -> FE: Điền form thông tin tin tuyển dụng
-activate FE
-
-FE -> FE: Validate dữ liệu client-side
-
-FE -> GW: POST /api/job-postings\n+ JWT Token
-activate GW
-
-GW -> GW: Xác thực Token
-GW -> GW: Kiểm tra quyền\n(ROLE_HIRING_MANAGER)
-
-GW -> RS: Forward request
-activate RS
-
-RS -> RS: Validate dữ liệu:\n- Tiêu đề không rỗng\n- Mức lương hợp lệ\n- Deadline > ngày hiện tại
-
-alt Validation failed
-    RS --> GW: 400 Bad Request
-    GW --> FE: Error message
-    FE --> HM: Hiển thị lỗi validation
-    
-else Validation success
-    RS -> DB: INSERT INTO job_postings\n(status = 'draft')
-    activate DB
-    DB --> RS: job_posting_id
-    deactivate DB
-    
-    RS -> DB: Log audit trail
-    activate DB
-    DB --> RS: OK
-    deactivate DB
-    
-    RS --> GW: 201 Created\n+ Job Posting Data
-    deactivate RS
-    
-    GW --> FE: Success response
-    deactivate GW
-    
-    FE --> HM: Hiển thị thông báo thành công\nChuyển đến trang chi tiết
-    deactivate FE
-end
-
-note right of DB
-  **Dữ liệu lưu trữ:**
-  - Thông tin cơ bản
-  - Yêu cầu ứng viên
-  - Mức lương
-  - Trạng thái: 'draft'
-  - Timestamp
+R -> FE: Nhập bộ lọc/tìm kiếm (nếu có)
+note right
+  - Lọc theo trạng thái
+  - Lọc theo tin tuyển dụng
+  - Lọc theo ứng viên
+  - Lọc theo ngày nộp đơn
 end note
 
-@enduml
+FE -> System: Gửi yêu cầu lọc/tìm kiếm
+System -> System: Apply filters
+System -> DB: Lấy kết quả đã lọc
+DB --> System: Trả về kết quả đã lọc
+System -> FE: Hiển thị kết quả đã lọc
 
+alt [Cần thay đổi trạng thái]
+    R -> FE: Chọn đơn và thay đổi trạng thái
+    note right
+      - SCREENING: Đang sàng lọc
+      - INTERVIEWING: Đang phỏng vấn
+      - REJECTED: Từ chối
+      - HIRED: Tuyển dụng
+    end note
+    
+    FE -> System: Gửi yêu cầu cập nhật trạng thái
+    System -> System: Kiểm tra tính hợp lệ
+    System -> DB: Cập nhật trạng thái đơn ứng tuyển
+    DB --> System: Xác nhận cập nhật thành công
+    System -> DB: Lưu lịch sử thay đổi
+    DB --> System: Xác nhận lưu lịch sử
+    System -> System: Gửi thông báo đến ứng viên
+    System -> FE: Hiển thị thông báo thành công
+    FE -> R: Chuyển đến trang quản lý đơn
+else [Tiếp tục duyệt]
+    FE -> R: Hiển thị danh sách đơn ứng tuyển
+end
+
+@enduml

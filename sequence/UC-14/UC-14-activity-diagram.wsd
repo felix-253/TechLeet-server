@@ -1,0 +1,52 @@
+@startuml UC-014: Tạo trụ sở
+
+|Admin|
+start
+:Đăng nhập hệ thống với quyền Admin;
+:Truy cập trang quản lý tổ chức;
+:Click "Tạo trụ sở mới";
+
+|System|
+:Kiểm tra quyền Admin;
+:Load form tạo trụ sở;
+
+if (Có quyền Admin?) then (Có)
+  |Admin|
+  :Hiển thị form tạo trụ sở;
+  :Nhập thông tin trụ sở;
+  note right
+    - Tên trụ sở
+    - Địa chỉ chi tiết
+    - Số điện thoại
+    - Email liên hệ
+    - Mô tả trụ sở
+    - Trạng thái hoạt động
+  end note
+  
+  |System|
+  :Validate thông tin trụ sở;
+  :Kiểm tra tên trụ sở không trùng lặp;
+  
+  if (Thông tin hợp lệ?) then (Có)
+    :Tạo trụ sở trong DB;
+    :Set trạng thái: ACTIVE;
+    :Tạo mã trụ sở duy nhất;
+    :Gửi thông báo đến Admin;
+    
+    |Admin|
+    :Hiển thị thông báo tạo trụ sở thành công;
+    :Hiển thị thông tin trụ sở đã tạo;
+    stop
+  else (Không)
+    |Admin|
+    :Hiển thị lỗi validation;
+    :Cho phép chỉnh sửa lại;
+    stop
+  endif
+else (Không)
+  |Admin|
+  :Hiển thị lỗi không có quyền Admin;
+  stop
+endif
+
+@enduml

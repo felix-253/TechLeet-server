@@ -1,0 +1,57 @@
+@startuml UC-015: Cập nhật trụ sở
+
+|Admin|
+start
+:Truy cập trang quản lý trụ sở;
+:Chọn trụ sở cần cập nhật;
+
+|System|
+:Kiểm tra quyền Admin;
+:Load thông tin trụ sở;
+
+if (Có quyền Admin?) then (Có)
+  :Lấy thông tin trụ sở từ DB;
+  :Lấy lịch sử thay đổi;
+  
+  |Admin|
+  :Hiển thị form chỉnh sửa;
+  :Cập nhật thông tin trụ sở;
+  note right
+    - Tên trụ sở
+    - Địa chỉ mới
+    - Số điện thoại
+    - Email liên hệ
+    - Mô tả trụ sở
+    - Trạng thái hoạt động
+  end note
+  
+  |System|
+  :Validate thông tin đã cập nhật;
+  :Kiểm tra tên trụ sở không trùng lặp;
+  
+  if (Thông tin hợp lệ?) then (Có)
+    :Cập nhật thông tin trong DB;
+    :Lưu lịch sử thay đổi;
+    
+    if (Thay đổi quan trọng?) then (Có)
+      :Cập nhật thông tin nhân viên liên quan;
+      :Gửi thông báo đến nhân viên;
+      :Gửi thông báo đến Admin;
+    endif
+    
+    |Admin|
+    :Hiển thị thông báo cập nhật thành công;
+    stop
+  else (Không)
+    |Admin|
+    :Hiển thị lỗi validation;
+    :Cho phép chỉnh sửa lại;
+    stop
+  endif
+else (Không)
+  |Admin|
+  :Hiển thị lỗi không có quyền Admin;
+  stop
+endif
+
+@enduml

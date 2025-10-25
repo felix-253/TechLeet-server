@@ -1,0 +1,54 @@
+@startuml UC-09: Tạo lịch phỏng vấn
+
+|Recruiter|
+start
+:Từ chi tiết đơn ứng tuyển;
+:Click "Lên lịch phỏng vấn";
+
+|System|
+:Kiểm tra quyền tạo lịch;
+:Load thông tin ứng viên;
+
+if (Có quyền tạo lịch?) then (Có)
+  :Lấy danh sách người phỏng vấn;
+  :Lấy lịch rảnh của người phỏng vấn;
+  
+  |Recruiter|
+  :Hiển thị form tạo lịch phỏng vấn;
+  :Chọn thông tin lịch;
+  note right
+    - Loại phỏng vấn (Phone/Video/In-person)
+    - Người phỏng vấn chính
+    - Người phỏng vấn phụ (nếu có)
+    - Thời gian và ngày
+    - Địa điểm hoặc link meeting
+    - Ghi chú
+  end note
+  
+  |System|
+  :Validate thông tin lịch;
+  :Kiểm tra conflict lịch;
+  
+  if (Thông tin hợp lệ và không conflict?) then (Có)
+    :Tạo lịch phỏng vấn trong DB;
+    :Set trạng thái: SCHEDULED;
+    :Gửi email thông báo đến ứng viên;
+    :Gửi email thông báo đến người phỏng vấn;
+    :Cập nhật trạng thái đơn ứng tuyển: INTERVIEWING;
+    
+    |Recruiter|
+    :Hiển thị thông báo tạo lịch thành công;
+    stop
+  else (Không)
+    |Recruiter|
+    :Hiển thị lỗi conflict hoặc validation;
+    :Cho phép chọn thời gian khác;
+    stop
+  endif
+else (Không)
+  |Recruiter|
+  :Hiển thị lỗi không có quyền;
+  stop
+endif
+
+@enduml

@@ -1,0 +1,57 @@
+@startuml UC-013: Cập nhật thông tin nhân viên
+
+actor "HR Manager" as HR
+participant "Giao diện quản trị" as FE
+participant "Hệ thống" as System
+database "Cơ sở dữ liệu" as DB
+
+HR -> FE: Truy cập trang quản lý nhân viên
+FE -> System: Yêu cầu hiển thị danh sách nhân viên
+System -> DB: Lấy danh sách nhân viên
+DB --> System: Trả về danh sách nhân viên
+System -> FE: Hiển thị danh sách nhân viên
+
+HR -> FE: Chọn nhân viên cần cập nhật
+FE -> System: Yêu cầu hiển thị màn hình chỉnh sửa
+System -> System: Kiểm tra quyền chỉnh sửa
+System -> DB: Lấy thông tin nhân viên
+DB --> System: Trả về thông tin nhân viên
+System -> DB: Lấy lịch sử thay đổi
+DB --> System: Trả về lịch sử thay đổi
+System -> FE: Hiển thị form chỉnh sửa nhân viên
+
+HR -> FE: Cập nhật thông tin nhân viên và nhấn "Cập nhật"
+note right
+  - Thông tin cá nhân
+  - Chức vụ và phòng ban
+  - Thông tin liên hệ
+  - Mức lương và phúc lợi
+  - Quyền truy cập hệ thống
+  - Trạng thái làm việc
+end note
+
+FE -> System: Gửi dữ liệu cập nhật
+System -> System: Kiểm tra tính hợp lệ
+System -> System: Kiểm tra quyền thay đổi
+
+alt [Dữ liệu hợp lệ]
+    System -> DB: Cập nhật thông tin nhân viên
+    DB --> System: Xác nhận cập nhật thành công
+    System -> DB: Lưu lịch sử thay đổi
+    DB --> System: Xác nhận lưu lịch sử thành công
+    
+    alt [Có thay đổi quan trọng]
+        System -> System: Cập nhật thông tin tài khoản
+        System -> System: Cập nhật thông tin công ty
+        System -> System: Gửi thông báo đến nhân viên
+        System -> System: Gửi thông báo đến HR Manager
+    end
+    
+    System -> FE: Hiển thị thông báo thành công
+    FE -> HR: Chuyển đến trang quản lý nhân viên
+else [Dữ liệu không hợp lệ]
+    System -> FE: Hiển thị thông báo lỗi
+    FE -> HR: Quay lại màn hình nhập liệu
+end
+
+@enduml

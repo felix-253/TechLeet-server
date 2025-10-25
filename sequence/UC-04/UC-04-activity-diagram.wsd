@@ -1,27 +1,51 @@
-@startuml UC-04: Xem hồ sơ cá nhân
+@startuml UC-04: Cập nhật thông tin tuyển dụng
 
-|Employee|
+|Hiring Manager|
 start
-:Truy cập trang hồ sơ cá nhân;
-|System|
-:Hiển thị form profile;
+:Đăng nhập hệ thống;
+:Truy cập danh sách tin tuyển dụng;
+:Chọn tin cần chỉnh sửa;
 
-|Employee|
-:Nhấn "Xem hồ sơ";
 |System|
-:Validate JWT token;
-:Lấy employeeId từ token;
-:Lấy permissions từ Redis;
-:Tìm employee trong database;
+:Kiểm tra quyền chỉnh sửa;
+:Load thông tin tin tuyển dụng;
 
-if (Employee tồn tại?) then (Có)
-  :Transform dữ liệu\n(exclude sensitive fields);
-  |Employee|
-  :Hiển thị hồ sơ cá nhân\n(firstName, lastName, email, phone, department, position, salary);
-  stop
+if (Có quyền chỉnh sửa?) then (Có)
+  |Hiring Manager|
+  :Hiển thị form chỉnh sửa;
+  :Cho phép sửa đổi thông tin;
+  note right
+    - Tiêu đề và mô tả
+    - Yêu cầu ứng viên
+    - Mức lương
+    - Số lượng và hạn ứng tuyển
+    - Trạng thái tin tuyển dụng
+  end note
+  
+  |System|
+  :Validate dữ liệu đã sửa;
+  
+  if (Dữ liệu hợp lệ?) then (Có)
+    :Cập nhật tin tuyển dụng trong DB;
+    :Lưu lịch sử thay đổi;
+    :Kiểm tra trạng thái mới;
+    
+    if (Trạng thái = PUBLISHED?) then (Có)
+      :Gửi thông báo đến ứng viên;
+    endif
+    
+    |Hiring Manager|
+    :Hiển thị thông báo cập nhật thành công;
+    stop
+  else (Không)
+    |Hiring Manager|
+    :Hiển thị lỗi validation;
+    :Cho phép chỉnh sửa lại;
+    stop
+  endif
 else (Không)
-  |Employee|
-  :Hiển thị lỗi "Không tìm thấy";
+  |Hiring Manager|
+  :Hiển thị lỗi không có quyền;
   stop
 endif
 

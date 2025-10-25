@@ -1,0 +1,39 @@
+@startuml UC-08: Xem chi tiết đơn ứng tuyển
+
+actor "Nhà tuyển dụng" as R
+participant "Giao diện quản trị" as FE
+participant "Hệ thống" as System
+database "Cơ sở dữ liệu" as DB
+
+R -> FE: Click vào đơn ứng tuyển từ danh sách
+FE -> System: Yêu cầu hiển thị chi tiết đơn
+System -> System: Kiểm tra quyền truy cập
+System -> DB: Lấy thông tin đơn ứng tuyển
+DB --> System: Trả về thông tin đơn ứng tuyển
+System -> DB: Lấy thông tin ứng viên
+DB --> System: Trả về thông tin ứng viên
+System -> DB: Lấy thông tin tin tuyển dụng
+DB --> System: Trả về thông tin tin tuyển dụng
+System -> DB: Lấy lịch sử đơn ứng tuyển
+DB --> System: Trả về lịch sử đơn ứng tuyển
+System -> FE: Hiển thị chi tiết đơn ứng tuyển
+
+alt [Cần tải CV]
+    R -> FE: Click download CV
+    FE -> System: Yêu cầu tải CV
+    System -> DB: Lấy đường dẫn file CV
+    DB --> System: Trả về đường dẫn CV
+    System -> System: Tạo link download
+    System -> FE: Hiển thị link download CV
+    FE -> R: Download CV file
+else [Cần thực hiện hành động]
+    R -> FE: Chọn hành động (thay đổi trạng thái/lên lịch)
+    FE -> System: Yêu cầu các hành động có thể
+    System -> System: Kiểm tra quyền thực hiện hành động
+    System -> FE: Hiển thị các hành động có thể
+    FE -> R: Hiển thị các hành động có thể thực hiện
+else [Chỉ xem chi tiết]
+    FE -> R: Hiển thị chi tiết đơn ứng tuyển
+end
+
+@enduml

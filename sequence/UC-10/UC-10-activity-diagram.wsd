@@ -1,0 +1,64 @@
+@startuml UC-010: Quản lý lịch phỏng vấn
+
+|User|
+start
+:Đăng nhập hệ thống;
+:Truy cập trang quản lý lịch phỏng vấn;
+
+|System|
+:Kiểm tra quyền truy cập;
+:Load danh sách lịch phỏng vấn;
+
+if (Có quyền xem?) then (Có)
+  :Lấy danh sách lịch từ DB;
+  :Apply filters nếu có;
+  note right
+    - Lọc theo trạng thái
+    - Lọc theo thời gian
+    - Lọc theo loại phỏng vấn
+    - Lọc theo người phỏng vấn
+  end note
+  
+  :Phân trang kết quả;
+  
+  |User|
+  :Hiển thị lịch phỏng vấn;
+  :Cho phép tìm kiếm và lọc;
+  
+  if (Cần thực hiện hành động?) then (Có)
+    if (Hành động?) then (Xem chi tiết)
+      :Click vào lịch phỏng vấn;
+      :Hiển thị chi tiết lịch;
+      stop
+    elseif (Thay đổi lịch)
+      :Chọn lịch cần sửa;
+      :Chỉnh sửa thông tin;
+      :Cập nhật lịch trong DB;
+      :Gửi thông báo thay đổi;
+      stop
+    elseif (Hủy lịch)
+      :Chọn lịch cần hủy;
+      :Xác nhận hủy lịch;
+      :Cập nhật trạng thái: CANCELLED;
+      :Gửi thông báo hủy lịch;
+      stop
+    elseif (Xác nhận lịch)
+      :Chọn lịch cần xác nhận;
+      :Cập nhật trạng thái: CONFIRMED;
+      :Gửi thông báo xác nhận;
+      stop
+    else (Khác)
+      :Thực hiện hành động tương ứng;
+      stop
+    endif
+  else (Không)
+    :Tiếp tục duyệt lịch;
+    stop
+  endif
+else (Không)
+  |User|
+  :Hiển thị lỗi không có quyền;
+  stop
+endif
+
+@enduml

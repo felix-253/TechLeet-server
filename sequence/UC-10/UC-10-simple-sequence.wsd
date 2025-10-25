@@ -1,0 +1,49 @@
+@startuml UC-010: Quản lý lịch phỏng vấn
+
+actor "Người dùng" as U
+participant "Giao diện quản trị" as FE
+participant "Hệ thống" as System
+database "Cơ sở dữ liệu" as DB
+
+U -> FE: Truy cập trang quản lý lịch phỏng vấn
+FE -> System: Yêu cầu hiển thị danh sách lịch
+System -> System: Kiểm tra quyền truy cập
+System -> DB: Lấy danh sách lịch phỏng vấn
+DB --> System: Trả về danh sách lịch phỏng vấn
+System -> FE: Hiển thị danh sách lịch phỏng vấn
+
+U -> FE: Nhập bộ lọc/tìm kiếm (nếu có)
+note right
+  - Lọc theo trạng thái
+  - Lọc theo thời gian
+  - Lọc theo loại phỏng vấn
+  - Lọc theo người phỏng vấn
+end note
+
+FE -> System: Gửi yêu cầu lọc/tìm kiếm
+System -> System: Apply filters
+System -> DB: Lấy kết quả đã lọc
+DB --> System: Trả về kết quả đã lọc
+System -> FE: Hiển thị kết quả đã lọc
+
+alt [Cần xem chi tiết]
+    U -> FE: Click vào lịch phỏng vấn
+    FE -> System: Yêu cầu hiển thị chi tiết
+    System -> DB: Lấy thông tin chi tiết lịch
+    DB --> System: Trả về chi tiết lịch phỏng vấn
+    System -> FE: Hiển thị chi tiết lịch phỏng vấn
+    FE -> U: Chuyển đến trang chi tiết
+else [Cần thực hiện hành động]
+    U -> FE: Chọn hành động (sửa/hủy/xác nhận)
+    FE -> System: Gửi yêu cầu thực hiện hành động
+    System -> System: Kiểm tra tính hợp lệ
+    System -> DB: Cập nhật lịch phỏng vấn
+    DB --> System: Xác nhận cập nhật thành công
+    System -> System: Gửi thông báo đến các bên liên quan
+    System -> FE: Hiển thị thông báo thành công
+    FE -> U: Chuyển đến trang quản lý lịch
+else [Tiếp tục duyệt]
+    FE -> U: Hiển thị danh sách lịch phỏng vấn
+end
+
+@enduml

@@ -1,60 +1,47 @@
-@startuml UC-03: Quản lý phòng ban
+@startuml UC-03: Tạo tin tuyển dụng tự động
 
-actor "Admin" as Admin
-participant "Frontend" as FE
-participant "API Gateway" as GW
-participant "Company Service" as CS
-database "PostgreSQL" as DB
+actor "Nhà tuyển dụng" as HM
+participant "Giao diện quản trị" as FE
+participant "Hệ thống" as System
+database "Cơ sở dữ liệu" as DB
 
-Admin -> FE: Truy cập trang quản lý phòng ban
-FE -> FE: Load department list template
-FE --> Admin: Hiển thị danh sách phòng ban
+HM -> FE: Chọn "Tạo tin tự động"
+FE -> System: Yêu cầu hiển thị màn hình tạo tự động
+System -> FE: Hiển thị form tạo tự động
 
-Admin -> FE: Nhấn "Tạo phòng ban mới"
-FE -> FE: Load create form template
-FE --> Admin: Hiển thị form tạo phòng ban
+alt [Sử dụng mẫu có sẵn]
+    HM -> FE: Chọn template và nhập thông tin cơ bản
+    note right
+      - Tên vị trí
+      - Phòng ban
+      - Mức lương dự kiến
+      - Số lượng cần tuyển
+    end note
+else [Sử dụng AI]
+    HM -> FE: Nhập mô tả ngắn và kích hoạt AI
+    note right
+      - Mô tả vị trí
+      - Phòng ban và level
+      - Yêu cầu cơ bản
+    end note
+end
 
-Admin -> FE: Điền thông tin phòng ban\n(departmentName, description, budget)
-Admin -> FE: Chọn headquarter và department type
-FE -> FE: Validate client-side\n(department name required, budget format)
-FE -> GW: POST /api/departments\n+ department data + JWT token
-activate GW
+FE -> System: Gửi dữ liệu tạo tin tự động
+System -> System: Kiểm tra tính hợp lệ
 
-GW -> GW: Extract JWT token
-GW -> GW: Validate token format
-GW -> CS: Forward request to Company Service
-activate CS
+alt [Sử dụng AI]
+    System -> System: Gọi AI service
+    System -> System: Generate nội dung tin tuyển dụng
+end
 
-CS -> CS: Validate dữ liệu đầu vào\n(department name, budget format)
-CS -> CS: Check department name uniqueness
-CS -> DB: SELECT COUNT(*) WHERE departmentName = ?
-activate DB
-DB --> CS: Department name count result
-deactivate DB
-
-alt Department name already exists
-    CS --> GW: 400 Bad Request\n+ "Tên phòng ban đã tồn tại"
-    GW --> FE: Error response
-    FE --> Admin: Hiển thị lỗi tên phòng ban trùng lặp
-else Department name is unique
-    CS -> DB: INSERT INTO department\n(departmentName, description, budget, headquarterId, departmentTypeId)
-    activate DB
-    DB --> CS: Department created with ID
-    deactivate DB
-    
-    CS -> CS: Generate department code\n(DEPT + timestamp)
-    CS -> DB: UPDATE department SET departmentCode = ?
-    activate DB
-    DB --> CS: Update successful
-    deactivate DB
-    
-    CS --> GW: 201 Created\n+ department data + departmentCode
-    deactivate CS
-    
-    GW --> FE: Success response
-    deactivate GW
-    
-    FE --> Admin: Hiển thị thông báo thành công\n+ Department ID + Department Code
+alt [Dữ liệu hợp lệ]
+    System -> DB: Lưu tin tuyển dụng mới
+    DB --> System: Xác nhận lưu thành công
+    System -> FE: Hiển thị thông báo thành công
+    FE -> HM: Hiển thị preview và cho phép chỉnh sửa
+else [Dữ liệu không hợp lệ]
+    System -> FE: Hiển thị thông báo lỗi
+    FE -> HM: Quay lại màn hình nhập liệu
 end
 
 @enduml

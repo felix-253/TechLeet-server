@@ -1,45 +1,56 @@
-@startuml
-|Hiring Manager|
+@startuml UC-07: Quản lý đơn ứng tuyển
+
+|Recruiter|
 start
-
-:Truy cập trang tạo tin tuyển dụng;
-
-:Điền form thông tin;
-
-:Nhấn nút "Tạo tin";
+:Đăng nhập hệ thống;
+:Truy cập trang quản lý đơn ứng tuyển;
 
 |System|
-:Validate dữ liệu;
+:Kiểm tra quyền truy cập;
+:Load danh sách đơn ứng tuyển;
 
-if (Dữ liệu hợp lệ?) then (Có)
-  :Lưu vào database\nvới trạng thái "Draft";
+if (Có quyền quản lý?) then (Có)
+  :Lấy danh sách đơn từ DB;
+  :Apply filters nếu có;
+  note right
+    - Lọc theo trạng thái
+    - Lọc theo tin tuyển dụng
+    - Lọc theo ứng viên
+    - Lọc theo ngày nộp đơn
+  end note
   
-  :Ghi log audit;
+  :Phân trang kết quả;
   
-  |Hiring Manager|
-  :Hiển thị thông báo\n"Tạo thành công";
+  |Recruiter|
+  :Hiển thị danh sách đơn ứng tuyển;
+  :Cho phép tìm kiếm và lọc;
   
-  if (Xuất bản ngay?) then (Có)
+  if (Cần thay đổi trạng thái?) then (Có)
+    :Chọn đơn ứng tuyển;
+    :Chọn trạng thái mới;
+    note right
+      - SCREENING: Đang sàng lọc
+      - INTERVIEWING: Đang phỏng vấn
+      - REJECTED: Từ chối
+      - HIRED: Tuyển dụng
+    end note
+    
     |System|
-    if (Deadline hợp lệ?) then (Có)
-      :Cập nhật status = "Published";
-      :Gửi thông báo;
-      |Hiring Manager|
-      :Tin đã xuất bản;
-      stop
-    else (Không)
-      |Hiring Manager|
-      :Lỗi: "Hạn ứng tuyển không hợp lệ";
-      stop
-    endif
+    :Cập nhật trạng thái trong DB;
+    :Lưu lịch sử thay đổi;
+    :Gửi thông báo đến ứng viên;
+    
+    |Recruiter|
+    :Hiển thị thông báo cập nhật thành công;
+    stop
   else (Không)
-    :Lưu nháp để chỉnh sửa sau;
+    :Tiếp tục duyệt danh sách;
     stop
   endif
-  
 else (Không)
-  |Hiring Manager|
-  :Hiển thị lỗi validation;
+  |Recruiter|
+  :Hiển thị lỗi không có quyền;
   stop
 endif
+
 @enduml

@@ -1,0 +1,55 @@
+@startuml UC-011: Đánh giá ứng viên
+
+actor "Người phỏng vấn" as I
+participant "Giao diện quản trị" as FE
+participant "Hệ thống" as System
+database "Cơ sở dữ liệu" as DB
+
+I -> FE: Click "Đánh giá ứng viên" từ lịch phỏng vấn
+FE -> System: Yêu cầu hiển thị màn hình đánh giá
+System -> System: Kiểm tra quyền đánh giá
+System -> DB: Lấy thông tin phỏng vấn
+DB --> System: Trả về thông tin phỏng vấn
+System -> DB: Lấy thông tin ứng viên
+DB --> System: Trả về thông tin ứng viên
+System -> DB: Lấy thông tin tin tuyển dụng
+DB --> System: Trả về thông tin tin tuyển dụng
+System -> FE: Hiển thị form đánh giá ứng viên
+
+I -> FE: Nhập kết quả đánh giá và nhấn "Lưu đánh giá"
+note right
+  - Điểm số tổng thể (1-10)
+  - Kết quả (PASS/FAIL/MAYBE)
+  - Điểm mạnh/yếu
+  - Nhận xét chi tiết
+  - Đề xuất vòng tiếp theo
+end note
+
+FE -> System: Gửi dữ liệu đánh giá
+System -> System: Kiểm tra tính hợp lệ
+System -> System: Tính toán điểm số tổng hợp
+
+alt [Dữ liệu hợp lệ]
+    System -> DB: Lưu kết quả đánh giá
+    DB --> System: Xác nhận lưu đánh giá thành công
+    System -> DB: Cập nhật trạng thái phỏng vấn
+    DB --> System: Xác nhận cập nhật trạng thái
+    System -> DB: Cập nhật trạng thái đơn ứng tuyển
+    DB --> System: Xác nhận cập nhật trạng thái đơn
+    
+    alt [Kết quả = PASS]
+        System -> System: Gửi thông báo đến Hiring Manager
+    else [Kết quả = FAIL]
+        System -> System: Gửi thông báo từ chối đến ứng viên
+    else [Kết quả = MAYBE]
+        System -> System: Gửi thông báo đến Hiring Manager
+    end
+    
+    System -> FE: Hiển thị thông báo thành công
+    FE -> I: Chuyển đến trang quản lý lịch
+else [Dữ liệu không hợp lệ]
+    System -> FE: Hiển thị thông báo lỗi
+    FE -> I: Quay lại màn hình nhập liệu
+end
+
+@enduml

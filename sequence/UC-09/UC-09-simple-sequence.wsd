@@ -1,0 +1,46 @@
+@startuml UC-09: Tạo lịch phỏng vấn
+
+actor "Nhà tuyển dụng" as R
+participant "Giao diện quản trị" as FE
+participant "Hệ thống" as System
+database "Cơ sở dữ liệu" as DB
+
+R -> FE: Click "Lên lịch phỏng vấn" từ chi tiết đơn
+FE -> System: Yêu cầu hiển thị màn hình tạo lịch
+System -> System: Kiểm tra quyền tạo lịch
+System -> DB: Lấy thông tin đơn ứng tuyển
+DB --> System: Trả về thông tin đơn ứng tuyển
+System -> DB: Lấy danh sách người phỏng vấn
+DB --> System: Trả về danh sách người phỏng vấn
+System -> DB: Lấy lịch rảnh của người phỏng vấn
+DB --> System: Trả về lịch rảnh
+System -> FE: Hiển thị form tạo lịch phỏng vấn
+
+R -> FE: Điền thông tin lịch phỏng vấn và nhấn "Tạo lịch"
+note right
+  - Loại phỏng vấn (Phone/Video/In-person)
+  - Người phỏng vấn chính/phụ
+  - Thời gian và ngày
+  - Địa điểm/link meeting
+  - Ghi chú
+end note
+
+FE -> System: Gửi dữ liệu tạo lịch phỏng vấn
+System -> System: Kiểm tra tính hợp lệ
+System -> System: Kiểm tra conflict lịch
+
+alt [Dữ liệu hợp lệ và không conflict]
+    System -> DB: Tạo lịch phỏng vấn
+    DB --> System: Xác nhận tạo lịch thành công
+    System -> DB: Cập nhật trạng thái đơn ứng tuyển
+    DB --> System: Xác nhận cập nhật trạng thái
+    System -> System: Gửi email thông báo đến ứng viên
+    System -> System: Gửi email thông báo đến người phỏng vấn
+    System -> FE: Hiển thị thông báo thành công
+    FE -> R: Chuyển đến trang quản lý lịch
+else [Dữ liệu không hợp lệ hoặc conflict]
+    System -> FE: Hiển thị thông báo lỗi
+    FE -> R: Quay lại màn hình nhập liệu
+end
+
+@enduml

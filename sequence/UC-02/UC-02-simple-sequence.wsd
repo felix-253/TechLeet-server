@@ -1,56 +1,36 @@
-@startuml UC-02: Quản lý hồ sơ nhân viên
+@startuml UC-02: Tạo tin tuyển dụng thủ công
 
-actor "Admin" as Admin
-participant "Frontend" as FE
-participant "API Gateway" as GW
-participant "User Service" as US
-database "PostgreSQL" as DB
+actor "Nhà tuyển dụng" as HM
+participant "Giao diện quản trị" as FE
+participant "Hệ thống" as System
+database "Cơ sở dữ liệu" as DB
 
-Admin -> FE: Truy cập trang tạo nhân viên
-FE -> FE: Load form template
-FE --> Admin: Hiển thị form điền thông tin
+HM -> FE: Chọn "Tạo tin tuyển dụng"
+FE -> System: Yêu cầu hiển thị form tạo tin
+System -> FE: Hiển thị form nhập thông tin
 
-Admin -> FE: Điền thông tin nhân viên\n(firstName, lastName, email, phone)
-Admin -> FE: Chọn department và position
-FE -> FE: Validate client-side\n(email format, required fields)
-FE -> GW: POST /api/employee\n+ employee data + JWT token
-activate GW
+HM -> FE: Nhập thông tin chi tiết và nhấn "Lưu"
+note right
+  - Tiêu đề công việc
+  - Mô tả công việc
+  - Yêu cầu ứng viên
+  - Mức lương min-max
+  - Số lượng cần tuyển
+  - Hạn ứng tuyển
+  - Hình thức làm việc
+end note
 
-GW -> GW: Extract JWT token
-GW -> GW: Validate token format
-GW -> US: Forward request to User Service
-activate US
+FE -> System: Gửi dữ liệu tin tuyển dụng
+System -> System: Kiểm tra tính hợp lệ
 
-US -> US: Validate dữ liệu đầu vào\n(email format, phone format)
-US -> US: Check email uniqueness
-US -> DB: SELECT COUNT(*) WHERE email = ?
-activate DB
-DB --> US: Email count result
-deactivate DB
-
-alt Email already exists
-    US --> GW: 400 Bad Request\n+ "Email đã tồn tại"
-    GW --> FE: Error response
-    FE --> Admin: Hiển thị lỗi email trùng lặp
-else Email is unique
-    US -> DB: INSERT INTO employee\n(firstName, lastName, email, phone, departmentId, positionId)
-    activate DB
-    DB --> US: Employee created with ID
-    deactivate DB
-    
-    US -> US: Generate employee code\n(EMP + timestamp)
-    US -> DB: UPDATE employee SET employeeCode = ?
-    activate DB
-    DB --> US: Update successful
-    deactivate DB
-    
-    US --> GW: 201 Created\n+ employee data + employeeCode
-    deactivate US
-    
-    GW --> FE: Success response
-    deactivate GW
-    
-    FE --> Admin: Hiển thị thông báo thành công\n+ Employee ID + Employee Code
+alt [Dữ liệu hợp lệ]
+    System -> DB: Lưu tin tuyển dụng mới
+    DB --> System: Xác nhận lưu thành công
+    System -> FE: Hiển thị thông báo thành công
+    FE -> HM: Chuyển đến trang chỉnh sửa
+else [Dữ liệu không hợp lệ]
+    System -> FE: Hiển thị thông báo lỗi
+    FE -> HM: Quay lại màn hình nhập liệu
 end
 
 @enduml
