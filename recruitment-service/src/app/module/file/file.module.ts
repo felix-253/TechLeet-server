@@ -33,6 +33,7 @@ import { FileManagementHandler } from './handlers/file-management.service';
 
 // Import email service directly (not module to avoid circular dependency)
 import { RecruitmentEmailService } from '../email/email.service';
+import { AdaptiveThresholdService } from '../cv-screening/adaptive-threshold.service';
 
 @Module({
    imports: [
@@ -55,6 +56,7 @@ import { RecruitmentEmailService } from '../email/email.service';
       CvTextExtractionService,
       CvNlpProcessingService,
       CvLlmSummaryService,
+      AdaptiveThresholdService,
       ApplicationService,
       CvScreeningService,
       CvScreeningWorkerService,

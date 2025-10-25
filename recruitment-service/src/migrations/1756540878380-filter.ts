@@ -16,7 +16,7 @@ export class FilterScore1756540878380 implements MigrationInterface {
             "screening_min_threshold" DOUBLE PRECISION DEFAULT 0.0,
             "screening_max_threshold" DOUBLE PRECISION DEFAULT 1.0,
             "created_at" TIMESTAMPTZ DEFAULT now(),
-            "updated_at" TIMESTAMPTZ DEFAULT now(),
+            "updated_at" TIMESTAMPTZ DEFAULT now()
          );
       `);
    }
