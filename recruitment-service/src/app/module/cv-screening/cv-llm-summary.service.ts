@@ -198,6 +198,111 @@ export class CvLlmSummaryService {
    }
 
    /**
+    * Extract structured CV data using AI
+    */
+   async extractCvData(cvText: string): Promise<ProcessedCvData> {
+      try {
+         this.logger.log('Starting AI-based CV data extraction');
+
+         const prompt = `
+Bạn là một hệ thống AI chuyên trích xuất thông tin từ CV. Hãy phân tích CV sau và trích xuất thông tin có cấu trúc.
+
+CV Text:
+${cvText}
+
+Vui lòng trả về kết quả theo định dạng JSON sau:
+
+{
+  "personalInfo": {
+    "name": "Họ và tên từ CV",
+    "email": "Email từ CV",
+    "phone": "Số điện thoại từ CV",
+    "location": "Địa chỉ/Vị trí từ CV"
+  },
+  "workExperience": [
+    {
+      "company": "Tên công ty",
+      "position": "Chức vụ",
+      "duration": "Thời gian làm việc",
+      "durationInMonths": 12,
+      "description": "Mô tả công việc",
+      "isCurrent": false
+    }
+  ],
+  "education": [
+    {
+      "institution": "Tên trường",
+      "degree": "Bằng cấp",
+      "field": "Chuyên ngành",
+      "graduationYear": 2020
+    }
+  ],
+  "skills": {
+    "technical": ["kỹ năng 1", "kỹ năng 2"],
+    "soft": ["kỹ năng mềm 1"],
+    "languages": ["Ngôn ngữ 1"],
+    "frameworks": ["Framework 1"],
+    "tools": ["Công cụ 1"],
+    "certifications": ["Chứng chỉ 1"]
+  },
+  "totalExperienceMonths": 36,
+  "totalExperienceYears": 3,
+  "summary": "Tóm tắt ngắn",
+  "keyPhrases": ["cụm từ 1", "cụm từ 2"]
+}
+
+QUAN TRỌNG: Chỉ trả về JSON, không thêm bất kỳ text nào khác.`;
+
+         const config = MODEL_CONFIGS['gemini'];
+         const model = this.genAI.getGenerativeModel({
+            model: config.modelName,
+            generationConfig: {
+               temperature: 0.3, // Lower temperature for more structured output
+               maxOutputTokens: 4096,
+            },
+         });
+
+         const response = await model.generateContent(prompt);
+         const content = response.response.text();
+
+         // Extract JSON from response
+         const jsonMatch = content.match(/\{[\s\S]*\}/);
+         if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            
+            return {
+               personalInfo: {
+                  name: parsed.personalInfo?.name,
+                  email: parsed.personalInfo?.email,
+                  phone: parsed.personalInfo?.phone,
+                  location: parsed.personalInfo?.location,
+               },
+               workExperience: parsed.workExperience || [],
+               education: parsed.education || [],
+               skills: {
+                  technical: parsed.skills?.technical || [],
+                  soft: parsed.skills?.soft || [],
+                  languages: parsed.skills?.languages || [],
+                  frameworks: parsed.skills?.frameworks || [],
+                  tools: parsed.skills?.tools || [],
+                  certifications: parsed.skills?.certifications || [],
+               },
+               totalExperienceMonths: parsed.totalExperienceMonths || 0,
+               totalExperienceYears: parsed.totalExperienceYears || 0,
+               summary: parsed.summary,
+               extractedDates: [],
+               keyPhrases: parsed.keyPhrases || [],
+            };
+         }
+
+         throw new Error('Could not parse AI response');
+      } catch (error) {
+         this.logger.error(`AI data extraction failed: ${error.message}`);
+         throw error;
+      }
+   }
+
+   /**
     * Build prompt for CV summary generation with enhanced detail
     */
    private buildSummaryPrompt(
