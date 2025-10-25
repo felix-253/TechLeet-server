@@ -47,9 +47,4 @@ export class FilterScoreEntity {
 
    @Column({ name: 'updated_at', type: 'timestamptz', default: () => 'now()' })
    updatedAt: Date;
-
-   // Relationship với JobPosting
-   @OneToOne(() => JobPostingEntity, (jobPosting) => jobPosting.filterScore)
-   @JoinColumn({ name: 'job_posting_id' })
-   jobPosting: JobPostingEntity;
 }

@@ -23,6 +23,7 @@ import { CvEmbeddingEntity } from '../../../entities/recruitment/cv-embedding.en
 import { CvEmbeddingChunkEntity } from '../../../entities/recruitment/cv-embedding-chunk.entity';
 import { SkillEntity } from '../../../entities/recruitment/skill.entity';
 import { SkillAliasEntity } from '../../../entities/recruitment/skill-alias.entity';
+import { FilterScoreEntity } from '../../../entities/recruitment/filter-score.entity';
 
 // Import new modular services
 import { OcrService } from './ocr/ocr.service';
@@ -47,6 +48,7 @@ import { AdaptiveThresholdService } from '../cv-screening/adaptive-threshold.ser
          CvEmbeddingChunkEntity,
          SkillEntity,
          SkillAliasEntity,
+         FilterScoreEntity,
       ]),
    ],
    controllers: [FileController, BrevoWebhookController],

@@ -189,8 +189,4 @@ export class JobPostingEntity extends BaseEntity {
       const diffTime = deadline.getTime() - today.getTime();
       return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
    }
-
-   // Relationship với FilterScore
-   @OneToOne(() => FilterScoreEntity, (filterScore) => filterScore.jobPosting)
-   filterScore: FilterScoreEntity;
 }
