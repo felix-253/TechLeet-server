@@ -132,6 +132,7 @@ export class InformationService {
                concerns: aiSummaryResult.concerns,
                fitScore: aiSummaryResult.fitScore,
                recommendation: aiSummaryResult.recommendation,
+               processedData: aiSummaryResult.processedData,
             };
             this.logger.log(`Đã tạo AI summary với fit score: ${aiAnalysis.fitScore}`);
          } catch (aiError) {
@@ -142,7 +143,7 @@ export class InformationService {
 
          // Bước 5: Tạo hoặc cập nhật candidate trong database
          const candidate = await this.createOrUpdateCandidate(
-            processedData,
+            aiAnalysis?.processedData,
             candidateId,
             senderEmail,
          );
@@ -154,7 +155,7 @@ export class InformationService {
             application = await this.createApplication(
                candidate.candidateId,
                jobPostingId,
-               processedData,
+               aiAnalysis?.processedData,
                aiAnalysis,
             );
             this.logger.log(`Đã tạo application với ID: ${application.applicationId}`);
@@ -411,6 +412,7 @@ export class InformationService {
 
          // Cập nhật thông tin từ processed data
          if (processedData.personalInfo.name) {
+            console.log('processedData.personalInfo.name', processedData.personalInfo.name);
             const nameParts = processedData.personalInfo.name
                .split(' ')
                .filter((part) => part.trim());

@@ -2,12 +2,11 @@ import { Column, Entity, PrimaryGeneratedColumn, Index } from 'typeorm';
 import { BaseEntity } from '../base/base.entities';
 
 @Entity('candidate')
-@Index(['email'], { unique: true })
 @Index(['phoneNumber'])
 @Index(['status'])
 export class CandidateEntity extends BaseEntity {
    @PrimaryGeneratedColumn('identity', {
-      comment: 'Unique identifier for the candidate'
+      comment: 'Unique identifier for the candidate',
    })
    candidateId: number;
 
@@ -15,7 +14,7 @@ export class CandidateEntity extends BaseEntity {
       type: 'varchar',
       length: 50,
       nullable: false,
-      comment: 'Candidate first name'
+      comment: 'Candidate first name',
    })
    firstName: string;
 
@@ -23,7 +22,7 @@ export class CandidateEntity extends BaseEntity {
       type: 'varchar',
       length: 50,
       nullable: false,
-      comment: 'Candidate last name'
+      comment: 'Candidate last name',
    })
    lastName: string;
 
@@ -32,7 +31,7 @@ export class CandidateEntity extends BaseEntity {
       length: 100,
       nullable: false,
       unique: true,
-      comment: 'Candidate email address'
+      comment: 'Candidate email address',
    })
    email: string;
 
@@ -40,28 +39,28 @@ export class CandidateEntity extends BaseEntity {
       type: 'varchar',
       length: 20,
       nullable: false,
-      comment: 'Candidate phone number'
+      comment: 'Candidate phone number',
    })
    phoneNumber: string;
 
    @Column({
       type: 'date',
       nullable: true,
-      comment: 'Candidate date of birth'
+      comment: 'Candidate date of birth',
    })
    birthDate?: Date;
 
    @Column({
       type: 'boolean',
       nullable: true,
-      comment: 'Candidate gender (true=male, false=female)'
+      comment: 'Candidate gender (true=male, false=female)',
    })
    gender?: boolean;
 
    @Column({
       type: 'text',
       nullable: true,
-      comment: 'Candidate residential address'
+      comment: 'Candidate residential address',
    })
    address?: string;
 
@@ -69,7 +68,7 @@ export class CandidateEntity extends BaseEntity {
       type: 'varchar',
       length: 255,
       nullable: true,
-      comment: 'URL to candidate resume/CV file'
+      comment: 'URL to candidate resume/CV file',
    })
    resumeUrl?: string;
 
@@ -77,7 +76,7 @@ export class CandidateEntity extends BaseEntity {
       type: 'varchar',
       length: 255,
       nullable: true,
-      comment: 'LinkedIn profile URL'
+      comment: 'LinkedIn profile URL',
    })
    linkedinUrl?: string;
 
@@ -85,7 +84,7 @@ export class CandidateEntity extends BaseEntity {
       type: 'varchar',
       length: 255,
       nullable: true,
-      comment: 'GitHub profile URL'
+      comment: 'GitHub profile URL',
    })
    githubUrl?: string;
 
@@ -93,7 +92,7 @@ export class CandidateEntity extends BaseEntity {
       type: 'varchar',
       length: 255,
       nullable: true,
-      comment: 'Portfolio website URL'
+      comment: 'Portfolio website URL',
    })
    portfolioUrl?: string;
 
@@ -102,7 +101,7 @@ export class CandidateEntity extends BaseEntity {
       length: 50,
       nullable: false,
       default: 'new',
-      comment: 'Candidate status (new, screening, interviewing, hired, rejected, withdrawn)'
+      comment: 'Candidate status (new, screening, interviewing, hired, rejected, withdrawn)',
    })
    status: string;
 
@@ -110,21 +109,21 @@ export class CandidateEntity extends BaseEntity {
       type: 'date',
       nullable: false,
       default: () => 'CURRENT_DATE',
-      comment: 'Date when candidate first applied'
+      comment: 'Date when candidate first applied',
    })
    appliedDate: Date;
 
    @Column({
       type: 'text',
       nullable: true,
-      comment: 'Summary or bio provided by candidate'
+      comment: 'Summary or bio provided by candidate',
    })
    summary?: string;
 
    @Column({
       type: 'int',
       nullable: true,
-      comment: 'Years of total work experience'
+      comment: 'Years of total work experience',
    })
    yearsOfExperience?: number;
 
@@ -132,7 +131,7 @@ export class CandidateEntity extends BaseEntity {
       type: 'varchar',
       length: 100,
       nullable: true,
-      comment: 'Current job title'
+      comment: 'Current job title',
    })
    currentJobTitle?: string;
 
@@ -140,7 +139,7 @@ export class CandidateEntity extends BaseEntity {
       type: 'varchar',
       length: 100,
       nullable: true,
-      comment: 'Current company name'
+      comment: 'Current company name',
    })
    currentCompany?: string;
 
@@ -148,7 +147,7 @@ export class CandidateEntity extends BaseEntity {
       type: 'varchar',
       length: 100,
       nullable: true,
-      comment: 'Highest education level'
+      comment: 'Highest education level',
    })
    educationLevel?: string;
 
@@ -156,7 +155,7 @@ export class CandidateEntity extends BaseEntity {
       type: 'varchar',
       length: 100,
       nullable: true,
-      comment: 'Field of study or major'
+      comment: 'Field of study or major',
    })
    fieldOfStudy?: string;
 
@@ -164,28 +163,28 @@ export class CandidateEntity extends BaseEntity {
       type: 'varchar',
       length: 100,
       nullable: true,
-      comment: 'University or institution name'
+      comment: 'University or institution name',
    })
    university?: string;
 
    @Column({
       type: 'int',
       nullable: true,
-      comment: 'Graduation year'
+      comment: 'Graduation year',
    })
    graduationYear?: number;
 
    @Column({
       type: 'text',
       nullable: true,
-      comment: 'Technical skills (comma-separated or JSON)'
+      comment: 'Technical skills (comma-separated or JSON)',
    })
    skills?: string;
 
    @Column({
       type: 'text',
       nullable: true,
-      comment: 'Programming languages known'
+      comment: 'Programming languages known',
    })
    programmingLanguages?: string;
 
@@ -194,7 +193,7 @@ export class CandidateEntity extends BaseEntity {
       precision: 10,
       scale: 2,
       nullable: true,
-      comment: 'Expected salary (VND)'
+      comment: 'Expected salary (VND)',
    })
    expectedSalary?: number;
 
@@ -202,7 +201,7 @@ export class CandidateEntity extends BaseEntity {
       type: 'varchar',
       length: 50,
       nullable: true,
-      comment: 'Preferred employment type (full-time, part-time, contract)'
+      comment: 'Preferred employment type (full-time, part-time, contract)',
    })
    preferredEmploymentType?: string;
 
@@ -210,24 +209,22 @@ export class CandidateEntity extends BaseEntity {
       type: 'boolean',
       nullable: true,
       default: false,
-      comment: 'Whether candidate is available for remote work'
+      comment: 'Whether candidate is available for remote work',
    })
    availableForRemote?: boolean;
 
    @Column({
       type: 'date',
       nullable: true,
-      comment: 'Earliest available start date'
+      comment: 'Earliest available start date',
    })
    availableStartDate?: Date;
-
-
 
    @Column({
       type: 'varchar',
       length: 50,
       nullable: true,
-      comment: 'How candidate heard about the company'
+      comment: 'How candidate heard about the company',
    })
    source?: string;
 

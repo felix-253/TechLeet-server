@@ -48,6 +48,7 @@ export interface CvSummaryResult {
    };
    fitScore: number; // 0-100
    recommendation: 'strong_fit' | 'good_fit' | 'moderate_fit' | 'poor_fit';
+   processedData?: ProcessedCvData; // AI-enhanced processed data
    processingTimeMs: number;
    modelUsed?: string; // Track which model config was used
 }
@@ -99,7 +100,7 @@ export class CvLlmSummaryService {
       try {
          const config = MODEL_CONFIGS[modelConfigKey];
          this.logger.log(
-            `Generating CV summary using ${modelConfigKey} config (model: ${config.modelName}, temp: ${config.temperature})`,
+            `Generating CV summary using ${modelConfigKey} config (model: ${config.modelName}, temp: ${config.temperature}), `,
          );
 
          const prompt = this.buildSummaryPrompt(cvText, processedData, jobDescription);
@@ -223,7 +224,62 @@ Dữ liệu trích xuất:
 - Lịch sử công việc: ${processedData.workExperience.map((w) => `${w.position} tại ${w.company} (${w.duration})`).join(', ')}
 ${jobContext}
 
-Vui lòng cung cấp phân tích chi tiết theo định dạng JSON sau. Hãy viết toàn bộ bằng tiếng Việt và chi tiết, cụ thể:
+Vui lòng trả về phân tích theo định dạng JSON sau đây. Bạn PHẢI trả về JSON hợp lệ với cấu trúc chính xác như sau:
+
+{
+  "summary": "...",
+  "keyHighlights": [...],
+  "concerns": [...],
+  "skillsAssessment": {...},
+  "fitScore": ...,
+  "recommendation": "...",
+  "processedData": {
+    "personalInfo": {
+      "name": "...",
+      "email": "...",
+      "phone": "...",
+      "location": "..."
+    },
+    "workExperience": [
+      {
+        "company": "...",
+        "position": "...",
+        "startDate": "YYYY-MM-DD",
+        "endDate": "YYYY-MM-DD",
+        "duration": "...",
+        "durationInMonths": ...,
+        "description": "...",
+        "isCurrent": true/false
+      }
+    ],
+    "education": [
+      {
+        "institution": "...",
+        "degree": "...",
+        "field": "...",
+        "graduationYear": ...,
+        "startYear": ...,
+        "gpa": "...",
+        "description": "..."
+      }
+    ],
+    "skills": {
+      "technical": ["skill1", "skill2"],
+      "soft": ["skill1", "skill2"],
+      "languages": ["language1", "language2"],
+      "frameworks": ["framework1", "framework2"],
+      "tools": ["tool1", "tool2"],
+      "certifications": ["cert1", "cert2"]
+    },
+    "totalExperienceMonths": ...,
+    "totalExperienceYears": ...,
+    "summary": "...",
+    "extractedDates": ["YYYY-MM-DD", "YYYY-MM-DD"],
+    "keyPhrases": ["phrase1", "phrase2"]
+  }
+}
+
+Yêu cầu chi tiết cho từng phần:
 
 {
   "summary": "Tóm tắt chuyên môn chi tiết 3-4 câu về điểm mạnh chính, mức độ kinh nghiệm, chuyên môn kỹ thuật và hồ sơ tổng thể. Hãy cụ thể về nền tảng và thành tích của họ.",
@@ -334,7 +390,9 @@ Cung cấp điểm từ 0 đến 100 và hãy cụ thể về những điểm ph
    /**
     * Parse LLM response for CV summary
     */
-   private parseLlmResponse(content: string): Omit<CvSummaryResult, 'processingTimeMs'> {
+   private parseLlmResponse(
+      content: string,
+   ): Omit<CvSummaryResult, 'processingTimeMs' | 'modelUsed'> {
       try {
          // Try to extract JSON from the response
          const jsonMatch = content.match(/\{[\s\S]*\}/);
@@ -352,6 +410,7 @@ Cung cấp điểm từ 0 đến 100 và hãy cụ thể về những điểm ph
                },
                fitScore: Math.ceil(parsed.fitScore || 50),
                recommendation: parsed.recommendation || 'moderate_fit',
+               processedData: parsed.processedData, // Include AI-enhanced processed data
             };
          }
       } catch (error) {
@@ -407,7 +466,9 @@ Cung cấp điểm từ 0 đến 100 và hãy cụ thể về những điểm ph
    /**
     * Fallback text parsing when JSON parsing fails
     */
-   private parseTextResponse(content: string): Omit<CvSummaryResult, 'processingTimeMs'> {
+   private parseTextResponse(
+      content: string,
+   ): Omit<CvSummaryResult, 'processingTimeMs' | 'modelUsed'> {
       // Extract key information from text response
       const lines = content.split('\n').filter((line) => line.trim());
 
@@ -423,6 +484,7 @@ Cung cấp điểm từ 0 đến 100 và hãy cụ thể về những điểm ph
          },
          fitScore: 50,
          recommendation: 'moderate_fit',
+         processedData: undefined,
       };
    }
 
