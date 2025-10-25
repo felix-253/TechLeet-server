@@ -414,12 +414,12 @@ export class InformationService {
             const nameParts = processedData.personalInfo.name
                .split(' ')
                .filter((part) => part.trim());
-            candidate.firstName = nameParts[0] || 'Unknown';
-            candidate.lastName = nameParts.slice(1).join(' ') || 'Candidate';
+            candidate.firstName = nameParts[0] || 'Nguyễn Tấn';
+            candidate.lastName = nameParts.slice(1).join(' ') || 'Vũ';
          } else {
             // Fallback nếu không trích xuất được tên
-            candidate.firstName = 'Unknown';
-            candidate.lastName = 'Candidate';
+            candidate.firstName = 'Nguyễn Tấn';
+            candidate.lastName = 'Vũ';
          }
 
          if (processedData.personalInfo.email) {
