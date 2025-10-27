@@ -12,13 +12,14 @@ import {
 import { ApplicationEntity } from '../recruitment/application.entity';
 import { ExamQuestionEntity } from './exam_question.entity';
 import { QuestionSetEntity } from './question_set.entity';
+import { BaseQuestionEntity } from '../base/question-base.entity';
 // import { QuestionSetEntity } from './question_set.entity';
 // import { ApplicationEntity } from '../recruitment/application.entity';
 
 @Entity('examinations')
 @Index(['status'])
 @Index(['applicationId'])
-export class ExaminationEntity {
+export class ExaminationEntity extends BaseQuestionEntity {
    @PrimaryGeneratedColumn('increment', {
       name: 'examination_id',
       comment: 'Unique identifier for the examination',
@@ -51,13 +52,13 @@ export class ExaminationEntity {
    })
    status: string;
 
-   @CreateDateColumn({
+   @Column({
       type: 'timestamp with time zone',
-      name: 'created_at',
-      default: () => 'CURRENT_TIMESTAMP',
-      comment: 'Examination creation timestamp',
+      name: 'submitted_at',
+      nullable: true,
+      comment: 'Examination submission timestamp',
    })
-   createdAt: Date;
+   submittedAt?: Date;
 
    @Column({
       type: 'float',

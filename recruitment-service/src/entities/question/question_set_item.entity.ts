@@ -1,10 +1,11 @@
 import { Entity, PrimaryGeneratedColumn, Column, Index, ManyToOne, JoinColumn } from 'typeorm';
 import { QuestionSetEntity } from './question_set.entity';
 import { QuestionEntity } from './question.entity';
+import { BaseQuestionEntity } from '../base/question-base.entity';
 
 @Entity('question_set_items')
 @Index(['setId', 'questionId'], { unique: true })
-export class QuestionSetItemEntity {
+export class QuestionSetItemEntity extends BaseQuestionEntity {
    @PrimaryGeneratedColumn('increment', {
       name: 'set_item_id',
       comment: 'Unique identifier for the question set item',
@@ -36,4 +37,3 @@ export class QuestionSetItemEntity {
    @JoinColumn({ name: 'question_id' })
    question: QuestionEntity;
 }
-

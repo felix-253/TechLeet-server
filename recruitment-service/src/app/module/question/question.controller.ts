@@ -1,12 +1,99 @@
-import { Controller, Get } from '@nestjs/common';
+import {
+   Controller,
+   Get,
+   Post,
+   Put,
+   Delete,
+   Body,
+   Param,
+   ParseIntPipe,
+   Query,
+} from '@nestjs/common';
 import { QuestionService } from './question.service';
+import { CreateQuestionDto, UpdateQuestionDto, FilterQuestionDto } from './dto/question.dto';
+import { CreateQuestionSetDto, UpdateQuestionSetDto } from './dto/question-set.dto';
+import { CreateExaminationDto, SubmitExaminationDto, UpdateScoreDto } from './dto/examination.dto';
 
 @Controller('question')
 export class QuestionController {
    constructor(private readonly questionService: QuestionService) {}
 
-   @Get('test')
-   async test() {
-      return this.questionService.test();
+   @Get('questions')
+   async getQuestions(@Query() filter: FilterQuestionDto) {
+      return this.questionService.findQuestions(filter);
+   }
+
+   @Post('questions')
+   async createQuestion(@Body() dto: CreateQuestionDto) {
+      return this.questionService.createQuestion(dto);
+   }
+
+   @Put('questions/:id')
+   async updateQuestion(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateQuestionDto) {
+      return this.questionService.updateQuestion(id, dto);
+   }
+
+   @Delete('questions/:id')
+   async deleteQuestion(@Param('id', ParseIntPipe) id: number) {
+      return this.questionService.deleteQuestion(id);
+   }
+
+   @Post('question-sets')
+   async createQuestionSet(@Body() dto: CreateQuestionSetDto) {
+      return this.questionService.createQuestionSet(dto);
+   }
+
+   @Put('question-sets/:id')
+   async updateQuestionSet(
+      @Param('id', ParseIntPipe) id: number,
+      @Body() dto: UpdateQuestionSetDto,
+   ) {
+      return this.questionService.updateQuestionSet(id, dto);
+   }
+
+   @Post('question-sets/:setId/items/:questionId')
+   async addQuestionToSet(
+      @Param('setId', ParseIntPipe) setId: number,
+      @Param('questionId', ParseIntPipe) questionId: number,
+   ) {
+      return this.questionService.addQuestionToSet(setId, questionId);
+   }
+
+   @Delete('question-sets/items/:itemId')
+   async removeQuestionFromSet(@Param('itemId', ParseIntPipe) itemId: number) {
+      return this.questionService.removeQuestionFromSet(itemId);
+   }
+
+   @Delete('question-sets/:id')
+   async deleteQuestionSet(@Param('id', ParseIntPipe) id: number) {
+      return this.questionService.deleteQuestionSet(id);
+   }
+
+   @Post('examinations')
+   async createExamination(@Body() dto: CreateExaminationDto) {
+      return this.questionService.createExamination(dto);
+   }
+
+   @Post('examinations/:id/submit')
+   async submitExamination(
+      @Param('id', ParseIntPipe) id: number,
+      @Body() dto: SubmitExaminationDto,
+   ) {
+      return this.questionService.submitExamination(id, dto);
+   }
+
+   @Get('examinations/:id')
+   async getExaminationDetail(@Param('id', ParseIntPipe) id: number) {
+      return this.questionService.getExaminationDetail(id);
+   }
+
+   @Put('examinations/score/:id')
+   async updateExamScore(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateScoreDto) {
+      return this.questionService.updateExamScore(id, dto);
+   }
+
+   @Get('examinations/todo/:applicationId')
+   async getExaminationsToDo(@Param('applicationId', ParseIntPipe) applicationId: number) {
+      return this.questionService.getExaminationsToDo(applicationId);
    }
 }
