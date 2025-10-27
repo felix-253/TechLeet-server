@@ -1,4 +1,17 @@
-import { Column, Entity, PrimaryGeneratedColumn, Index, CreateDateColumn } from 'typeorm';
+import {
+   Column,
+   Entity,
+   PrimaryGeneratedColumn,
+   Index,
+   CreateDateColumn,
+   OneToOne,
+   JoinColumn,
+   OneToMany,
+   ManyToOne,
+} from 'typeorm';
+import { ApplicationEntity } from '../recruitment/application.entity';
+import { ExamQuestionEntity } from './exam_question.entity';
+import { QuestionSetEntity } from './question_set.entity';
 // import { QuestionSetEntity } from './question_set.entity';
 // import { ApplicationEntity } from '../recruitment/application.entity';
 
@@ -6,7 +19,7 @@ import { Column, Entity, PrimaryGeneratedColumn, Index, CreateDateColumn } from 
 @Index(['status'])
 @Index(['applicationId'])
 export class ExaminationEntity {
-   @PrimaryGeneratedColumn('identity', {
+   @PrimaryGeneratedColumn('increment', {
       name: 'examination_id',
       comment: 'Unique identifier for the examination',
    })
@@ -47,12 +60,23 @@ export class ExaminationEntity {
    createdAt: Date;
 
    @Column({
-      type: 'timestamp with time zone',
-      name: 'submitted_at',
+      type: 'float',
+      name: 'total_score',
       nullable: true,
-      comment: 'Examination submission timestamp',
+      comment: 'Total score for the examination',
    })
-   submittedAt?: Date;
+   totalScore?: number;
+
+   @OneToOne(() => ApplicationEntity, (application) => application.examination)
+   @JoinColumn({ name: 'application_id' })
+   application: ApplicationEntity;
+
+   @OneToMany(() => ExamQuestionEntity, (examQuestion) => examQuestion.examination)
+   examQuestions: ExamQuestionEntity[];
+
+   @ManyToOne(() => QuestionSetEntity, { nullable: true })
+   @JoinColumn({ name: 'source_set_id' })
+   sourceSet: QuestionSetEntity;
 
    // Relationships
    // @ManyToOne(() => ApplicationEntity, { onDelete: 'CASCADE' })
@@ -63,4 +87,3 @@ export class ExaminationEntity {
    // @JoinColumn({ name: 'source_set_id' })
    // sourceSet: QuestionSetEntity;
 }
-

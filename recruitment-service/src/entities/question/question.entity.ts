@@ -1,11 +1,12 @@
-import { Column, Entity, PrimaryGeneratedColumn, Index } from 'typeorm';
+import { Column, Entity, PrimaryGeneratedColumn, Index, OneToMany } from 'typeorm';
 import { BaseQuestionEntity } from '../base/question-base.entity';
 import { DifficultyLevel } from './difficulty-level.enum';
+import { ExamQuestionEntity } from './exam_question.entity';
 
 @Entity('questions')
 @Index(['difficulty'])
 export class QuestionEntity extends BaseQuestionEntity {
-   @PrimaryGeneratedColumn('identity', {
+   @PrimaryGeneratedColumn('increment', {
       name: 'question_id',
       comment: 'Unique identifier for the question',
    })
@@ -35,5 +36,7 @@ export class QuestionEntity extends BaseQuestionEntity {
       comment: 'Difficulty level of the question',
    })
    difficulty: DifficultyLevel;
-}
 
+   @OneToMany(() => ExamQuestionEntity, (examQuestion) => examQuestion.question)
+   examQuestions: ExamQuestionEntity[];
+}

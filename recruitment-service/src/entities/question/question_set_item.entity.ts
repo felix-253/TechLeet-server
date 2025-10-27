@@ -5,7 +5,7 @@ import { QuestionEntity } from './question.entity';
 @Entity('question_set_items')
 @Index(['setId', 'questionId'], { unique: true })
 export class QuestionSetItemEntity {
-   @PrimaryGeneratedColumn('identity', {
+   @PrimaryGeneratedColumn('increment', {
       name: 'set_item_id',
       comment: 'Unique identifier for the question set item',
    })
