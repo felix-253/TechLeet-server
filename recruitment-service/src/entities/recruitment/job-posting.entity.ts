@@ -1,6 +1,7 @@
-import { Column, Entity, PrimaryGeneratedColumn, Index, OneToOne } from 'typeorm';
+import { Column, Entity, PrimaryGeneratedColumn, Index, ManyToOne, JoinColumn } from 'typeorm';
 import { BaseEntity } from '../base/base.entities';
 import { FilterScoreEntity } from './filter-score.entity';
+import { QuestionSetEntity } from '../question/question_set.entity';
 
 @Entity('job_posting')
 @Index(['title'])
@@ -136,6 +137,22 @@ export class JobPostingEntity extends BaseEntity {
    })
    educationLevel?: string;
 
+   @Column({
+      type: 'boolean',
+      nullable: false,
+      default: false,
+      comment: 'Indicates whether the job requires a test',
+   })
+   isTest: boolean;
+
+   @Column({
+      type: 'int',
+      name: 'question_set_id',
+      nullable: true,
+      comment: 'Reference to question set used for this job',
+   })
+   questionSetId?: number;
+
    // Foreign Keys (references to Company Service and User Service)
    @Column({
       type: 'int',
@@ -163,6 +180,14 @@ export class JobPostingEntity extends BaseEntity {
    //    cascade: ['soft-remove']
    // })
    // applications: ApplicationEntity[];
+
+   @ManyToOne(() => QuestionSetEntity, { nullable: true, onDelete: 'SET NULL' })
+   @JoinColumn({
+      name: 'question_set_id',
+      referencedColumnName: 'setId',
+      foreignKeyConstraintName: 'fk_job_posting_question_set',
+   })
+   questionSet?: QuestionSetEntity;
 
    // Computed properties
    get salaryRange(): string | null {

@@ -1,17 +1,18 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { 
-   IsString, 
-   IsOptional, 
-   IsNumber, 
-   IsNotEmpty, 
-   MinLength, 
-   MaxLength, 
-   IsDateString, 
-   IsInt, 
-   Min, 
+import {
+   IsString,
+   IsOptional,
+   IsNumber,
+   IsNotEmpty,
+   MinLength,
+   MaxLength,
+   IsDateString,
+   IsInt,
+   Min,
    Max,
    IsIn,
-   IsArray
+   IsArray,
+   IsBoolean,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 
@@ -186,6 +187,25 @@ export class CreateJobPostingDto {
    @IsInt()
    @Type(() => Number)
    hiringManagerId?: number;
+
+   @ApiPropertyOptional({
+      description: 'Whether this job posting requires a test',
+      example: false,
+      default: false,
+   })
+   @IsOptional()
+   @IsBoolean()
+   @Type(() => Boolean)
+   isTest?: boolean;
+
+   @ApiPropertyOptional({
+      description: 'ID of the question set used for this job',
+      example: 1,
+   })
+   @IsOptional()
+   @IsInt()
+   @Type(() => Number)
+   questionSetId?: number;
 }
 
 export class UpdateJobPostingDto {
@@ -372,6 +392,24 @@ export class UpdateJobPostingDto {
    @IsInt()
    @Type(() => Number)
    hiringManagerId?: number;
+
+   @ApiPropertyOptional({
+      description: 'Whether this job posting requires a test',
+      example: false,
+   })
+   @IsOptional()
+   @IsBoolean()
+   @Type(() => Boolean)
+   isTest?: boolean;
+
+   @ApiPropertyOptional({
+      description: 'ID of the question set used for this job',
+      example: 1,
+   })
+   @IsOptional()
+   @IsInt()
+   @Type(() => Number)
+   questionSetId?: number;
 }
 
 export class JobPostingResponseDto {
@@ -494,6 +532,18 @@ export class JobPostingResponseDto {
       example: 1,
    })
    hiringManagerId?: number;
+
+   @ApiPropertyOptional({
+      description: 'Whether this job posting requires a test',
+      example: false,
+   })
+   isTest?: boolean;
+
+   @ApiPropertyOptional({
+      description: 'ID of the question set used for this job',
+      example: 1,
+   })
+   questionSetId?: number;
 
    @ApiPropertyOptional({
       description: 'Formatted salary range',

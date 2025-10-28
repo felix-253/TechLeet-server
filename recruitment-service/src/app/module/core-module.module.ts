@@ -6,6 +6,7 @@ import { FileModule } from './file/file.module';
 import { CvScreeningModule } from './cv-screening/cv-screening.module';
 import { InterviewModule } from './interview/interview.module';
 import { ChatbotAgentModule } from './chatbot-agent/chatbot-agent.module';
+import { QuestionModule } from './question/question.module';
 
 @Module({
    imports: [
@@ -16,6 +17,7 @@ import { ChatbotAgentModule } from './chatbot-agent/chatbot-agent.module';
       FileModule,
       CvScreeningModule,
       ChatbotAgentModule,
+      QuestionModule,
    ],
 })
 export class CoreModuleModule {}
