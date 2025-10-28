@@ -1,4 +1,10 @@
-import { IsString, IsOptional, IsNumber } from 'class-validator';
+import { IsString, IsOptional } from 'class-validator';
+
+export class FilterQuestionSetDto {
+   @IsOptional()
+   @IsString()
+   text?: string;
+}
 
 export class CreateQuestionSetDto {
    @IsString()

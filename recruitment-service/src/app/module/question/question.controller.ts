@@ -11,7 +11,11 @@ import {
 } from '@nestjs/common';
 import { QuestionService } from './question.service';
 import { CreateQuestionDto, UpdateQuestionDto, FilterQuestionDto } from './dto/question.dto';
-import { CreateQuestionSetDto, UpdateQuestionSetDto } from './dto/question-set.dto';
+import {
+   CreateQuestionSetDto,
+   UpdateQuestionSetDto,
+   FilterQuestionSetDto,
+} from './dto/question-set.dto';
 import { CreateExaminationDto, SubmitExaminationDto, UpdateScoreDto } from './dto/examination.dto';
 
 @Controller('question')
@@ -36,6 +40,11 @@ export class QuestionController {
    @Delete('questions/:id')
    async deleteQuestion(@Param('id', ParseIntPipe) id: number) {
       return this.questionService.deleteQuestion(id);
+   }
+
+   @Get('question-sets')
+   async getQuestionSets(@Query() filter: FilterQuestionSetDto) {
+      return this.questionService.findQuestionSets(filter);
    }
 
    @Post('question-sets')

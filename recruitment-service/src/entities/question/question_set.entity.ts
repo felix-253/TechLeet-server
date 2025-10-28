@@ -1,6 +1,7 @@
 import { Column, Entity, PrimaryGeneratedColumn, Index, OneToMany } from 'typeorm';
 import { BaseQuestionEntity } from '../base/question-base.entity';
 import { QuestionSetItemEntity } from './question_set_item.entity';
+import { JobPostingEntity } from '../recruitment/job-posting.entity';
 
 @Entity('question_sets')
 @Index(['title'], { unique: true })
@@ -31,4 +32,7 @@ export class QuestionSetEntity extends BaseQuestionEntity {
 
    @OneToMany(() => QuestionSetItemEntity, (questionSetItem) => questionSetItem.questionSet)
    questionSetItems: QuestionSetItemEntity[];
+
+   @OneToMany(() => JobPostingEntity, (jobPosting) => jobPosting.questionSet)
+   jobPostings: JobPostingEntity[];
 }

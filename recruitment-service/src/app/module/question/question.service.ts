@@ -8,7 +8,11 @@ import { QuestionSetEntity } from '../../../entities/question/question_set.entit
 import { QuestionSetItemEntity } from '../../../entities/question/question_set_item.entity';
 import { CreateQuestionDto, FilterQuestionDto, UpdateQuestionDto } from './dto/question.dto';
 import { CreateExaminationDto, SubmitExaminationDto, UpdateScoreDto } from './dto/examination.dto';
-import { CreateQuestionSetDto, UpdateQuestionSetDto } from './dto/question-set.dto';
+import {
+   CreateQuestionSetDto,
+   UpdateQuestionSetDto,
+   FilterQuestionSetDto,
+} from './dto/question-set.dto';
 
 @Injectable()
 export class QuestionService {
@@ -61,6 +65,20 @@ export class QuestionService {
       return this.questionRepository.softRemove(question);
    }
 
+   async findQuestionSets(filter: FilterQuestionSetDto) {
+      const where: any = {};
+
+      if (filter.text) {
+         where.title = Like(`%${filter.text}%`);
+      }
+
+      return this.questionSetRepository.find({
+         where,
+         relations: ['questionSetItems', 'questionSetItems.question'],
+         order: { createdAt: 'DESC' },
+      });
+   }
+
    async createQuestionSet(dto: CreateQuestionSetDto) {
       const questionSet = this.questionSetRepository.create(dto);
       return this.questionSetRepository.save(questionSet);
@@ -103,6 +121,13 @@ export class QuestionService {
       const questionSet = await this.questionSetRepository.findOne({ where: { setId: id } });
       if (!questionSet) throw new NotFoundException('Question set not found');
 
+      // Delete all items first
+      const items = await this.questionSetItemRepository.find({ where: { setId: id } });
+      if (items.length > 0) {
+         await this.questionSetItemRepository.remove(items);
+      }
+
+      // Then delete the question set
       return this.questionSetRepository.remove(questionSet);
    }
 
