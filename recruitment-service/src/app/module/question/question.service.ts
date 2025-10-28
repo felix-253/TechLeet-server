@@ -31,6 +31,9 @@ export class QuestionService {
 
    async findQuestions(filter: FilterQuestionDto) {
       const where: any = {};
+      const page = filter.page || 0;
+      const limit = filter.limit || 10;
+      const skip = page * limit;
 
       if (filter.text) {
          where.content = Like(`%${filter.text}%`);
@@ -42,7 +45,16 @@ export class QuestionService {
          where.createdAt = Between(new Date(filter.startDate), new Date(filter.endDate));
       }
 
-      return this.questionRepository.find({ where, order: { createdAt: 'DESC' } });
+      const [questions, total] = await this.questionRepository.findAndCount({
+         where,
+         order: {
+            [filter.sortBy || 'createdAt']: filter.sortOrder || 'DESC',
+         },
+         skip,
+         take: limit,
+      });
+
+      return { data: questions, total };
    }
 
    async createQuestion(dto: CreateQuestionDto) {
@@ -62,21 +74,30 @@ export class QuestionService {
       const question = await this.questionRepository.findOne({ where: { questionId: id } });
       if (!question) throw new NotFoundException('Question not found');
 
-      return this.questionRepository.softRemove(question);
+      return this.questionRepository.remove(question);
    }
 
    async findQuestionSets(filter: FilterQuestionSetDto) {
       const where: any = {};
+      const page = filter.page || 0;
+      const limit = filter.limit || 10;
+      const skip = page * limit;
 
       if (filter.text) {
          where.title = Like(`%${filter.text}%`);
       }
 
-      return this.questionSetRepository.find({
+      const [questionSets, total] = await this.questionSetRepository.findAndCount({
          where,
          relations: ['questionSetItems', 'questionSetItems.question'],
-         order: { createdAt: 'DESC' },
+         order: {
+            [filter.sortBy || 'createdAt']: filter.sortOrder || 'DESC',
+         },
+         skip,
+         take: limit,
       });
+
+      return { data: questionSets, total };
    }
 
    async createQuestionSet(dto: CreateQuestionSetDto) {
@@ -224,7 +245,10 @@ export class QuestionService {
          where: { examinationId: examQuestion.examinationId },
       });
 
-      examination.totalScore = examQuestions.reduce((sum, eq) => sum + (eq.score || 0), 0);
+      // Calculate average score (total / number of questions)
+      const totalScore = examQuestions.reduce((sum, eq) => sum + (eq.score || 0), 0);
+      const questionCount = examQuestions.length;
+      examination.totalScore = questionCount > 0 ? totalScore / questionCount : 0;
       await this.examinationRepository.save(examination);
 
       return examQuestion;

@@ -139,6 +139,7 @@ export class JobPostingEntity extends BaseEntity {
 
    @Column({
       type: 'boolean',
+      name: 'is_test',
       nullable: false,
       default: false,
       comment: 'Indicates whether the job requires a test',

@@ -118,9 +118,6 @@ export class JobPostingService {
       }
       console.log(findOptions);
       const [jobPostings, total] = await this.jobPostingRepository.findAndCount(findOptions);
-      console.log('job', jobPostings);
-      console.log('total', total);
-      console.log('Confirm test cicd');
       return {
          data: jobPostings.map((jp) => this.mapToResponseDto(jp)),
          total,
