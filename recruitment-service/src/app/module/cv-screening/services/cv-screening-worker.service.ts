@@ -85,7 +85,6 @@ export class CvScreeningWorkerService {
       };
       
       let screeningResult: CvScreeningResultEntity | undefined;
-      let lastError: Error | undefined;
 
       try {
          this.logger.log(`Starting CV screening pipeline for application ${applicationId}`);
