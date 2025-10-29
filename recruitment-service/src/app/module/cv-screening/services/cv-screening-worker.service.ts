@@ -12,7 +12,7 @@ import { CvEmbeddingService } from '../processors/cv-embedding.service';
 import { CvLlmSummaryService } from '../processors/cv-llm-summary.service';
 import { ScoringService } from './scoring.service';
 import { AdaptiveThresholdService, IScreeningResult } from './adaptive-threshold.service';
-import { EmbeddingType, CvEmbeddingEntity } from '../../../../entities/recruitment/cv-embedding.entity';
+import { EmbeddingType } from '../../../../entities/recruitment/cv-embedding.entity';
 import { RetryUtil, CircuitBreakerUtil, FileValidationUtil, JobDescriptionUtil } from '../utils';
 import { CV_SCREENING_CONFIG } from '../config';
 import {
