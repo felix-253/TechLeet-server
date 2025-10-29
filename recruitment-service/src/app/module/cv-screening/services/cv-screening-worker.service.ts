@@ -560,7 +560,7 @@ export class CvScreeningWorkerService {
          const normalizedScore = scores.overallScore / 100;
 
          // Apply adaptive threshold to determine pass/fail
-         let finalStatus = ScreeningStatus.COMPLETED;
+         let finalStatus: ScreeningStatus;
          let adaptiveThresholdResult: IScreeningResult | undefined = undefined;
 
          try {
