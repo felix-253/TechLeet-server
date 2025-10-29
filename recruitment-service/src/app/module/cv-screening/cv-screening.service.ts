@@ -14,6 +14,7 @@ import { ScoringService } from './services/scoring.service';
 import { CvTextExtractionService } from './processors/cv-text-extraction.service';
 import { CvNlpProcessingService, ProcessedCvData } from './processors/cv-nlp-processing.service';
 import { CvLlmSummaryService } from './processors/cv-llm-summary.service';
+import { AdaptiveThresholdService, IScreeningResult } from './services/adaptive-threshold.service';
 import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
 import {
    ScreeningResultDto,
@@ -30,12 +31,15 @@ export class CvScreeningService {
       private readonly screeningRepository: Repository<CvScreeningResultEntity>,
       @InjectRepository(ApplicationEntity)
       private readonly applicationRepository: Repository<ApplicationEntity>,
+      @InjectRepository(JobPostingEntity)
+      private readonly jobPostingRepository: Repository<JobPostingEntity>,
       private readonly screeningWorker: CvScreeningWorkerService,
       private readonly queueService: CvQueueService,
       private readonly textExtractionService: CvTextExtractionService,
       private readonly nlpProcessingService: CvNlpProcessingService,
       private readonly llmSummaryService: CvLlmSummaryService,
       private readonly scoringService: ScoringService,
+      private readonly adaptiveThresholdService: AdaptiveThresholdService,
       private readonly dataSource: DataSource,
    ) {}
 
@@ -335,8 +339,21 @@ export class CvScreeningService {
       try {
          this.logger.log(`Testing CV screening with local file: ${filePath} using ${modelConfig} config`);
 
-         // Use mock job posting for testing
-         const mockJobPosting = this.getDefaultMockJobPosting();
+         // Get actual job posting if provided, otherwise use mock
+         let jobPosting: JobPostingEntity;
+         if (jobPostingId) {
+            const actualJobPosting = await this.jobPostingRepository.findOne({
+               where: { jobPostingId },
+            });
+            if (!actualJobPosting) {
+               throw new Error(`Job posting ${jobPostingId} not found`);
+            }
+            jobPosting = actualJobPosting;
+            this.logger.log(`Using actual job posting: ${jobPosting.title} (ID: ${jobPostingId})`);
+         } else {
+            jobPosting = this.getDefaultMockJobPosting();
+            this.logger.log(`Using mock job posting for testing`);
+         }
          
          // Step 1: Extract text
          const extractedText = await this.extractTextFromFile(filePath);
@@ -344,15 +361,53 @@ export class CvScreeningService {
          // Step 2: Process with NLP
          const processedData = await this.processTextWithNlp(extractedText);
          
-         // Step 3: Calculate scores (simplified for testing) with model-specific adjustments
-         const scores = this.calculateTestScores(processedData, mockJobPosting, modelConfig);
+         // Step 3: Calculate scores using the same logic as production pipeline
+         const scores = this.calculateTestScores(processedData, jobPosting, modelConfig);
          
          // Step 4: Generate AI summary (if configured) with specified model config
-         const summary = await this.generateTestSummary(extractedText, processedData, mockJobPosting, modelConfig);
+         const summary = await this.generateTestSummary(extractedText, processedData, jobPosting, modelConfig);
+         
+         // Override fitScore and recommendation with actual calculated scores (more accurate)
+         const actualFitScore = scores.overallScore;
+         const actualRecommendation = this.getRecommendationFromFitScore(
+            actualFitScore,
+            processedData.totalExperienceYears || 0,
+            jobPosting.minExperience || 0
+         );
+         
+         // Apply Adaptive Threshold if jobPostingId is provided (real job posting)
+         let adaptiveThresholdResult: IScreeningResult | undefined = undefined;
+         if (jobPostingId) {
+            try {
+               // Normalize score from 0-100 to 0-1 for adaptive threshold
+               const normalizedScore = actualFitScore / 100;
+               adaptiveThresholdResult = await this.adaptiveThresholdService.processNewCV(
+                  jobPostingId,
+                  normalizedScore
+               );
+               this.logger.log(
+                  `[TEST] Adaptive Threshold: Score ${actualFitScore.toFixed(2)} (normalized: ${normalizedScore.toFixed(3)}) → ${adaptiveThresholdResult.decision.toUpperCase()} | Threshold: ${adaptiveThresholdResult.newThreshold.toFixed(3)}`
+               );
+            } catch (adaptiveError) {
+               this.logger.warn(
+                  `[TEST] Adaptive Threshold failed: ${adaptiveError.message}`
+               );
+            }
+         }
+         
+         // Update summary with calculated values
+         const correctedSummary = {
+            ...summary,
+            fitScore: actualFitScore,
+            recommendation: actualRecommendation,
+         };
          
          const processingTime = Date.now() - startTime;
          
          this.logger.log(`Test CV screening completed in ${processingTime}ms using ${modelConfig}`);
+         this.logger.log(
+            `[TEST] Score Correction: AI fitScore=${summary.fitScore} → Actual=${actualFitScore.toFixed(1)}, Recommendation=${actualRecommendation}`
+         );
          
          return {
             success: true,
@@ -365,7 +420,14 @@ export class CvScreeningService {
                workExperience: processedData.workExperience?.slice(0, 2) // First 2 jobs
             },
             scores,
-            summary,
+            summary: correctedSummary,
+            adaptiveThreshold: adaptiveThresholdResult ? {
+               decision: adaptiveThresholdResult.decision,
+               threshold: adaptiveThresholdResult.newThreshold,
+               mean: adaptiveThresholdResult.newState.mean,
+               stdDev: Math.sqrt(adaptiveThresholdResult.newState.m2 / (adaptiveThresholdResult.newState.n - 1)) || 0,
+               n: adaptiveThresholdResult.newState.n,
+            } : undefined,
             testInfo: {
                filePath,
                jobPostingId: jobPostingId || 'mock',
@@ -409,32 +471,91 @@ export class CvScreeningService {
       jobPosting: JobPostingEntity,
       modelConfig: 'gemini' | 'chatgpt' | 'deepseek' = 'gemini'
    ) {
-      // Simplified scoring for testing using ScoringService
-      const skillsScore = this.scoringService.calculateSkillsMatchScore(processedData.skills?.technical || [], jobPosting.skills || '');
-      const experienceScore = this.scoringService.calculateExperienceMatchScore(processedData.totalExperienceYears, jobPosting.minExperience || 0, jobPosting.maxExperience || 10);
-      const educationScore = this.scoringService.calculateEducationMatchScore(processedData.education || [], jobPosting.educationLevel || '');
+      // Use the same scoring logic as production pipeline
+      // Combine all skill types for better matching
+      const allCvSkills = [
+         ...(processedData.skills?.technical || []),
+         ...(processedData.skills?.frameworks || []),
+         ...(processedData.skills?.languages || []),
+         ...(processedData.skills?.tools || []),
+      ];
+      const jobSkillsText = jobPosting.skills || '';
       
-      const baseOverallScore = (skillsScore * 0.4 + experienceScore * 0.3 + educationScore * 0.3) * 100;
+      this.logger.log(
+         `[TEST SCORING] CV Total Skills (${allCvSkills.length}): Technical=${processedData.skills?.technical?.length || 0}, Frameworks=${processedData.skills?.frameworks?.length || 0}, Languages=${processedData.skills?.languages?.length || 0}, Tools=${processedData.skills?.tools?.length || 0}`
+      );
+      this.logger.log(
+         `[TEST SCORING] CV Skills: [${allCvSkills.slice(0, 15).join(', ')}${allCvSkills.length > 15 ? '...' : ''}]`
+      );
+      this.logger.log(
+         `[TEST SCORING] Job Required Skills: "${jobSkillsText}"`
+      );
       
-      // Apply model-specific score adjustments to simulate different models
+      const skillsScore = this.scoringService.calculateSkillsMatchScore(
+         allCvSkills, 
+         jobSkillsText
+      );
+      
+      const experienceScore = this.scoringService.calculateExperienceMatchScore(
+         processedData.totalExperienceYears || 0, 
+         jobPosting.minExperience || 0, 
+         jobPosting.maxExperience || 10
+      );
+      
+      const cvEducation = processedData.education || [];
+      const requiredEducation = jobPosting.educationLevel || '';
+      
+      this.logger.log(
+         `[TEST SCORING] CV Education (${cvEducation.length} entries): ${cvEducation.map(e => `${e.degree || 'N/A'} ${e.field || ''} at ${e.institution || 'N/A'}`).join('; ')}`
+      );
+      this.logger.log(
+         `[TEST SCORING] Job Required Education: "${requiredEducation}"`
+      );
+      
+      const educationScore = this.scoringService.calculateEducationMatchScore(
+         cvEducation, 
+         requiredEducation
+      );
+      
+      this.logger.log(
+         `[TEST SCORING] Calculated Scores - Skills: ${(skillsScore * 100).toFixed(1)}%, Experience: ${(experienceScore * 100).toFixed(1)}%, Education: ${(educationScore * 100).toFixed(1)}%`
+      );
+      
+      // Use a mock vector similarity for testing (since we don't have embeddings in test mode)
+      // This simulates embedding similarity - you can adjust this based on your needs
+      const mockVectorSimilarity = Math.min(0.95, 
+         skillsScore * 0.7 + experienceScore * 0.2 + educationScore * 0.1
+      );
+      
+      // Use the same calculateOverallScore method with cap logic
+      const scores = this.scoringService.calculateOverallScore(
+         mockVectorSimilarity,
+         skillsScore,
+         experienceScore,
+         educationScore,
+         0 // chunk similarity
+      );
+      
+      // Apply model-specific score adjustments to simulate different models (only to overall)
       let scoreModifier = 1.0;
       if (modelConfig === 'chatgpt') {
-         // ChatGPT: slightly lower scores (90-95% of original)
          scoreModifier = 0.90 + (Math.random() * 0.05);
       } else if (modelConfig === 'deepseek') {
-         // DeepSeek: more variation (85-95% of original)
          scoreModifier = 0.85 + (Math.random() * 0.10);
       }
-      // Gemini keeps original scores (modifier = 1.0)
       
-      const overallScore = baseOverallScore * scoreModifier;
+      // Only apply modifier to overall score, not individual scores
+      scores.overallScore = Math.round(scores.overallScore * scoreModifier * 100) / 100;
       
-      return {
-         overallScore: Math.ceil(overallScore),
-         skillsScore: Math.ceil(skillsScore * 100 * scoreModifier),
-         experienceScore: Math.ceil(experienceScore * 100 * scoreModifier),
-         educationScore: Math.ceil(educationScore * 100 * scoreModifier)
-      };
+      // Log experience gap for debugging
+      const experienceGap = (jobPosting.minExperience || 0) - (processedData.totalExperienceYears || 0);
+      if (experienceGap > 0) {
+         this.logger.log(
+            `[TEST] Experience gap: CV has ${processedData.totalExperienceYears || 0} years, required ${jobPosting.minExperience || 0}+ years (gap: ${experienceGap} years) → Experience Score: ${scores.experienceScore.toFixed(1)}%`
+         );
+      }
+      
+      return scores;
    }
 
    private async generateTestSummary(
@@ -485,7 +606,11 @@ export class CvScreeningService {
                'AI summary not available - manual review recommended'
             ],
             fitScore: this.calculateBasicFitScore(processedData, jobPosting),
-            recommendation: experienceYears >= 3 ? 'good_fit' : experienceYears >= 1 ? 'moderate_fit' : 'poor_fit'
+            recommendation: this.getRecommendationFromFitScore(
+               this.calculateBasicFitScore(processedData, jobPosting),
+               processedData.totalExperienceYears || 0,
+               jobPosting.minExperience || 0
+            )
          };
       }
    }
@@ -493,17 +618,72 @@ export class CvScreeningService {
 
    /**
     * Calculate basic fit score when AI is not available
+    * Uses the same logic as production pipeline with cap logic
     */
    private calculateBasicFitScore(processedData: ProcessedCvData, jobPosting: JobPostingEntity): number {
-      const skillsScore = this.scoringService.calculateSkillsMatchScore(processedData.skills?.technical || [], jobPosting.skills || '');
+      // Combine all skill types for better matching
+      const allCvSkills = [
+         ...(processedData.skills?.technical || []),
+         ...(processedData.skills?.frameworks || []),
+         ...(processedData.skills?.languages || []),
+         ...(processedData.skills?.tools || []),
+      ];
+      
+      const skillsScore = this.scoringService.calculateSkillsMatchScore(
+         allCvSkills, 
+         jobPosting.skills || ''
+      );
       const experienceScore = this.scoringService.calculateExperienceMatchScore(
          processedData.totalExperienceYears || 0, 
          jobPosting.minExperience || 0, 
          jobPosting.maxExperience || 10
       );
-      const educationScore = this.scoringService.calculateEducationMatchScore(processedData.education || [], jobPosting.educationLevel || '');
+      const educationScore = this.scoringService.calculateEducationMatchScore(
+         processedData.education || [], 
+         jobPosting.educationLevel || ''
+      );
       
-      return Math.round((skillsScore * 0.4 + experienceScore * 0.4 + educationScore * 0.2) * 100);
+      // Use mock vector similarity (simplified calculation)
+      const mockVectorSimilarity = Math.min(0.95, 
+         skillsScore * 0.7 + experienceScore * 0.2 + educationScore * 0.1
+      );
+      
+      // Use the same calculateOverallScore method which includes cap logic
+      const scores = this.scoringService.calculateOverallScore(
+         mockVectorSimilarity,
+         skillsScore,
+         experienceScore,
+         educationScore,
+         0
+      );
+      
+      return Math.round(scores.overallScore);
+   }
+
+   /**
+    * Get recommendation based on fit score and experience match
+    */
+   private getRecommendationFromFitScore(
+      fitScore: number,
+      cvExperience: number,
+      minRequired: number
+   ): 'strong_fit' | 'good_fit' | 'moderate_fit' | 'poor_fit' {
+      // Check for severe under-qualification first
+      const experienceGap = minRequired - cvExperience;
+      if (experienceGap > 3) {
+         return 'poor_fit';
+      }
+      
+      // Base recommendation on fit score
+      if (fitScore >= 80) {
+         return 'strong_fit';
+      } else if (fitScore >= 65) {
+         return 'good_fit';
+      } else if (fitScore >= 50) {
+         return 'moderate_fit';
+      } else {
+         return 'poor_fit';
+      }
    }
 
    private getDefaultMockJobPosting(): JobPostingEntity {

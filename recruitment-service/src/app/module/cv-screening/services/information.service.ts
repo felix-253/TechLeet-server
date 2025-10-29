@@ -5,6 +5,7 @@ import { CvTextExtractionService } from '../processors/cv-text-extraction.servic
 import { CvNlpProcessingService, ProcessedCvData } from '../processors/cv-nlp-processing.service';
 import { CvLlmSummaryService } from '../processors/cv-llm-summary.service';
 import { AdaptiveThresholdService } from './adaptive-threshold.service';
+import { CvQueueService } from './cv-queue.service';
 import { CandidateEntity } from '../../../../entities/recruitment/candidate.entity';
 import { ApplicationEntity } from '../../../../entities/recruitment/application.entity';
 import { JobPostingEntity } from '../../../../entities/recruitment/job-posting.entity';
@@ -78,6 +79,7 @@ export class InformationService {
       private readonly nlpProcessingService: CvNlpProcessingService,
       private readonly llmSummaryService: CvLlmSummaryService,
       private readonly adaptiveThresholdService: AdaptiveThresholdService,
+      private readonly cvQueueService: CvQueueService,
       private readonly dataSource: DataSource,
    ) {}
 
@@ -537,6 +539,27 @@ export class InformationService {
          const savedApplication = await queryRunner.manager.save(application);
 
          await queryRunner.commitTransaction();
+
+         // Auto-trigger screening pipeline for the new application
+         try {
+            await this.cvQueueService.addCvProcessingJob(
+               {
+                  applicationId: savedApplication.applicationId,
+                  jobPostingId: savedApplication.jobPostingId,
+                  resumeUrl: '', // Will be resolved from application in worker
+                  priority: 0,
+               },
+               { priority: 0 }
+            );
+            this.logger.log(
+               `Auto-triggered screening pipeline for application ${savedApplication.applicationId}`
+            );
+         } catch (queueError) {
+            // Log but don't fail application creation if queue fails
+            this.logger.warn(
+               `Failed to auto-trigger screening for application ${savedApplication.applicationId}: ${queueError.message}`
+            );
+         }
 
          // Note: Email sending moved to FileService after successful Brevo processing
          // Direct uploads still send emails in ApplicationService

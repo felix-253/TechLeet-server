@@ -11,7 +11,7 @@ import { CvNlpProcessingService, ProcessedCvData } from '../processors/cv-nlp-pr
 import { CvEmbeddingService } from '../processors/cv-embedding.service';
 import { CvLlmSummaryService } from '../processors/cv-llm-summary.service';
 import { ScoringService } from './scoring.service';
-import { AdaptiveThresholdService } from './adaptive-threshold.service';
+import { AdaptiveThresholdService, IScreeningResult } from './adaptive-threshold.service';
 import { EmbeddingType, CvEmbeddingEntity } from '../../../../entities/recruitment/cv-embedding.entity';
 import { RetryUtil, CircuitBreakerUtil, FileValidationUtil, JobDescriptionUtil } from '../utils';
 import { CV_SCREENING_CONFIG } from '../config';
@@ -457,8 +457,16 @@ export class CvScreeningWorkerService {
       );
 
       // Calculate individual match scores using scoring service
+      // Combine technical, frameworks, languages, and tools for better matching
+      const allCvSkills = [
+         ...(processedData.skills.technical || []),
+         ...(processedData.skills.frameworks || []),
+         ...(processedData.skills.languages || []),
+         ...(processedData.skills.tools || []),
+      ];
+      
       const skillsScore = this.scoringService.calculateSkillsMatchScore(
-         processedData.skills.technical,
+         allCvSkills,
          jobPosting.skills || ''
       );
 
@@ -473,14 +481,45 @@ export class CvScreeningWorkerService {
          jobPosting.educationLevel || ''
       );
 
+      // Log details for debugging
+      this.logger.log(
+         `[SCORING] Job ${jobPostingId}: CV has ${allCvSkills.length} total skills (technical: ${processedData.skills.technical.length}, frameworks: ${processedData.skills.frameworks.length}, languages: ${processedData.skills.languages.length}, tools: ${processedData.skills.tools.length})`
+      );
+      this.logger.log(
+         `[SCORING] CV Skills: [${allCvSkills.slice(0, 10).join(', ')}${allCvSkills.length > 10 ? '...' : ''}]`
+      );
+      this.logger.log(
+         `[SCORING] Job requires: [${(jobPosting.skills || '').split(/[,;]/).map(s => s.trim()).join(', ')}] → Skills Score: ${(skillsScore * 100).toFixed(1)}%`
+      );
+      this.logger.log(
+         `[SCORING] Education: CV has ${processedData.education.length} entries, Job requires: "${jobPosting.educationLevel || 'none'}" → Education Score: ${(educationScore * 100).toFixed(1)}%`
+      );
+
+      // Log experience score for debugging
+      const experienceGap = (jobPosting.minExperience || 0) - processedData.totalExperienceYears;
+      if (experienceGap > 0) {
+         this.logger.log(
+            `Experience gap for Job ${jobPostingId}: CV has ${processedData.totalExperienceYears} years, required ${jobPosting.minExperience || 0}+ years (gap: ${experienceGap} years) → Experience Score: ${(experienceScore * 100).toFixed(1)}%`
+         );
+      }
+
       // Calculate overall score using scoring service
-      return this.scoringService.calculateOverallScore(
+      const scores = this.scoringService.calculateOverallScore(
          vectorSimilarity,
          skillsScore,
          experienceScore,
          educationScore,
          0 // chunk similarity (calculated elsewhere if needed)
       );
+
+      // Log if overall score was capped due to experience
+      if (experienceScore < 0.3 && scores.overallScore <= 50) {
+         this.logger.warn(
+            `Overall score capped at ${scores.overallScore.toFixed(1)}% due to severe experience under-qualification (experience score: ${(experienceScore * 100).toFixed(1)}%)`
+         );
+      }
+
+      return scores;
    }
 
    /**
@@ -501,14 +540,15 @@ export class CvScreeningWorkerService {
    }
 
    /**
-    * Complete screening process
+    * Complete screening process with adaptive threshold
     */
    private async completeScreening(
       screeningId: number,
+      jobPostingId: number,
       scores: any,
       summary: any,
       startTime: number
-   ): Promise<CvScreeningResultEntity> {
+   ): Promise<CvScreeningResultEntity & { adaptiveThresholdResult?: IScreeningResult }> {
       // Use transaction for completing screening with all related updates
       const queryRunner = this.dataSource.createQueryRunner();
       await queryRunner.connect();
@@ -517,8 +557,39 @@ export class CvScreeningWorkerService {
       try {
          const processingTime = Date.now() - startTime;
 
+         // Normalize overallScore from 0-100 to 0-1 for adaptive threshold
+         const normalizedScore = scores.overallScore / 100;
+
+         // Apply adaptive threshold to determine pass/fail
+         let finalStatus = ScreeningStatus.COMPLETED;
+         let adaptiveThresholdResult: IScreeningResult | undefined = undefined;
+
+         try {
+            adaptiveThresholdResult = await this.adaptiveThresholdService.processNewCV(
+               jobPostingId,
+               normalizedScore
+            );
+
+            // Set final status based on adaptive threshold decision
+            if (adaptiveThresholdResult.decision === 'pass') {
+               finalStatus = ScreeningStatus.PASSED;
+            } else {
+               finalStatus = ScreeningStatus.SCREENING_FAILED;
+            }
+
+            this.logger.log(
+               `Adaptive Threshold Result for Job ${jobPostingId}: Score ${scores.overallScore.toFixed(2)} (normalized: ${normalizedScore.toFixed(3)}) → ${adaptiveThresholdResult.decision.toUpperCase()} | Threshold: ${adaptiveThresholdResult.newThreshold.toFixed(3)}`
+            );
+         } catch (adaptiveError) {
+            // If adaptive threshold fails, fallback to COMPLETED status
+            this.logger.warn(
+               `Adaptive threshold failed for job ${jobPostingId}, using COMPLETED status: ${adaptiveError.message}`
+            );
+            finalStatus = ScreeningStatus.COMPLETED;
+         }
+
          const updateData = {
-            status: ScreeningStatus.COMPLETED,
+            status: finalStatus,
             overallScore: scores.overallScore,
             skillsScore: scores.skillsScore,
             experienceScore: scores.experienceScore,
@@ -541,7 +612,9 @@ export class CvScreeningWorkerService {
          }
 
          await queryRunner.commitTransaction();
-         return result;
+
+         // Attach adaptive threshold result to return value
+         return { ...result, adaptiveThresholdResult };
       } catch (error) {
          await queryRunner.rollbackTransaction();
          this.logger.error(`Failed to complete screening ${screeningId}: ${error.message}`, error.stack);
@@ -552,18 +625,37 @@ export class CvScreeningWorkerService {
    }
 
    /**
-    * Update application screening status
+    * Update application screening status with pass/fail decision
     */
    private async updateApplicationScreeningStatus(
       applicationId: number,
-      screeningResult: CvScreeningResultEntity
+      screeningResult: CvScreeningResultEntity & { adaptiveThresholdResult?: IScreeningResult }
    ): Promise<void> {
+      // Determine application status based on screening result
+      let applicationStatus = 'submitted';
+      let screeningStatus = 'pending';
+
+      if (screeningResult.status === ScreeningStatus.PASSED) {
+         applicationStatus = 'screening_passed';
+         screeningStatus = 'passed';
+      } else if (screeningResult.status === ScreeningStatus.SCREENING_FAILED) {
+         applicationStatus = 'screening_failed';
+         screeningStatus = 'failed';
+      } else if (screeningResult.status === ScreeningStatus.COMPLETED) {
+         screeningStatus = 'completed';
+      }
+
       await this.applicationRepository.update(applicationId, {
          isScreeningCompleted: true,
          screeningScore: screeningResult.overallScore,
-         screeningStatus: screeningResult.status,
+         screeningStatus: screeningStatus,
+         status: applicationStatus,
          screeningCompletedAt: screeningResult.completedAt,
       });
+
+      this.logger.log(
+         `Updated application ${applicationId}: status=${applicationStatus}, screeningStatus=${screeningStatus}, score=${screeningResult.overallScore}`
+      );
    }
 
    /**

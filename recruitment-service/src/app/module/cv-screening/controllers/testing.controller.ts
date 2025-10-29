@@ -15,7 +15,6 @@ import { CvScreeningService } from '../cv-screening.service';
 import { TestLocalCvDto } from '../cv-screening.dto';
 
 @ApiTags('CV Testing (Development Only)')
-@ApiBearerAuth('token')
 @Controller('cv-screening/dev')
 export class TestingController {
    constructor(
