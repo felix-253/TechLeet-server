@@ -1,14 +1,13 @@
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { CvTextExtractionService } from './cv-text-extraction.service';
-import { CvNlpProcessingService, ProcessedCvData } from './cv-nlp-processing.service';
-import { CvLlmSummaryService } from './cv-llm-summary.service';
+import { Repository, DataSource } from 'typeorm';
+import { CvTextExtractionService } from '../processors/cv-text-extraction.service';
+import { CvNlpProcessingService, ProcessedCvData } from '../processors/cv-nlp-processing.service';
+import { CvLlmSummaryService } from '../processors/cv-llm-summary.service';
 import { AdaptiveThresholdService } from './adaptive-threshold.service';
-import { CandidateEntity } from '../../../entities/recruitment/candidate.entity';
-import { ApplicationEntity } from '../../../entities/recruitment/application.entity';
-import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
-import { RecruitmentEmailService } from '../email/email.service';
+import { CandidateEntity } from '../../../../entities/recruitment/candidate.entity';
+import { ApplicationEntity } from '../../../../entities/recruitment/application.entity';
+import { JobPostingEntity } from '../../../../entities/recruitment/job-posting.entity';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -79,7 +78,7 @@ export class InformationService {
       private readonly nlpProcessingService: CvNlpProcessingService,
       private readonly llmSummaryService: CvLlmSummaryService,
       private readonly adaptiveThresholdService: AdaptiveThresholdService,
-      private readonly recruitmentEmailService: RecruitmentEmailService,
+      private readonly dataSource: DataSource,
    ) {}
 
    /**
@@ -500,13 +499,19 @@ export class InformationService {
       processedData: ProcessedCvData,
       aiAnalysis?: any,
    ): Promise<ApplicationEntity> {
+      // Use transaction for creating application with related data
+      const queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+
       try {
          // Kiểm tra xem application đã tồn tại chưa
-         const existingApplication = await this.applicationRepository.findOne({
+         const existingApplication = await queryRunner.manager.findOne(ApplicationEntity, {
             where: { candidateId, jobPostingId },
          });
 
          if (existingApplication) {
+            await queryRunner.commitTransaction();
             this.logger.log(
                `Application đã tồn tại cho candidate ${candidateId} và job ${jobPostingId}`,
             );
@@ -514,7 +519,7 @@ export class InformationService {
          }
 
          // Tạo application mới
-         const application = this.applicationRepository.create({
+         const application = queryRunner.manager.create(ApplicationEntity, {
             candidateId,
             jobPostingId,
             status: 'submitted',
@@ -548,15 +553,20 @@ export class InformationService {
             );
          }
 
-         const savedApplication = await this.applicationRepository.save(application);
+         const savedApplication = await queryRunner.manager.save(application);
+
+         await queryRunner.commitTransaction();
 
          // Note: Email sending moved to FileService after successful Brevo processing
          // Direct uploads still send emails in ApplicationService
 
          return savedApplication;
       } catch (error) {
+         await queryRunner.rollbackTransaction();
          this.logger.error(`Lỗi khi tạo application: ${error.message}`, error.stack);
          throw error;
+      } finally {
+         await queryRunner.release();
       }
    }
 

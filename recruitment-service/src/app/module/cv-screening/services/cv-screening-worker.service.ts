@@ -1,16 +1,27 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { CvScreeningResultEntity, ScreeningStatus } from '../../../entities/recruitment/cv-screening-result.entity';
-import { ApplicationEntity } from '../../../entities/recruitment/application.entity';
-import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
-import { CvTextExtractionService } from './cv-text-extraction.service';
-import { CvNlpProcessingService, ProcessedCvData } from './cv-nlp-processing.service';
-import { CvEmbeddingService } from './cv-embedding.service';
-import { CvLlmSummaryService } from './cv-llm-summary.service';
-import { CvChunkingService } from './cv-chunking.service';
+import { Repository, DataSource } from 'typeorm';
+import * as fs from 'fs';
+import * as crypto from 'crypto';
+import { CvScreeningResultEntity, ScreeningStatus } from '../../../../entities/recruitment/cv-screening-result.entity';
+import { ApplicationEntity } from '../../../../entities/recruitment/application.entity';
+import { JobPostingEntity } from '../../../../entities/recruitment/job-posting.entity';
+import { CvTextExtractionService } from '../processors/cv-text-extraction.service';
+import { CvNlpProcessingService, ProcessedCvData } from '../processors/cv-nlp-processing.service';
+import { CvEmbeddingService } from '../processors/cv-embedding.service';
+import { CvLlmSummaryService } from '../processors/cv-llm-summary.service';
+import { CvChunkingService } from '../processors/cv-chunking.service';
 import { SkillTaxonomyService } from './skill-taxonomy.service';
-import { EmbeddingType } from '../../../entities/recruitment/cv-embedding.entity';
+import { ScoringService } from './scoring.service';
+import { EmbeddingType, CvEmbeddingEntity } from '../../../../entities/recruitment/cv-embedding.entity';
+import { RetryUtil, CircuitBreakerUtil, FileValidationUtil } from '../utils';
+import { CV_SCREENING_CONFIG } from '../config';
+import {
+   CvFileNotFoundException,
+   CvFileTooLargeException,
+   CvTextExtractionException,
+   CvApplicationNotFoundException,
+} from '../exceptions/cv-screening.exceptions';
 
 export interface ScreeningPipelineResult {
    screeningId: number;
@@ -31,6 +42,7 @@ export interface ScreeningPipelineResult {
 @Injectable()
 export class CvScreeningWorkerService {
    private readonly logger = new Logger(CvScreeningWorkerService.name);
+   private readonly summaryCircuitBreaker: CircuitBreakerUtil;
 
    constructor(
       @InjectRepository(CvScreeningResultEntity)
@@ -45,7 +57,17 @@ export class CvScreeningWorkerService {
       private readonly llmSummaryService: CvLlmSummaryService,
       private readonly chunkingService: CvChunkingService,
       private readonly skillTaxonomyService: SkillTaxonomyService,
-   ) {}
+      private readonly scoringService: ScoringService,
+      private readonly dataSource: DataSource,
+   ) {
+      // Initialize circuit breaker for AI summary (expensive operation)
+      this.summaryCircuitBreaker = new CircuitBreakerUtil({
+         failureThreshold: CV_SCREENING_CONFIG.CIRCUIT_BREAKER.FAILURE_THRESHOLD,
+         successThreshold: CV_SCREENING_CONFIG.CIRCUIT_BREAKER.SUCCESS_THRESHOLD,
+         timeout: CV_SCREENING_CONFIG.TIMEOUTS.SUMMARY_GENERATION_MS,
+         resetTimeout: CV_SCREENING_CONFIG.CIRCUIT_BREAKER.RESET_TIMEOUT_MS,
+      });
+   }
 
    /**
     * Execute the complete CV screening pipeline with error recovery
@@ -55,6 +77,15 @@ export class CvScreeningWorkerService {
       resumePath?: string
    ): Promise<ScreeningPipelineResult> {
       const startTime = Date.now();
+      const metrics = {
+         textExtractionMs: 0,
+         nlpProcessingMs: 0,
+         embeddingMs: 0,
+         similarityMs: 0,
+         summaryMs: 0,
+         totalMs: 0,
+      };
+      
       let screeningResult: CvScreeningResultEntity | undefined;
       let lastError: Error | undefined;
 
@@ -63,63 +94,108 @@ export class CvScreeningWorkerService {
 
          // Get application and job posting details
          const application = await this.getApplicationWithJobPosting(applicationId);
-         if (!application || !application.jobPosting) {
-            throw new Error(`Application ${applicationId} or job posting not found`);
+         if (!application) {
+            throw new CvApplicationNotFoundException(applicationId);
+         }
+         if (!application.jobPosting) {
+            throw new CvTextExtractionException('Job posting not found for application');
          }
 
          // Create or update existing screening record
          screeningResult = await this.createOrUpdateScreeningRecord(applicationId, application.jobPostingId);
 
          // Step 1: Extract text from CV with retry
-         const extractedText = await this.executeWithRetry(
+         const textExtractionStart = Date.now();
+         const extractedText = await RetryUtil.executeWithRetry(
             () => this.extractTextFromCv(application, resumePath),
-            'Text extraction',
-            3
+            {
+               maxAttempts: CV_SCREENING_CONFIG.RETRY.MAX_ATTEMPTS,
+               baseDelayMs: CV_SCREENING_CONFIG.RETRY.BASE_DELAY_MS,
+               maxDelayMs: CV_SCREENING_CONFIG.RETRY.MAX_DELAY_MS,
+            }
          );
+         metrics.textExtractionMs = Date.now() - textExtractionStart;
+         this.logger.log(`Text extraction completed in ${metrics.textExtractionMs}ms`);
+         
          await this.updateScreeningProgress(screeningResult.screeningId, {
             extractedText,
             status: ScreeningStatus.PROCESSING,
          });
 
          // Step 2: Process text with NLP with retry
-         const processedData = await this.executeWithRetry(
-            () => this.processWithNlp(extractedText),
-            'NLP processing',
-            2
+         const nlpStart = Date.now();
+         const processedData = await RetryUtil.executeWithRetry(
+            () => this.nlpProcessingService.processCvText(extractedText),
+            {
+               maxAttempts: 2,
+               baseDelayMs: CV_SCREENING_CONFIG.RETRY.BASE_DELAY_MS,
+               maxDelayMs: CV_SCREENING_CONFIG.RETRY.MAX_DELAY_MS,
+            }
          );
+         metrics.nlpProcessingMs = Date.now() - nlpStart;
+         this.logger.log(`NLP processing completed in ${metrics.nlpProcessingMs}ms`);
+         
          await this.updateScreeningProgress(screeningResult.screeningId, {
             extractedSkills: processedData.skills.technical,
             extractedExperience: processedData.workExperience,
             extractedEducation: processedData.education,
          });
 
-         // Step 3: Generate embeddings with retry
-         const cvEmbedding = await this.executeWithRetry(
-            () => this.generateCvEmbedding(applicationId, extractedText),
-            'CV embedding generation',
-            2
-         );
-         
-         const jobEmbedding = await this.executeWithRetry(
-            () => this.ensureJobEmbedding(application.jobPostingId, application.jobPosting!),
-            'Job embedding generation',
-            2
-         );
+         // Step 3: Generate embeddings in parallel (Performance improvement!)
+         const embeddingStart = Date.now();
+         const [cvEmbedding, jobEmbedding] = await Promise.all([
+            RetryUtil.executeWithRetry(
+               () => this.generateCvEmbedding(applicationId, extractedText),
+               {
+                  maxAttempts: 2,
+                  baseDelayMs: CV_SCREENING_CONFIG.RETRY.BASE_DELAY_MS,
+                  maxDelayMs: CV_SCREENING_CONFIG.RETRY.MAX_DELAY_MS,
+               }
+            ),
+            RetryUtil.executeWithRetry(
+               () => this.ensureJobEmbedding(application.jobPostingId, application.jobPosting!),
+               {
+                  maxAttempts: 2,
+                  baseDelayMs: CV_SCREENING_CONFIG.RETRY.BASE_DELAY_MS,
+                  maxDelayMs: CV_SCREENING_CONFIG.RETRY.MAX_DELAY_MS,
+               }
+            ),
+         ]);
+         metrics.embeddingMs = Date.now() - embeddingStart;
+         this.logger.log(`Embedding generation completed in ${metrics.embeddingMs}ms`);
 
          // Step 4: Calculate similarity scores
+         const similarityStart = Date.now();
          const scores = await this.calculateSimilarityScores(
             applicationId,
             application.jobPostingId,
             processedData,
             application.jobPosting!
          );
+         metrics.similarityMs = Date.now() - similarityStart;
+         this.logger.log(`Similarity calculation completed in ${metrics.similarityMs}ms`);
 
-         // Step 5: Generate AI summary with circuit breaker
-         const summary = await this.executeWithCircuitBreaker(
-            () => this.generateAiSummary(extractedText, processedData, application.jobPosting!),
-            'AI summary generation',
-            60000 // 60 second timeout
-         );
+         // Step 5: Generate AI summary with circuit breaker (graceful degradation)
+         const summaryStart = Date.now();
+         let summary;
+         try {
+            summary = await this.summaryCircuitBreaker.execute(
+               () => this.generateAiSummary(extractedText, processedData, application.jobPosting!),
+               'AI Summary Generation'
+            );
+         } catch (error) {
+            // Graceful degradation: continue without AI summary
+            this.logger.warn(`AI summary generation failed, continuing with partial results: ${error.message}`);
+            summary = {
+               summary: 'AI summary temporarily unavailable',
+               keyHighlights: [],
+               concerns: [],
+               fitScore: null,
+               recommendation: 'Manual review recommended',
+            };
+         }
+         metrics.summaryMs = Date.now() - summaryStart;
+         this.logger.log(`AI summary generation completed in ${metrics.summaryMs}ms (including graceful degradation check)`);
 
          // Step 6: Complete screening
          const finalResult = await this.completeScreening(
@@ -132,7 +208,17 @@ export class CvScreeningWorkerService {
          // Update application with screening results
          await this.updateApplicationScreeningStatus(applicationId, finalResult);
 
-         this.logger.log(`CV screening completed for application ${applicationId} in ${Date.now() - startTime}ms`);
+         metrics.totalMs = Date.now() - startTime;
+         
+         // Log detailed performance metrics
+         this.logger.log(`CV screening completed for application ${applicationId}:`);
+         this.logger.log(`  Total time: ${metrics.totalMs}ms`);
+         this.logger.log(`  - Text extraction: ${metrics.textExtractionMs}ms`);
+         this.logger.log(`  - NLP processing: ${metrics.nlpProcessingMs}ms`);
+         this.logger.log(`  - Embedding generation: ${metrics.embeddingMs}ms`);
+         this.logger.log(`  - Similarity calculation: ${metrics.similarityMs}ms`);
+         this.logger.log(`  - AI summary: ${metrics.summaryMs}ms`);
+         this.logger.log(`  - Overhead: ${metrics.totalMs - metrics.textExtractionMs - metrics.nlpProcessingMs - metrics.embeddingMs - metrics.similarityMs - metrics.summaryMs}ms`);
 
          return {
             screeningId: finalResult.screeningId,
@@ -181,25 +267,20 @@ export class CvScreeningWorkerService {
    }
 
    /**
-    * Get application with job posting details
+    * Get application with job posting details (optimized single query)
     */
    private async getApplicationWithJobPosting(applicationId: number) {
-      const application = await this.applicationRepository.findOne({
-         where: { applicationId },
-      });
+      const application = await this.applicationRepository
+         .createQueryBuilder('app')
+         .leftJoinAndSelect('app.jobPosting', 'jobPosting')
+         .where('app.applicationId = :applicationId', { applicationId })
+         .getOne();
 
       if (!application) {
          return null;
       }
 
-      const jobPosting = await this.jobPostingRepository.findOne({
-         where: { jobPostingId: application.jobPostingId },
-      });
-
-      return {
-         ...application,
-         jobPosting,
-      };
+      return application as ApplicationEntity & { jobPosting: JobPostingEntity | null };
    }
 
    /**
@@ -222,38 +303,39 @@ export class CvScreeningWorkerService {
     * Extract text from CV with improved error handling
     */
    private async extractTextFromCv(
-      application: any,
+      application: ApplicationEntity & { jobPosting?: JobPostingEntity | null },
       resumePath?: string
    ): Promise<string> {
       const filePath = resumePath || application.resumeUrl;
 
       if (!filePath) {
-         throw new Error('No resume file path provided');
+         throw new CvTextExtractionException('No resume file path provided');
       }
 
       // Convert URL to local file path if needed
       const localFilePath = this.convertUrlToLocalPath(filePath);
 
-      // Check if file exists before attempting extraction
-      const fs = require('fs');
-      if (!fs.existsSync(localFilePath)) {
-         throw new Error(`Resume file not found at path: ${localFilePath}. Original path: ${filePath}`);
+      // Validate file using utility
+      const validation = FileValidationUtil.validateFile(localFilePath);
+      if (!validation.isValid) {
+         const errorMsg = validation.error || 'Unknown validation error';
+         if (errorMsg.includes('not found')) {
+            throw new CvFileNotFoundException(localFilePath, filePath);
+         } else if (errorMsg.includes('too large')) {
+            throw new CvFileTooLargeException(validation.fileSizeMB || 0, CV_SCREENING_CONFIG.FILE.MAX_SIZE_MB);
+         } else {
+            throw new CvTextExtractionException(errorMsg);
+         }
       }
 
-      // Check file size (optional safety check)
-      const stats = fs.statSync(localFilePath);
-      const fileSizeMB = stats.size / (1024 * 1024);
-      
-      if (fileSizeMB > 50) { // 50MB limit
-         throw new Error(`Resume file too large: ${fileSizeMB.toFixed(2)}MB. Maximum allowed: 50MB`);
-      }
-
-      this.logger.log(`Extracting text from file: ${localFilePath} (${fileSizeMB.toFixed(2)}MB)`);
+      this.logger.log(`Extracting text from file: ${localFilePath} (${(validation.fileSizeMB || 0).toFixed(2)}MB)`);
 
       const result = await this.textExtractionService.extractTextFromPdf(localFilePath);
       
-      if (!result.text || result.text.trim().length < 10) {
-         throw new Error('Extracted text is too short or empty. File may be corrupted or not contain readable text.');
+      // Validate extracted text
+      const textValidation = FileValidationUtil.validateExtractedText(result.text);
+      if (!textValidation.isValid) {
+         throw new CvTextExtractionException(textValidation.error || 'Text validation failed');
       }
 
       return result.text;
@@ -309,15 +391,14 @@ export class CvScreeningWorkerService {
       }
    }
 
-   /**
-    * Process text with NLP
-    */
-   private async processWithNlp(text: string): Promise<ProcessedCvData> {
-      return this.nlpProcessingService.processCvText(text);
-   }
 
    /**
     * Generate CV embedding
+    * 
+    * TODO: Add content-hash caching to detect duplicate CVs
+    * - Calculate SHA-256 hash of CV text content
+    * - Check if embedding exists for this hash
+    * - Reuse embedding if found
     */
    private async generateCvEmbedding(applicationId: number, text: string) {
       return this.embeddingService.generateAndStoreCvEmbedding(
@@ -328,19 +409,31 @@ export class CvScreeningWorkerService {
    }
 
    /**
-    * Ensure job posting has embedding
+    * Ensure job posting has embedding (with caching)
+    * 
+    * Caching Strategy:
+    * - Check if embedding exists in database by jobPostingId
+    * - If exists, return cached embedding (no API call)
+    * - If not, generate and store (one-time cost per job posting)
+    * 
+    * Benefits:
+    * - 100+ applications to same job = 1 embedding generation (not 100!)
+    * - Saves 99% of embedding API calls for repeat jobs
+    * - Significant cost reduction
     */
    private async ensureJobEmbedding(jobPostingId: number, jobPosting: JobPostingEntity) {
-      // Check if job embedding already exists
+      // Check cache first (database lookup)
       const existingEmbedding = await this.embeddingService.getEmbedding(jobPostingId);
 
       if (existingEmbedding) {
+         this.logger.log(`Using cached job embedding for job posting ${jobPostingId}`);
          return existingEmbedding;
       }
 
       // Create job description text for embedding
       const jobText = this.createJobDescriptionText(jobPosting);
 
+      this.logger.log(`Generating new job embedding for job posting ${jobPostingId}`);
       return this.embeddingService.generateAndStoreJobEmbedding(
          jobPostingId,
          jobText,
@@ -364,39 +457,31 @@ export class CvScreeningWorkerService {
          EmbeddingType.CV_FULL_TEXT
       );
 
-      // Calculate skills match score
-      const skillsScore = this.calculateSkillsMatchScore(
+      // Calculate individual match scores using scoring service
+      const skillsScore = this.scoringService.calculateSkillsMatchScore(
          processedData.skills.technical,
          jobPosting.skills || ''
       );
 
-      // Calculate experience match score
-      const experienceScore = this.calculateExperienceMatchScore(
+      const experienceScore = this.scoringService.calculateExperienceMatchScore(
          processedData.totalExperienceYears,
          jobPosting.minExperience || 0,
          jobPosting.maxExperience || 10
       );
 
-      // Calculate education match score
-      const educationScore = this.calculateEducationMatchScore(
+      const educationScore = this.scoringService.calculateEducationMatchScore(
          processedData.education,
          jobPosting.educationLevel || ''
       );
 
-      // Calculate overall score (weighted average)
-      const overallScore = (
-         vectorSimilarity * 0.4 +
-         skillsScore * 0.3 +
-         experienceScore * 0.2 +
-         educationScore * 0.1
-      ) * 100;
-
-      return {
-         overallScore: Math.round(overallScore * 100) / 100,
-         skillsScore: Math.round(skillsScore * 100 * 100) / 100,
-         experienceScore: Math.round(experienceScore * 100 * 100) / 100,
-         educationScore: Math.round(educationScore * 100 * 100) / 100,
-      };
+      // Calculate overall score using scoring service
+      return this.scoringService.calculateOverallScore(
+         vectorSimilarity,
+         skillsScore,
+         experienceScore,
+         educationScore,
+         0 // chunk similarity (calculated elsewhere if needed)
+      );
    }
 
    /**
@@ -425,32 +510,46 @@ export class CvScreeningWorkerService {
       summary: any,
       startTime: number
    ): Promise<CvScreeningResultEntity> {
-      const processingTime = Date.now() - startTime;
+      // Use transaction for completing screening with all related updates
+      const queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
 
-      const updateData = {
-         status: ScreeningStatus.COMPLETED,
-         overallScore: scores.overallScore,
-         skillsScore: scores.skillsScore,
-         experienceScore: scores.experienceScore,
-         educationScore: scores.educationScore,
-         aiSummary: summary.summary,
-         keyHighlights: summary.keyHighlights,
-         concerns: summary.concerns,
-         processingTimeMs: processingTime,
-         completedAt: new Date(),
-      };
+      try {
+         const processingTime = Date.now() - startTime;
 
-      await this.updateScreeningProgress(screeningId, updateData);
+         const updateData = {
+            status: ScreeningStatus.COMPLETED,
+            overallScore: scores.overallScore,
+            skillsScore: scores.skillsScore,
+            experienceScore: scores.experienceScore,
+            educationScore: scores.educationScore,
+            aiSummary: summary.summary,
+            keyHighlights: summary.keyHighlights,
+            concerns: summary.concerns,
+            processingTimeMs: processingTime,
+            completedAt: new Date(),
+         };
 
-      const result = await this.screeningRepository.findOne({
-         where: { screeningId },
-      });
+         await queryRunner.manager.update(CvScreeningResultEntity, screeningId, updateData);
 
-      if (!result) {
-         throw new Error(`Screening result ${screeningId} not found after completion`);
+         const result = await queryRunner.manager.findOne(CvScreeningResultEntity, {
+            where: { screeningId },
+         });
+
+         if (!result) {
+            throw new Error(`Screening result ${screeningId} not found after completion`);
+         }
+
+         await queryRunner.commitTransaction();
+         return result;
+      } catch (error) {
+         await queryRunner.rollbackTransaction();
+         this.logger.error(`Failed to complete screening ${screeningId}: ${error.message}`, error.stack);
+         throw error;
+      } finally {
+         await queryRunner.release();
       }
-
-      return result;
    }
 
    /**
@@ -494,74 +593,6 @@ export class CvScreeningWorkerService {
       return parts.filter(part => part.split(': ')[1]).join('\n');
    }
 
-   /**
-    * Calculate skills match score
-    */
-   private calculateSkillsMatchScore(cvSkills: string[], jobSkills: string): number {
-      if (!jobSkills || cvSkills.length === 0) {
-         return 0;
-      }
-
-      const jobSkillsArray = jobSkills.toLowerCase().split(/[,\s]+/).filter(s => s.length > 0);
-      const cvSkillsLower = cvSkills.map(s => s.toLowerCase());
-
-      const matchingSkills = jobSkillsArray.filter(skill =>
-         cvSkillsLower.some(cvSkill => cvSkill.includes(skill) || skill.includes(cvSkill))
-      );
-
-      return jobSkillsArray.length > 0 ? matchingSkills.length / jobSkillsArray.length : 0;
-   }
-
-   /**
-    * Calculate experience match score
-    */
-   private calculateExperienceMatchScore(
-      cvExperience: number,
-      minRequired: number,
-      maxRequired: number
-   ): number {
-      if (cvExperience >= minRequired && cvExperience <= maxRequired) {
-         return 1.0; // Perfect match
-      } else if (cvExperience >= minRequired) {
-         // Over-qualified but still good
-         const overQualification = cvExperience - maxRequired;
-         return Math.max(0.7, 1.0 - (overQualification * 0.1));
-      } else {
-         // Under-qualified
-         const experienceGap = minRequired - cvExperience;
-         return Math.max(0, 1.0 - (experienceGap * 0.2));
-      }
-   }
-
-   /**
-    * Calculate education match score
-    */
-   private calculateEducationMatchScore(
-      cvEducation: any[],
-      requiredEducation: string
-   ): number {
-      if (!requiredEducation || cvEducation.length === 0) {
-         return 0.5; // Neutral score when no education info
-      }
-
-      const requiredLower = requiredEducation.toLowerCase();
-
-      // Simple matching logic - can be enhanced
-      for (const education of cvEducation) {
-         const degree = education.degree?.toLowerCase() || '';
-         if (degree.includes('bachelor') && requiredLower.includes('bachelor')) {
-            return 1.0;
-         }
-         if (degree.includes('master') && requiredLower.includes('master')) {
-            return 1.0;
-         }
-         if (degree.includes('phd') && requiredLower.includes('phd')) {
-            return 1.0;
-         }
-      }
-
-      return 0.3; // Some education but not exact match
-   }
 
    /**
     * Create or update existing screening record
@@ -585,59 +616,4 @@ export class CvScreeningWorkerService {
       }
    }
 
-   /**
-    * Execute function with retry logic
-    */
-   private async executeWithRetry<T>(
-      fn: () => Promise<T>,
-      operation: string,
-      maxRetries: number = 3,
-      delay: number = 1000
-   ): Promise<T> {
-      let lastError: Error = new Error(`${operation} failed for unknown reason`);
-
-      for (let attempt = 1; attempt <= maxRetries; attempt++) {
-         try {
-            this.logger.log(`Executing ${operation} (attempt ${attempt}/${maxRetries})`);
-            return await fn();
-         } catch (error) {
-            lastError = error instanceof Error ? error : new Error(String(error));
-            this.logger.warn(`${operation} failed (attempt ${attempt}/${maxRetries}): ${error.message}`);
-            
-            if (attempt === maxRetries) {
-               break;
-            }
-
-            // Exponential backoff
-            const backoffDelay = delay * Math.pow(2, attempt - 1);
-            this.logger.log(`Retrying ${operation} in ${backoffDelay}ms...`);
-            await this.sleep(backoffDelay);
-         }
-      }
-
-      throw new Error(`${operation} failed after ${maxRetries} attempts: ${lastError.message}`);
-   }
-
-   /**
-    * Sleep utility function
-    */
-   private sleep(ms: number): Promise<void> {
-      return new Promise(resolve => setTimeout(resolve, ms));
-   }
-
-   /**
-    * Circuit breaker for external API calls
-    */
-   private async executeWithCircuitBreaker<T>(
-      fn: () => Promise<T>,
-      operation: string,
-      timeout: number = 30000
-   ): Promise<T> {
-      return Promise.race([
-         fn(),
-         new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error(`${operation} timed out after ${timeout}ms`)), timeout)
-         )
-      ]);
-   }
 }

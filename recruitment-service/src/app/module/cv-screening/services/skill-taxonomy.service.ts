@@ -2,9 +2,9 @@ import { Injectable, Logger, OnModuleInit, Inject, forwardRef } from '@nestjs/co
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as pgvector from 'pgvector';
-import { SkillEntity, SkillCategory } from '../../../entities/recruitment/skill.entity';
-import { SkillAliasEntity } from '../../../entities/recruitment/skill-alias.entity';
-import { CvEmbeddingService } from './cv-embedding.service';
+import { SkillEntity, SkillCategory } from '../../../../entities/recruitment/skill.entity';
+import { SkillAliasEntity } from '../../../../entities/recruitment/skill-alias.entity';
+import { CvEmbeddingService } from '../processors/cv-embedding.service';
 
 export interface SkillMatch {
    canonicalName: string;

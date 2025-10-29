@@ -2,8 +2,9 @@ import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as pgvector from 'pgvector';
-import { CvEmbeddingChunkEntity } from '../../../entities/recruitment/cv-embedding-chunk.entity';
+import { CvEmbeddingChunkEntity } from '../../../../entities/recruitment/cv-embedding-chunk.entity';
 import { CvEmbeddingService } from './cv-embedding.service';
+
 
 export interface ChunkConfig {
    maxChunkSize: number;

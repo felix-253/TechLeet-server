@@ -1,13 +1,19 @@
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, FindManyOptions } from 'typeorm';
+import { Repository, FindManyOptions, DataSource } from 'typeorm';
 import { CvScreeningResultEntity, ScreeningStatus } from '../../../entities/recruitment/cv-screening-result.entity';
 import { ApplicationEntity } from '../../../entities/recruitment/application.entity';
-import { CvScreeningWorkerService } from './cv-screening-worker.service';
-import { CvQueueService } from './cv-queue.service';
-import { CvTextExtractionService } from './cv-text-extraction.service';
-import { CvNlpProcessingService } from './cv-nlp-processing.service';
-import { CvLlmSummaryService } from './cv-llm-summary.service';
+import {
+   CvApplicationNotFoundException,
+   CvScreeningNotFoundException,
+} from './exceptions/cv-screening.exceptions';
+import { CvScreeningWorkerService } from './services/cv-screening-worker.service';
+import { CvQueueService } from './services/cv-queue.service';
+import { ScoringService } from './services/scoring.service';
+import { CvTextExtractionService } from './processors/cv-text-extraction.service';
+import { CvNlpProcessingService, ProcessedCvData } from './processors/cv-nlp-processing.service';
+import { CvLlmSummaryService } from './processors/cv-llm-summary.service';
+import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
 import {
    ScreeningResultDto,
    GetScreeningResultsQueryDto,
@@ -28,6 +34,8 @@ export class CvScreeningService {
       private readonly textExtractionService: CvTextExtractionService,
       private readonly nlpProcessingService: CvNlpProcessingService,
       private readonly llmSummaryService: CvLlmSummaryService,
+      private readonly scoringService: ScoringService,
+      private readonly dataSource: DataSource,
    ) {}
 
    /**
@@ -56,7 +64,7 @@ export class CvScreeningService {
          });
 
          if (!application) {
-            throw new BadRequestException(`Application ${applicationId} not found`);
+            throw new CvApplicationNotFoundException(applicationId);
          }
 
          if (!application.resumeUrl && !resumePath) {
@@ -153,40 +161,31 @@ export class CvScreeningService {
          sortOrder = 'DESC',
       } = query;
 
-      const findOptions: FindManyOptions<CvScreeningResultEntity> = {
-         skip: page * limit,
-         take: limit,
-         order: { [sortBy]: sortOrder },
-      };
-
-      // Build where conditions
-      const whereConditions: any = {};
+      // Build where conditions using TypeORM query builder for complex conditions
+      const queryBuilder = this.screeningRepository.createQueryBuilder('screening');
 
       if (status) {
-         whereConditions.status = status;
+         queryBuilder.andWhere('screening.status = :status', { status });
       }
 
       if (jobPostingId) {
-         whereConditions.jobPostingId = jobPostingId;
+         queryBuilder.andWhere('screening.jobPostingId = :jobPostingId', { jobPostingId });
       }
 
-      if (minScore !== undefined) {
-         whereConditions.overallScore = { $gte: minScore };
+      if (minScore !== undefined && maxScore !== undefined) {
+         queryBuilder.andWhere('screening.overallScore BETWEEN :minScore AND :maxScore', { minScore, maxScore });
+      } else if (minScore !== undefined) {
+         queryBuilder.andWhere('screening.overallScore >= :minScore', { minScore });
+      } else if (maxScore !== undefined) {
+         queryBuilder.andWhere('screening.overallScore <= :maxScore', { maxScore });
       }
 
-      if (maxScore !== undefined) {
-         if (whereConditions.overallScore) {
-            whereConditions.overallScore.$lte = maxScore;
-         } else {
-            whereConditions.overallScore = { $lte: maxScore };
-         }
-      }
+      queryBuilder
+         .skip(page * limit)
+         .take(limit)
+         .orderBy(`screening.${sortBy}`, sortOrder as 'ASC' | 'DESC');
 
-      if (Object.keys(whereConditions).length > 0) {
-         findOptions.where = whereConditions;
-      }
-
-      const [results, total] = await this.screeningRepository.findAndCount(findOptions);
+      const [results, total] = await queryBuilder.getManyAndCount();
 
       return {
          data: results.map(result => this.mapToDto(result)),
@@ -272,7 +271,7 @@ export class CvScreeningService {
       });
 
       if (!screening) {
-         throw new NotFoundException(`Screening ${screeningId} not found`);
+         throw new CvScreeningNotFoundException(screeningId);
       }
 
       if (!force && screening.status !== ScreeningStatus.FAILED) {
@@ -298,7 +297,7 @@ export class CvScreeningService {
       });
 
       if (!screening) {
-         throw new NotFoundException(`Screening ${screeningId} not found`);
+         throw new CvScreeningNotFoundException(screeningId);
       }
 
       if (screening.status === ScreeningStatus.COMPLETED) {
@@ -335,8 +334,8 @@ export class CvScreeningService {
       try {
          this.logger.log(`Testing CV screening with local file: ${filePath} using ${modelConfig} config`);
 
-         // Use the screening worker directly for testing
-         const mockJobPosting = jobPostingId ? await this.getMockJobPosting(jobPostingId) : this.getDefaultMockJobPosting();
+         // Use mock job posting for testing
+         const mockJobPosting = this.getDefaultMockJobPosting();
          
          // Step 1: Extract text
          const extractedText = await this.extractTextFromFile(filePath);
@@ -405,14 +404,14 @@ export class CvScreeningService {
    }
 
    private calculateTestScores(
-      processedData: any, 
-      jobPosting: any,
+      processedData: ProcessedCvData, 
+      jobPosting: JobPostingEntity,
       modelConfig: 'gemini' | 'chatgpt' | 'deepseek' = 'gemini'
    ) {
-      // Simplified scoring for testing
-      const skillsScore = this.calculateSkillsMatch(processedData.skills?.technical || [], jobPosting.skills);
-      const experienceScore = this.calculateExperienceMatch(processedData.totalExperienceYears, jobPosting.minExperience, jobPosting.maxExperience);
-      const educationScore = this.calculateEducationMatch(processedData.education || [], jobPosting.educationLevel);
+      // Simplified scoring for testing using ScoringService
+      const skillsScore = this.scoringService.calculateSkillsMatchScore(processedData.skills?.technical || [], jobPosting.skills || '');
+      const experienceScore = this.scoringService.calculateExperienceMatchScore(processedData.totalExperienceYears, jobPosting.minExperience || 0, jobPosting.maxExperience || 10);
+      const educationScore = this.scoringService.calculateEducationMatchScore(processedData.education || [], jobPosting.educationLevel || '');
       
       const baseOverallScore = (skillsScore * 0.4 + experienceScore * 0.3 + educationScore * 0.3) * 100;
       
@@ -493,7 +492,7 @@ export class CvScreeningService {
    /**
     * Create job description text for AI processing
     */
-   private createJobDescriptionText(jobPosting: any): string {
+   private createJobDescriptionText(jobPosting: JobPostingEntity): string {
       const parts = [
          `Job Title: ${jobPosting.title || 'Software Engineer'}`,
          `Description: ${jobPosting.description || 'Software development position'}`,
@@ -509,29 +508,19 @@ export class CvScreeningService {
    /**
     * Calculate basic fit score when AI is not available
     */
-   private calculateBasicFitScore(processedData: any, jobPosting: any): number {
-      const skillsScore = this.calculateSkillsMatch(processedData.skills?.technical || [], jobPosting.skills || '');
-      const experienceScore = this.calculateExperienceMatch(
+   private calculateBasicFitScore(processedData: ProcessedCvData, jobPosting: JobPostingEntity): number {
+      const skillsScore = this.scoringService.calculateSkillsMatchScore(processedData.skills?.technical || [], jobPosting.skills || '');
+      const experienceScore = this.scoringService.calculateExperienceMatchScore(
          processedData.totalExperienceYears || 0, 
          jobPosting.minExperience || 0, 
          jobPosting.maxExperience || 10
       );
-      const educationScore = this.calculateEducationMatch(processedData.education || [], jobPosting.educationLevel || '');
+      const educationScore = this.scoringService.calculateEducationMatchScore(processedData.education || [], jobPosting.educationLevel || '');
       
       return Math.round((skillsScore * 0.4 + experienceScore * 0.4 + educationScore * 0.2) * 100);
    }
 
-   private async getMockJobPosting(jobPostingId: number) {
-      // Try to get real job posting, fallback to mock
-      try {
-         const jobPosting = await this.getJobPostingById(jobPostingId);
-         return jobPosting || this.getDefaultMockJobPosting();
-      } catch {
-         return this.getDefaultMockJobPosting();
-      }
-   }
-
-   private getDefaultMockJobPosting() {
+   private getDefaultMockJobPosting(): JobPostingEntity {
       return {
          jobPostingId: 999,
          title: 'Software Engineer',
@@ -539,55 +528,10 @@ export class CvScreeningService {
          minExperience: 2,
          maxExperience: 5,
          educationLevel: 'Bachelor degree',
-         description: 'Test job posting for CV screening'
-      };
+         description: 'Test job posting for CV screening',
+      } as JobPostingEntity;
    }
 
-   private async getJobPostingById(jobPostingId: number) {
-      // This would normally fetch from job posting repository
-      // For now, return null to use mock
-      return null;
-   }
-
-   private calculateSkillsMatch(cvSkills: string[], jobSkills: string): number {
-      if (!jobSkills || cvSkills.length === 0) return 0;
-      
-      const jobSkillsArray = jobSkills.toLowerCase().split(/[,\s]+/).filter(s => s.length > 0);
-      const cvSkillsLower = cvSkills.map(s => s.toLowerCase());
-      
-      const matchingSkills = jobSkillsArray.filter(skill =>
-         cvSkillsLower.some(cvSkill => cvSkill.includes(skill) || skill.includes(cvSkill))
-      );
-      
-      return jobSkillsArray.length > 0 ? matchingSkills.length / jobSkillsArray.length : 0;
-   }
-
-   private calculateExperienceMatch(cvExperience: number, minRequired: number, maxRequired: number): number {
-      if (cvExperience >= minRequired && cvExperience <= maxRequired) {
-         return 1.0;
-      } else if (cvExperience >= minRequired) {
-         const overQualification = cvExperience - maxRequired;
-         return Math.max(0.7, 1.0 - (overQualification * 0.1));
-      } else {
-         const experienceGap = minRequired - cvExperience;
-         return Math.max(0, 1.0 - (experienceGap * 0.2));
-      }
-   }
-
-   private calculateEducationMatch(cvEducation: any[], requiredEducation: string): number {
-      if (!requiredEducation || cvEducation.length === 0) return 0.5;
-      
-      const requiredLower = requiredEducation.toLowerCase();
-      
-      for (const education of cvEducation) {
-         const degree = education.degree?.toLowerCase() || '';
-         if (degree.includes('bachelor') && requiredLower.includes('bachelor')) return 1.0;
-         if (degree.includes('master') && requiredLower.includes('master')) return 1.0;
-         if (degree.includes('phd') && requiredLower.includes('phd')) return 1.0;
-      }
-      
-      return 0.3;
-   }
 
    /**
     * Reprocess all applications for a job posting
