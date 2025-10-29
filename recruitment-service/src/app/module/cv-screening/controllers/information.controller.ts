@@ -5,7 +5,6 @@ import {
    Query,
    Body,
    HttpStatus,
-   ParseIntPipe,
    BadRequestException,
 } from '@nestjs/common';
 import {
