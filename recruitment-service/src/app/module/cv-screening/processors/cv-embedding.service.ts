@@ -442,15 +442,6 @@ export class CvEmbeddingService {
       });
    }
 
-   /**
-    * Find embedding by content hash
-    * TODO: Optimize with database index on contentHash column
-    */
-   async findEmbeddingByContent(contentHash: string): Promise<CvEmbeddingEntity | null> {
-      // For now, return null to use new embedding
-      // Can be optimized later with contentHash column
-      return null;
-   }
 
    /**
     * Delete embeddings for an application

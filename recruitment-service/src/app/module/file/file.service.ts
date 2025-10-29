@@ -9,7 +9,7 @@ import { FileEntity, FileStatus, FileType } from '../../../entities/recruitment/
 import { InboundAttachment } from './brevo-webhook.dto';
 import * as fs from 'fs-extra';
 import axios from 'axios';
-import { InformationService } from '../cv-screening/information.service';
+import { InformationService } from '../cv-screening/services/information.service';
 import { ApplicationService } from '../application/application.service';
 import { ApplicationEntity } from '../../../entities/recruitment/application.entity';
 import { RecruitmentEmailService } from '../email/email.service';

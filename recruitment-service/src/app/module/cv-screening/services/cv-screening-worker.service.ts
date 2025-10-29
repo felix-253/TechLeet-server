@@ -10,11 +10,10 @@ import { CvTextExtractionService } from '../processors/cv-text-extraction.servic
 import { CvNlpProcessingService, ProcessedCvData } from '../processors/cv-nlp-processing.service';
 import { CvEmbeddingService } from '../processors/cv-embedding.service';
 import { CvLlmSummaryService } from '../processors/cv-llm-summary.service';
-import { CvChunkingService } from '../processors/cv-chunking.service';
-import { SkillTaxonomyService } from './skill-taxonomy.service';
 import { ScoringService } from './scoring.service';
+import { AdaptiveThresholdService } from './adaptive-threshold.service';
 import { EmbeddingType, CvEmbeddingEntity } from '../../../../entities/recruitment/cv-embedding.entity';
-import { RetryUtil, CircuitBreakerUtil, FileValidationUtil } from '../utils';
+import { RetryUtil, CircuitBreakerUtil, FileValidationUtil, JobDescriptionUtil } from '../utils';
 import { CV_SCREENING_CONFIG } from '../config';
 import {
    CvFileNotFoundException,
@@ -55,9 +54,8 @@ export class CvScreeningWorkerService {
       private readonly nlpProcessingService: CvNlpProcessingService,
       private readonly embeddingService: CvEmbeddingService,
       private readonly llmSummaryService: CvLlmSummaryService,
-      private readonly chunkingService: CvChunkingService,
-      private readonly skillTaxonomyService: SkillTaxonomyService,
       private readonly scoringService: ScoringService,
+      private readonly adaptiveThresholdService: AdaptiveThresholdService,
       private readonly dataSource: DataSource,
    ) {
       // Initialize circuit breaker for AI summary (expensive operation)
@@ -197,9 +195,10 @@ export class CvScreeningWorkerService {
          metrics.summaryMs = Date.now() - summaryStart;
          this.logger.log(`AI summary generation completed in ${metrics.summaryMs}ms (including graceful degradation check)`);
 
-         // Step 6: Complete screening
+         // Step 6: Complete screening with adaptive threshold
          const finalResult = await this.completeScreening(
             screeningResult.screeningId,
+            application.jobPostingId,
             scores,
             summary,
             startTime
@@ -431,7 +430,7 @@ export class CvScreeningWorkerService {
       }
 
       // Create job description text for embedding
-      const jobText = this.createJobDescriptionText(jobPosting);
+      const jobText = JobDescriptionUtil.createJobDescriptionText(jobPosting);
 
       this.logger.log(`Generating new job embedding for job posting ${jobPostingId}`);
       return this.embeddingService.generateAndStoreJobEmbedding(
@@ -492,7 +491,7 @@ export class CvScreeningWorkerService {
       processedData: ProcessedCvData,
       jobPosting: JobPostingEntity
    ) {
-      const jobDescription = this.createJobDescriptionText(jobPosting);
+      const jobDescription = JobDescriptionUtil.createJobDescriptionText(jobPosting);
 
       return this.llmSummaryService.generateCvSummary(
          extractedText,
@@ -577,21 +576,6 @@ export class CvScreeningWorkerService {
       await this.screeningRepository.update(screeningId, updateData);
    }
 
-   /**
-    * Create job description text for embedding
-    */
-   private createJobDescriptionText(jobPosting: JobPostingEntity): string {
-      const parts = [
-         `Job Title: ${jobPosting.title}`,
-         `Description: ${jobPosting.description}`,
-         `Requirements: ${jobPosting.requirements}`,
-         `Skills: ${jobPosting.skills}`,
-         `Experience Level: ${jobPosting.experienceLevel}`,
-         `Education: ${jobPosting.educationLevel}`,
-      ];
-
-      return parts.filter(part => part.split(': ')[1]).join('\n');
-   }
 
 
    /**

@@ -36,11 +36,11 @@ export class CircuitBreakerUtil {
       if (this.state.isOpen) {
          const timeSinceLastFailure = Date.now() - this.state.lastFailureTime;
          if (timeSinceLastFailure < this.config.resetTimeout) {
-            this.logger.warn(`${operationName}: Circuit is OPEN. Request rejected.`);
+            CircuitBreakerUtil.logger.warn(`${operationName}: Circuit is OPEN. Request rejected.`);
             throw new Error(`Circuit breaker is open. Too many failures.`);
          } else {
             // Circuit can transition to half-open
-            this.logger.log(`${operationName}: Circuit breaker resetting to HALF-OPEN`);
+            CircuitBreakerUtil.logger.log(`${operationName}: Circuit breaker resetting to HALF-OPEN`);
             this.state.isOpen = false;
             this.state.successCount = 0;
          }
@@ -58,7 +58,7 @@ export class CircuitBreakerUtil {
          if (this.state.isOpen) {
             this.state.successCount++;
             if (this.state.successCount >= this.config.successThreshold) {
-               this.logger.log(`${operationName}: Circuit breaker closed after ${this.config.successThreshold} successful attempts`);
+               CircuitBreakerUtil.logger.log(`${operationName}: Circuit breaker closed after ${this.config.successThreshold} successful attempts`);
                this.state.isOpen = false;
                this.state.failureCount = 0;
             }
@@ -70,12 +70,12 @@ export class CircuitBreakerUtil {
          this.state.failureCount++;
          this.state.lastFailureTime = Date.now();
 
-         this.logger.error(`${operationName}: Operation failed (failure count: ${this.state.failureCount})`);
+         CircuitBreakerUtil.logger.error(`${operationName}: Operation failed (failure count: ${this.state.failureCount})`);
 
          // Open circuit if threshold reached
          if (this.state.failureCount >= this.config.failureThreshold) {
             this.state.isOpen = true;
-            this.logger.error(`${operationName}: Circuit breaker opened after ${this.state.failureCount} failures`);
+            CircuitBreakerUtil.logger.error(`${operationName}: Circuit breaker opened after ${this.state.failureCount} failures`);
          }
 
          throw error;
@@ -120,7 +120,7 @@ export class CircuitBreakerUtil {
       this.state.failureCount = 0;
       this.state.successCount = 0;
       this.state.lastFailureTime = 0;
-      this.logger.log('Circuit breaker manually reset');
+      CircuitBreakerUtil.logger.log('Circuit breaker manually reset');
    }
 }
 

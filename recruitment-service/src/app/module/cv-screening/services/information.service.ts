@@ -524,33 +524,14 @@ export class InformationService {
             jobPostingId,
             status: 'submitted',
             appliedDate: new Date(),
-            isScreeningCompleted: true,
-            screeningStatus: 'completed',
-            screeningCompletedAt: new Date(),
+            isScreeningCompleted: false,
+            screeningStatus: 'pending',
          });
 
-         // Cập nhật screening score và áp dụng Adaptive Threshold
+         // Lưu initial screening score từ AI analysis nếu có
          if (aiAnalysis) {
             application.screeningScore = aiAnalysis.fitScore;
-
-            // Áp dụng Adaptive Threshold để xác định pass/fail
-            const screeningResult = await this.adaptiveThresholdService.processNewCV(
-               jobPostingId,
-               aiAnalysis.fitScore,
-            );
-
-            // Cập nhật trạng thái application dựa trên kết quả sàng lọc
-            if (screeningResult.decision === 'pass') {
-               application.status = 'screening_passed';
-               application.screeningStatus = 'passed';
-            } else {
-               application.status = 'screening_failed';
-               application.screeningStatus = 'failed';
-            }
-
-            this.logger.log(
-               `Adaptive Threshold Result for Job ${jobPostingId}: Score ${aiAnalysis.fitScore.toFixed(3)} → ${screeningResult.decision.toUpperCase()} | Threshold: ${screeningResult.newThreshold.toFixed(3)} | Mean: ${screeningResult.newState.mean.toFixed(3)} | Std: ${Math.sqrt(screeningResult.newState.m2 / (screeningResult.newState.n - 1)).toFixed(3)}`,
-            );
+            this.logger.log(`Initial AI fit score for application: ${aiAnalysis.fitScore.toFixed(3)}`);
          }
 
          const savedApplication = await queryRunner.manager.save(application);
@@ -605,22 +586,9 @@ export class InformationService {
                   .getRawOne(),
             ]);
 
-         // Lấy top skills (simplified - trong thực tế cần query phức tạp hơn)
-         const topSkills = [
-            { skill: 'JavaScript', count: 45 },
-            { skill: 'Python', count: 38 },
-            { skill: 'React', count: 32 },
-            { skill: 'Node.js', count: 28 },
-            { skill: 'Java', count: 25 },
-         ];
-
-         // Phân bố học vấn
-         const educationDistribution = [
-            { level: 'Bachelor', count: 60 },
-            { level: 'Master', count: 25 },
-            { level: 'PhD', count: 5 },
-            { level: 'Other', count: 10 },
-         ];
+         // TODO: Implement real aggregation queries for top skills and education distribution
+         const topSkills = [];
+         const educationDistribution = [];
 
          return {
             totalCandidates,

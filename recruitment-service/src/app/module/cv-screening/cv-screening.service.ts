@@ -9,6 +9,7 @@ import {
 } from './exceptions/cv-screening.exceptions';
 import { CvScreeningWorkerService } from './services/cv-screening-worker.service';
 import { CvQueueService } from './services/cv-queue.service';
+import { JobDescriptionUtil } from './utils';
 import { ScoringService } from './services/scoring.service';
 import { CvTextExtractionService } from './processors/cv-text-extraction.service';
 import { CvNlpProcessingService, ProcessedCvData } from './processors/cv-nlp-processing.service';
@@ -446,7 +447,7 @@ export class CvScreeningService {
          // Use the actual AI service for better summary generation
          this.logger.log(`Generating AI summary for test CV using ${modelConfig} config`);
          
-         const jobDescription = this.createJobDescriptionText(jobPosting);
+         const jobDescription = JobDescriptionUtil.createJobDescriptionText(jobPosting);
          const aiSummary = await this.llmSummaryService.generateCvSummary(
             text,
             processedData,
@@ -489,21 +490,6 @@ export class CvScreeningService {
       }
    }
 
-   /**
-    * Create job description text for AI processing
-    */
-   private createJobDescriptionText(jobPosting: JobPostingEntity): string {
-      const parts = [
-         `Job Title: ${jobPosting.title || 'Software Engineer'}`,
-         `Description: ${jobPosting.description || 'Software development position'}`,
-         `Requirements: ${jobPosting.requirements || 'Software development skills required'}`,
-         `Skills: ${jobPosting.skills || 'Programming skills'}`,
-         `Experience Level: ${jobPosting.experienceLevel || `${jobPosting.minExperience || 2}-${jobPosting.maxExperience || 5} years`}`,
-         `Education: ${jobPosting.educationLevel || 'Bachelor degree preferred'}`,
-      ];
-
-      return parts.filter(part => part.split(': ')[1] && part.split(': ')[1] !== 'undefined').join('\n');
-   }
 
    /**
     * Calculate basic fit score when AI is not available
