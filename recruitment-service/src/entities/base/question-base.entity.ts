@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, UpdateDateColumn, DeleteDateColumn } from 'typeorm';
+import { CreateDateColumn, UpdateDateColumn } from 'typeorm';
 
 export abstract class BaseQuestionEntity {
    @CreateDateColumn({
@@ -17,12 +17,4 @@ export abstract class BaseQuestionEntity {
       comment: 'Record last update timestamp',
    })
    updatedAt: Date;
-
-   @DeleteDateColumn({
-      type: 'timestamp',
-      name: 'deleted_at',
-      nullable: true,
-      comment: 'Soft delete timestamp',
-   })
-   deletedAt?: Date;
 }

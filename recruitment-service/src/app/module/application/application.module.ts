@@ -8,6 +8,7 @@ import { CandidateEntity } from '../../../entities/recruitment/candidate.entity'
 import { InterviewEntity } from '../../../entities/recruitment/interview.entity';
 import { CvScreeningModule } from '../cv-screening/cv-screening.module';
 import { RecruitmentEmailModule } from '../email/email.module';
+import { QuestionModule } from '../question/question.module';
 
 @Module({
    imports: [
@@ -19,6 +20,7 @@ import { RecruitmentEmailModule } from '../email/email.module';
       ]),
       CvScreeningModule,
       RecruitmentEmailModule,
+      QuestionModule,
    ],
    controllers: [ApplicationController],
    providers: [ApplicationService],
