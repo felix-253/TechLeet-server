@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, Like, Repository } from 'typeorm';
 import { ExamQuestionEntity } from '../../../entities/question/exam_question.entity';
@@ -13,9 +13,14 @@ import {
    UpdateQuestionSetDto,
    FilterQuestionSetDto,
 } from './dto/question-set.dto';
+import { ConfigService } from '@nestjs/config';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 @Injectable()
 export class QuestionService {
+   private readonly logger = new Logger(QuestionService.name);
+   private readonly genAI: GoogleGenerativeAI | null = null;
+
    constructor(
       @InjectRepository(QuestionEntity)
       private readonly questionRepository: Repository<QuestionEntity>,
@@ -27,7 +32,15 @@ export class QuestionService {
       private readonly questionSetItemRepository: Repository<QuestionSetItemEntity>,
       @InjectRepository(ExamQuestionEntity)
       private readonly examQuestionRepository: Repository<ExamQuestionEntity>,
-   ) {}
+      private readonly configService: ConfigService,
+   ) {
+      const apiKey = this.configService.get<string>('GEMINI_API_KEY');
+      if (apiKey) {
+         this.genAI = new GoogleGenerativeAI(apiKey);
+      } else {
+         this.logger.warn('Gemini API key not configured. AI grading will not work.');
+      }
+   }
 
    async findQuestions(filter: FilterQuestionDto) {
       const where: any = {};
@@ -207,6 +220,7 @@ export class QuestionService {
 
       let totalScore = 0;
 
+      // Grade all answers using AI
       for (const [examQuestionId, data] of Object.entries(dto.answers)) {
          const examQuestion = examQuestions.find(
             (eq) => eq.examinationQuestionId === parseInt(examQuestionId),
@@ -215,9 +229,25 @@ export class QuestionService {
 
          const answerData = data as { answerText: string; score?: number; reason?: string };
          examQuestion.answerText = answerData.answerText;
-         examQuestion.score = answerData.score;
-         examQuestion.reason = answerData.reason;
-         totalScore += answerData.score || 0;
+
+         // Use AI to grade if score/reason not provided
+         if (answerData.score === undefined || answerData.reason === undefined) {
+            this.logger.log(
+               `AI grading for question ${examQuestion.questionId} - answer not pre-graded`,
+            );
+            const aiResult = await this.gradeAnswerWithAI(
+               examQuestion.question,
+               answerData.answerText,
+            );
+            examQuestion.score = aiResult.score;
+            examQuestion.reason = aiResult.reason;
+         } else {
+            // Use provided score and reason
+            examQuestion.score = answerData.score;
+            examQuestion.reason = answerData.reason;
+         }
+
+         totalScore += examQuestion.score || 0;
       }
 
       await this.examQuestionRepository.save(examQuestions);
@@ -226,6 +256,10 @@ export class QuestionService {
       examination.submittedAt = new Date();
       examination.totalScore = totalScore;
       await this.examinationRepository.save(examination);
+
+      this.logger.log(
+         `Examination ${id} submitted successfully. Total score: ${totalScore} / ${examQuestions.length * 10}`,
+      );
 
       return this.getExaminationDetail(id);
    }
@@ -268,7 +302,7 @@ export class QuestionService {
 
    async getExaminationsToDo(applicationId: number) {
       return this.examinationRepository.find({
-         where: { applicationId, status: 'pending' },
+         where: { applicationId },
          relations: ['examQuestions', 'examQuestions.question'],
       });
    }
@@ -359,5 +393,138 @@ export class QuestionService {
 
       // Shuffle the final result to randomize order
       return shuffle(selectedQuestions);
+   }
+
+   /**
+    * Grade an answer using AI by comparing it with the sample answer
+    * @param question - The question with sample answer
+    * @param candidateAnswer - The candidate's answer
+    * @returns Score (0-10) and feedback
+    */
+   private async gradeAnswerWithAI(
+      question: QuestionEntity,
+      candidateAnswer: string,
+   ): Promise<{ score: number; reason: string }> {
+      try {
+         if (!this.genAI) {
+            this.logger.warn('Gemini AI not initialized. Using default score.');
+            return { score: 5, reason: 'AI grading unavailable - default score assigned' };
+         }
+
+         this.logger.log(`Grading answer for question ${question.questionId} using AI`);
+
+         // Build prompt for AI grading
+         const prompt = this.buildGradingPrompt(question, candidateAnswer);
+
+         const model = this.genAI.getGenerativeModel({
+            model: 'gemini-2.0-flash',
+            generationConfig: {
+               temperature: 0.3,
+               maxOutputTokens: 500,
+            },
+         });
+
+         const systemPrompt =
+            'Bạn là một giáo viên chấm bài chuyên nghiệp. Chấm điểm câu trả lời của học viên dựa trên câu trả lời mẫu. Thang điểm từ 0 đến 10. Nếu câu trả lời không liên quan gì đến câu hỏi thì chấm 0 điểm. Toàn bộ phản hồi phải bằng tiếng Việt.';
+
+         const fullPrompt = `${systemPrompt}\n\n${prompt}`;
+
+         const response = await model.generateContent(fullPrompt);
+         const content = response.response.text();
+
+         if (!content) {
+            this.logger.warn('No response from AI. Using default score.');
+            return { score: 0, reason: 'AI grading failed - default score assigned' };
+         }
+
+         // Parse AI response
+         const result = this.parseGradingResponse(content, question.questionId);
+
+         this.logger.log(
+            `AI grading completed for question ${question.questionId}: Score ${result.score}`,
+         );
+
+         return result;
+      } catch (error) {
+         this.logger.error(
+            `AI grading failed for question ${question.questionId}: ${error.message}`,
+         );
+         // Return default score if AI grading fails
+         return { score: 0, reason: 'AI grading error - default score assigned' };
+      }
+   }
+
+   /**
+    * Build prompt for AI grading
+    */
+   private buildGradingPrompt(question: QuestionEntity, candidateAnswer: string): string {
+      return `Câu hỏi:
+${question.content}
+
+Câu trả lời mẫu:
+${question.sampleAnswer || 'Không có câu trả lời mẫu'}
+
+Câu trả lời của học viên:
+${candidateAnswer}
+
+Yêu cầu: Chấm điểm câu trả lời của học viên từ 0-10 dựa trên câu trả lời mẫu.
+
+Độ khó: ${question.difficulty || 'medium'}
+
+Hãy đánh giá:
+1. Độ chính xác của nội dung (40%)
+2. Độ đầy đủ của thông tin (30%)
+3. Cấu trúc và cách trình bày (20%)
+4. Sáng tạo và mở rộng (10%)
+
+QUAN TRỌNG: Bạn PHẢI luôn trả về một điểm số từ 0-10. Ngay cả khi câu trả lời không liên quan, tầm bậy, hoặc sai hoàn toàn, vẫn phải chấm điểm (có thể là 0 điểm).
+
+Chỉ trả về JSON, không có văn bản nào khác:
+{
+  "score": <điểm từ 0-10>,
+  "reason": "<lý do chấm điểm chi tiết>"
+}`;
+   }
+
+   /**
+    * Parse AI grading response
+    */
+   private parseGradingResponse(
+      content: string,
+      questionId: number,
+   ): { score: number; reason: string } {
+      try {
+         // Try to extract JSON from the response
+         const jsonMatch = content.match(/\{[\s\S]*\}/);
+         if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            return {
+               score: Math.max(0, Math.min(10, parsed.score || 0)),
+               reason: parsed.reason || 'Đã chấm điểm tự động',
+            };
+         }
+
+         // If no JSON found, try to extract score from text
+         const scoreMatch = content.match(/["']?score["']?\s*:\s*(\d+(?:\.\d+)?)/);
+         const score = scoreMatch ? parseFloat(scoreMatch[1]) : 0;
+
+         // Extract reason (everything after score)
+         const reasonMatch = content.match(/reason["']?\s*:\s*["']([^"']+)["']/);
+         const reason = reasonMatch ? reasonMatch[1] : 'Đã chấm điểm tự động bằng AI';
+
+         this.logger.warn(
+            `Question ${questionId}: Failed to parse JSON from AI response. Raw content: ${content.substring(0, 200)}`,
+         );
+
+         return {
+            score: Math.max(0, Math.min(10, score)),
+            reason,
+         };
+      } catch (error) {
+         this.logger.error(
+            `Question ${questionId}: Failed to parse AI grading response: ${error.message}. Content: ${content.substring(0, 200)}`,
+         );
+         return { score: 0, reason: 'Lỗi phân tích phản hồi AI' };
+      }
    }
 }

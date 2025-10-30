@@ -9,6 +9,7 @@ import { CandidateEntity } from '../../../entities/recruitment/candidate.entity'
 import { QuestionController } from './question.controller';
 import { QuestionService } from './question.service';
 import { ExamQuestionEntity } from '../../../entities/question/exam_question.entity';
+import { CvScreeningModule } from '../cv-screening/cv-screening.module';
 
 @Module({
    imports: [
@@ -21,6 +22,7 @@ import { ExamQuestionEntity } from '../../../entities/question/exam_question.ent
          CandidateEntity,
          ExamQuestionEntity,
       ]),
+      CvScreeningModule,
    ],
    controllers: [QuestionController],
    providers: [QuestionService],

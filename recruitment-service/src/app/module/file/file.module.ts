@@ -33,6 +33,7 @@ import { RecruitmentEmailService } from '../email/email.service';
 import { QuestionModule } from '../question/question.module';
 import { ScoringService } from '../cv-screening/services/scoring.service';
 import { AdaptiveThresholdService } from '../cv-screening/services';
+
 import { CandidateModule } from '../candidate/candidate.module';
 
 
