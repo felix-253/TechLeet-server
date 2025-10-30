@@ -26,6 +26,8 @@ import { ApplicationEntity } from '../../../entities/recruitment/application.ent
 import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
 import { FilterScoreEntity } from '../../../entities/recruitment/filter-score.entity';
 import { CandidateEntity } from '../../../entities/recruitment/candidate.entity';
+import { InterviewEntity } from '../../../entities/recruitment/interview.entity';
+import { RecruitmentEmailModule } from '../email/email.module';
 
 @Module({
    imports: [
@@ -36,7 +38,9 @@ import { CandidateEntity } from '../../../entities/recruitment/candidate.entity'
          JobPostingEntity,
          CandidateEntity,
          FilterScoreEntity,
+         InterviewEntity,
       ]),
+      RecruitmentEmailModule,
    ],
    controllers: [
       ScreeningController,

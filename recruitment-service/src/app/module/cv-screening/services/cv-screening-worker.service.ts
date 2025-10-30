@@ -6,6 +6,8 @@ import * as crypto from 'crypto';
 import { CvScreeningResultEntity, ScreeningStatus } from '../../../../entities/recruitment/cv-screening-result.entity';
 import { ApplicationEntity } from '../../../../entities/recruitment/application.entity';
 import { JobPostingEntity } from '../../../../entities/recruitment/job-posting.entity';
+import { CandidateEntity } from '../../../../entities/recruitment/candidate.entity';
+import { InterviewEntity } from '../../../../entities/recruitment/interview.entity';
 import { CvTextExtractionService } from '../processors/cv-text-extraction.service';
 import { CvNlpProcessingService, ProcessedCvData } from '../processors/cv-nlp-processing.service';
 import { CvEmbeddingService } from '../processors/cv-embedding.service';
@@ -15,6 +17,7 @@ import { AdaptiveThresholdService, IScreeningResult } from './adaptive-threshold
 import { EmbeddingType } from '../../../../entities/recruitment/cv-embedding.entity';
 import { RetryUtil, CircuitBreakerUtil, FileValidationUtil, JobDescriptionUtil } from '../utils';
 import { CV_SCREENING_CONFIG } from '../config';
+import { RecruitmentEmailService } from '../../email/email.service';
 import {
    CvFileNotFoundException,
    CvFileTooLargeException,
@@ -50,12 +53,17 @@ export class CvScreeningWorkerService {
       private readonly applicationRepository: Repository<ApplicationEntity>,
       @InjectRepository(JobPostingEntity)
       private readonly jobPostingRepository: Repository<JobPostingEntity>,
+      @InjectRepository(CandidateEntity)
+      private readonly candidateRepository: Repository<CandidateEntity>,
+      @InjectRepository(InterviewEntity)
+      private readonly interviewRepository: Repository<InterviewEntity>,
       private readonly textExtractionService: CvTextExtractionService,
       private readonly nlpProcessingService: CvNlpProcessingService,
       private readonly embeddingService: CvEmbeddingService,
       private readonly llmSummaryService: CvLlmSummaryService,
       private readonly scoringService: ScoringService,
       private readonly adaptiveThresholdService: AdaptiveThresholdService,
+      private readonly emailService: RecruitmentEmailService,
       private readonly dataSource: DataSource,
    ) {
       // Initialize circuit breaker for AI summary (expensive operation)
@@ -204,7 +212,9 @@ export class CvScreeningWorkerService {
          );
 
          // Update application with screening results
+         this.logger.log(`Updating application ${applicationId} with screening results: status=${finalResult.status}, score=${finalResult.overallScore}`);
          await this.updateApplicationScreeningStatus(applicationId, finalResult);
+         this.logger.log(`Application ${applicationId} updated successfully`);
 
          metrics.totalMs = Date.now() - startTime;
          
@@ -268,17 +278,24 @@ export class CvScreeningWorkerService {
     * Get application with job posting details (optimized single query)
     */
    private async getApplicationWithJobPosting(applicationId: number) {
-      const application = await this.applicationRepository
-         .createQueryBuilder('app')
-         .leftJoinAndSelect('app.jobPosting', 'jobPosting')
-         .where('app.applicationId = :applicationId', { applicationId })
-         .getOne();
+      // Fetch application first
+      const application = await this.applicationRepository.findOne({
+         where: { applicationId },
+      });
 
       if (!application) {
          return null;
       }
 
-      return application as ApplicationEntity & { jobPosting: JobPostingEntity | null };
+      // Fetch job posting separately since relation is not defined in ApplicationEntity
+      const jobPosting = await this.jobPostingRepository.findOne({
+         where: { jobPostingId: application.jobPostingId },
+      });
+
+      return {
+         ...application,
+         jobPosting,
+      } as ApplicationEntity & { jobPosting: JobPostingEntity | null };
    }
 
    /**
@@ -306,17 +323,24 @@ export class CvScreeningWorkerService {
    ): Promise<string> {
       const filePath = resumePath || application.resumeUrl;
 
+      this.logger.log(`Extracting text from CV for application ${application.applicationId}`);
+      this.logger.log(`Resume path provided: ${resumePath || 'none'}`);
+      this.logger.log(`Application resumeUrl: ${application.resumeUrl || 'none'}`);
+      this.logger.log(`Final file path: ${filePath || 'none'}`);
+
       if (!filePath) {
          throw new CvTextExtractionException('No resume file path provided');
       }
 
       // Convert URL to local file path if needed
       const localFilePath = this.convertUrlToLocalPath(filePath);
+      this.logger.log(`Converted local file path: ${localFilePath}`);
 
       // Validate file using utility
       const validation = FileValidationUtil.validateFile(localFilePath);
       if (!validation.isValid) {
          const errorMsg = validation.error || 'Unknown validation error';
+         this.logger.error(`File validation failed: ${errorMsg}`);
          if (errorMsg.includes('not found')) {
             throw new CvFileNotFoundException(localFilePath, filePath);
          } else if (errorMsg.includes('too large')) {
@@ -563,28 +587,36 @@ export class CvScreeningWorkerService {
          let finalStatus: ScreeningStatus;
          let adaptiveThresholdResult: IScreeningResult | undefined = undefined;
 
-         try {
-            adaptiveThresholdResult = await this.adaptiveThresholdService.processNewCV(
-               jobPostingId,
-               normalizedScore
-            );
-
-            // Set final status based on adaptive threshold decision
-            if (adaptiveThresholdResult.decision === 'pass') {
-               finalStatus = ScreeningStatus.PASSED;
-            } else {
-               finalStatus = ScreeningStatus.SCREENING_FAILED;
-            }
-
-            this.logger.log(
-               `Adaptive Threshold Result for Job ${jobPostingId}: Score ${scores.overallScore.toFixed(2)} (normalized: ${normalizedScore.toFixed(3)}) → ${adaptiveThresholdResult.decision.toUpperCase()} | Threshold: ${adaptiveThresholdResult.newThreshold.toFixed(3)}`
-            );
-         } catch (adaptiveError) {
-            // If adaptive threshold fails, fallback to COMPLETED status
+         // Auto-fail if experience gap is too severe (gap > 3 years)
+         if (scores.autoFail) {
+            finalStatus = ScreeningStatus.SCREENING_FAILED;
             this.logger.warn(
-               `Adaptive threshold failed for job ${jobPostingId}, using COMPLETED status: ${adaptiveError.message}`
+               `AUTO-FAIL: Candidate automatically rejected due to severe experience under-qualification (gap > 3 years). Experience Score: ${(scores.experienceScore).toFixed(1)}%`
             );
-            finalStatus = ScreeningStatus.COMPLETED;
+         } else {
+            try {
+               adaptiveThresholdResult = await this.adaptiveThresholdService.processNewCV(
+                  jobPostingId,
+                  normalizedScore
+               );
+
+               // Set final status based on adaptive threshold decision
+               if (adaptiveThresholdResult.decision === 'pass') {
+                  finalStatus = ScreeningStatus.PASSED;
+               } else {
+                  finalStatus = ScreeningStatus.SCREENING_FAILED;
+               }
+
+               this.logger.log(
+                  `Adaptive Threshold Result for Job ${jobPostingId}: Score ${scores.overallScore.toFixed(2)} (normalized: ${normalizedScore.toFixed(3)}) → ${adaptiveThresholdResult.decision.toUpperCase()} | Threshold: ${adaptiveThresholdResult.newThreshold.toFixed(3)}`
+               );
+            } catch (adaptiveError) {
+               // If adaptive threshold fails, fallback to COMPLETED status
+               this.logger.warn(
+                  `Adaptive threshold failed for job ${jobPostingId}, using COMPLETED status: ${adaptiveError.message}`
+               );
+               finalStatus = ScreeningStatus.COMPLETED;
+            }
          }
 
          const updateData = {
@@ -655,6 +687,101 @@ export class CvScreeningWorkerService {
       this.logger.log(
          `Updated application ${applicationId}: status=${applicationStatus}, screeningStatus=${screeningStatus}, score=${screeningResult.overallScore}`
       );
+
+      // Send rejection email if screening failed
+      if (screeningResult.status === ScreeningStatus.SCREENING_FAILED) {
+         try {
+            const application = await this.applicationRepository.findOne({
+               where: { applicationId },
+            });
+
+            if (!application) {
+               this.logger.warn(`Application ${applicationId} not found for sending rejection email`);
+               return;
+            }
+
+            const candidate = await this.candidateRepository.findOne({
+               where: { candidateId: application.candidateId },
+            });
+
+            const jobPosting = await this.jobPostingRepository.findOne({
+               where: { jobPostingId: application.jobPostingId },
+            });
+
+            if (!candidate || !jobPosting) {
+               this.logger.warn(
+                  `Candidate or job posting not found for application ${applicationId}. Candidate: ${candidate ? 'found' : 'not found'}, JobPosting: ${jobPosting ? 'found' : 'not found'}`
+               );
+               return;
+            }
+
+            await this.emailService.sendScreeningRejectionEmail(candidate, jobPosting, application);
+            this.logger.log(`Sent rejection email for application ${applicationId}`);
+         } catch (error) {
+            this.logger.error(
+               `Failed to send rejection email for application ${applicationId}: ${error.message}`,
+               error.stack
+            );
+            // Don't throw error - email failure shouldn't break the screening process
+         }
+      }
+
+      // Auto-create interview request if screening passed
+      if (screeningResult.status === ScreeningStatus.PASSED) {
+         try {
+            const application = await this.applicationRepository.findOne({
+               where: { applicationId },
+            });
+
+            if (!application) {
+               this.logger.warn(`Application ${applicationId} not found for creating interview request`);
+               return;
+            }
+
+            // Check if interview request already exists
+            const existingInterview = await this.interviewRepository.findOne({
+               where: {
+                  candidate_id: application.candidateId,
+                  job_id: application.jobPostingId,
+               },
+            });
+
+            if (existingInterview) {
+               this.logger.log(
+                  `Interview request already exists for application ${applicationId} (interview_id: ${existingInterview.interview_id})`
+               );
+               return;
+            }
+
+            // Create interview request with status='pending'
+            // Note: scheduled_at is required, so we set a placeholder date (1 year from now)
+            // HR will update this when scheduling the actual interview
+            const placeholderDate = new Date();
+            placeholderDate.setFullYear(placeholderDate.getFullYear() + 1);
+
+            const interviewRequest = this.interviewRepository.create({
+               candidate_id: application.candidateId,
+               job_id: application.jobPostingId,
+               interviewer_ids: [],
+               scheduled_at: placeholderDate,
+               duration_minutes: 60,
+               meeting_link: '',
+               location: '',
+               status: 'pending',
+            });
+
+            const savedInterview = await this.interviewRepository.save(interviewRequest);
+            this.logger.log(
+               `Created interview request (interview_id: ${savedInterview.interview_id}) for application ${applicationId}, candidate ${application.candidateId}, job ${application.jobPostingId}`
+            );
+         } catch (error) {
+            this.logger.error(
+               `Failed to create interview request for application ${applicationId}: ${error.message}`,
+               error.stack
+            );
+            // Don't throw error - interview request creation failure shouldn't break the screening process
+         }
+      }
    }
 
    /**

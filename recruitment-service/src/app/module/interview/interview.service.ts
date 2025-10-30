@@ -8,6 +8,7 @@ import { FilterInterviewDto, SortBy } from './dtos/filterInterviewDto';
 import { RecruitmentEmailService } from '../email/email.service';
 import { CandidateEntity } from '../../../entities/recruitment/candidate.entity';
 import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
+import { ApplicationEntity } from '../../../entities/recruitment/application.entity';
 
 @Injectable()
 export class InterviewService {
@@ -18,6 +19,8 @@ export class InterviewService {
       private readonly candidateRepository: Repository<CandidateEntity>,
       @InjectRepository(JobPostingEntity)
       private readonly jobPostingRepository: Repository<JobPostingEntity>,
+      @InjectRepository(ApplicationEntity)
+      private readonly applicationRepository: Repository<ApplicationEntity>,
       private readonly entityManager: EntityManager,
       private readonly emailService: RecruitmentEmailService,
    ) {}
@@ -29,6 +32,15 @@ export class InterviewService {
          scheduled_at: new Date(createInterviewDto.scheduled_at),
       });
       const savedInterview = await this.interviewRepository.save(interview);
+
+      // Update application status to 'interviewing' if interview is scheduled
+      if (savedInterview.status === 'scheduled') {
+         await this.updateApplicationStatusForInterview(
+            savedInterview.candidate_id,
+            savedInterview.job_id,
+            'interviewing'
+         );
+      }
 
       // Send confirmation email (async, don't wait for it)
       this.sendInterviewConfirmationEmailAsync(
@@ -43,6 +55,43 @@ export class InterviewService {
       });
 
       return savedInterview;
+   }
+
+   /**
+    * Helper method to update application status when interview is scheduled
+    */
+   private async updateApplicationStatusForInterview(
+      candidateId: number,
+      jobId: number,
+      newStatus: string,
+   ): Promise<void> {
+      try {
+         const application = await this.applicationRepository.findOne({
+            where: {
+               candidateId,
+               jobPostingId: jobId,
+            },
+         });
+
+         if (application) {
+            await this.applicationRepository.update(application.applicationId, {
+               status: newStatus,
+            });
+            console.log(
+               `Updated application ${application.applicationId} status to ${newStatus} for candidate ${candidateId}, job ${jobId}`
+            );
+         } else {
+            console.warn(
+               `Application not found for candidate ${candidateId}, job ${jobId} - cannot update status`
+            );
+         }
+      } catch (error) {
+         console.error(
+            `Failed to update application status for candidate ${candidateId}, job ${jobId}:`,
+            error
+         );
+         // Don't throw error - application status update failure shouldn't break interview creation
+      }
    }
 
    /**
@@ -152,13 +201,39 @@ export class InterviewService {
          }
       }
 
+      // Track previous status before applying updates
+      const previousStatus = interview.status;
+
       // Apply updates
       Object.assign(interview, updateInterviewDto);
       if (updateInterviewDto.scheduled_at) {
          interview.scheduled_at = new Date(updateInterviewDto.scheduled_at);
       }
 
+      // Auto-set status to 'scheduled' if interview is being scheduled (from pending)
+      // Check if interview has all required fields for scheduling
+      // Only auto-set if scheduled_at was actually updated (not just placeholder date)
+      const scheduledAtUpdated = updateInterviewDto.scheduled_at !== undefined;
+      const hasScheduledAt = interview.scheduled_at && interview.scheduled_at.getTime() > Date.now();
+      const hasMeetingDetails = interview.meeting_link || interview.location;
+      const hasInterviewers = interview.interviewer_ids && interview.interviewer_ids.length > 0;
+
+      // If interview is pending and now has scheduling details, auto-set to 'scheduled'
+      if (previousStatus === 'pending' && scheduledAtUpdated && hasScheduledAt && hasMeetingDetails && hasInterviewers) {
+         interview.status = 'scheduled';
+      }
+
       const updatedInterview = await this.interviewRepository.save(interview);
+
+      // Update application status if interview status changed to 'scheduled'
+      const newStatus = updatedInterview.status;
+      if (previousStatus !== 'scheduled' && newStatus === 'scheduled') {
+         await this.updateApplicationStatusForInterview(
+            updatedInterview.candidate_id,
+            updatedInterview.job_id,
+            'interviewing'
+         );
+      }
 
       // Send update email if significant changes occurred
       if (changedFields.length > 0) {

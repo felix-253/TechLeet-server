@@ -176,13 +176,49 @@ export class FileController {
       if (!file) {
          throw new BadRequestException('No file provided');
       }
+      
+      // Move file from temp-uploads to final location based on file type
+      let finalFolder = 'documents';
+      switch (uploadDto.fileType) {
+         case FileType.EMPLOYEE_AVATAR:
+            finalFolder = 'avatars';
+            break;
+         case FileType.CANDIDATE_RESUME:
+         case FileType.EMPLOYEE_RESUME:
+            finalFolder = 'candidate_resume'; // Match folder used in CV screening
+            break;
+         case FileType.COMPANY_LOGO:
+            finalFolder = 'logos';
+            break;
+         case FileType.CANDIDATE_CERTIFICATE:
+            finalFolder = 'certificates';
+            break;
+      }
+
+      const fs = require('fs');
+      const path = require('path');
+      const uploadsDir = path.join(process.cwd(), 'uploads', finalFolder);
+      
+      // Ensure uploads directory exists
+      if (!fs.existsSync(uploadsDir)) {
+         fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+
+      // Move file from temp-uploads to final location
+      const tempFilePath = file.path;
+      const finalFilePath = path.join(uploadsDir, file.filename);
+      fs.renameSync(tempFilePath, finalFilePath);
+
+      // Generate fileUrl relative to uploads folder
+      const fileUrl = `./uploads/${finalFolder}/${file.filename}`;
+
       return await this.fileService.create({
          fileName: file.filename,
          fileSize: file.size,
          mimeType: file.mimetype,
          fileType: uploadDto.fileType,
          referenceId: uploadDto.referenceId,
-         fileUrl: '',
+         fileUrl: fileUrl,
          originalName: file.originalname,
       });
    }
