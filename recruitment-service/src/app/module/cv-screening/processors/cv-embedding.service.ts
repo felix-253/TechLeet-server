@@ -4,7 +4,10 @@ import { Repository } from 'typeorm';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { ConfigService } from '@nestjs/config';
 import * as pgvector from 'pgvector';
-import { CvEmbeddingEntity, EmbeddingType } from '../../../entities/recruitment/cv-embedding.entity';
+import { CvEmbeddingEntity, EmbeddingType } from '../../../../entities/recruitment/cv-embedding.entity';
+import { RetryUtil } from '../utils/retry.util';
+import { CircuitBreakerUtil } from '../utils/circuit-breaker.util';
+import { CV_SCREENING_CONFIG } from '../config';
 
 export interface EmbeddingResult {
    embedding: number[];
@@ -23,31 +26,15 @@ export interface SimilarityResult {
    originalText: string;
 }
 
-interface CircuitBreakerState {
-   isOpen: boolean;
-   failureCount: number;
-   lastFailureTime: number;
-   successCount: number;
-}
-
 @Injectable()
 export class CvEmbeddingService {
    private readonly logger = new Logger(CvEmbeddingService.name);
    private readonly genAI: GoogleGenerativeAI;
-   private readonly defaultModel = 'text-embedding-004';
-   private readonly defaultDimensions = 768;
-
-   // Circuit breaker configuration
-   private readonly circuitBreaker: CircuitBreakerState = {
-      isOpen: false,
-      failureCount: 0,
-      lastFailureTime: 0,
-      successCount: 0,
-   };
+   private readonly defaultModel = CV_SCREENING_CONFIG.MODELS.EMBEDDING_DEFAULT;
+   private readonly defaultDimensions = CV_SCREENING_CONFIG.MODELS.EMBEDDING_DIMENSIONS;
    
-   private readonly maxFailures = 5;
-   private readonly resetTimeoutMs = 60000; // 1 minute
-   private readonly halfOpenMaxAttempts = 3;
+   // Circuit breaker for Gemini API calls
+   private readonly circuitBreaker: CircuitBreakerUtil;
 
    constructor(
       @InjectRepository(CvEmbeddingEntity)
@@ -60,6 +47,14 @@ export class CvEmbeddingService {
       }
 
       this.genAI = new GoogleGenerativeAI(apiKey || 'dummy-key');
+      
+      // Initialize circuit breaker with config
+      this.circuitBreaker = new CircuitBreakerUtil({
+         failureThreshold: CV_SCREENING_CONFIG.CIRCUIT_BREAKER.FAILURE_THRESHOLD,
+         successThreshold: CV_SCREENING_CONFIG.CIRCUIT_BREAKER.SUCCESS_THRESHOLD,
+         timeout: CV_SCREENING_CONFIG.CIRCUIT_BREAKER.TIMEOUT_MS,
+         resetTimeout: CV_SCREENING_CONFIG.CIRCUIT_BREAKER.RESET_TIMEOUT_MS,
+      });
    }
 
    /**
@@ -70,11 +65,20 @@ export class CvEmbeddingService {
       model: string = this.defaultModel,
       dimensions: number = this.defaultDimensions
    ): Promise<EmbeddingResult> {
-      return this.executeWithCircuitBreaker(async () => {
-         return this.executeWithRetry(async () => {
-            return this.generateEmbeddingInternal(text, model, dimensions);
-         }, 3, 'embedding generation');
-      });
+      return this.circuitBreaker.execute(
+         () => RetryUtil.executeWithRetry(
+            () => this.generateEmbeddingInternal(text, model, dimensions),
+            {
+               maxAttempts: CV_SCREENING_CONFIG.RETRY.MAX_ATTEMPTS,
+               baseDelayMs: CV_SCREENING_CONFIG.RETRY.BASE_DELAY_MS,
+               maxDelayMs: CV_SCREENING_CONFIG.RETRY.MAX_DELAY_MS,
+               onRetry: (attempt, error) => {
+                  this.logger.warn(`Embedding generation attempt ${attempt} failed: ${error.message}`);
+               },
+            }
+         ),
+         'CV Embedding Generation'
+      );
    }
 
    /**
@@ -95,7 +99,7 @@ export class CvEmbeddingService {
          }
 
          // Truncate text if too long (Gemini has token limits)
-         const truncatedText = this.truncateText(text, 8000); // Conservative limit
+         const truncatedText = this.truncateText(text, CV_SCREENING_CONFIG.TEXT.MAX_CHARACTERS);
 
          const embeddingModel = this.genAI.getGenerativeModel({ model });
          const result = await embeddingModel.embedContent(truncatedText);
@@ -120,152 +124,6 @@ export class CvEmbeddingService {
       }
    }
 
-   /**
-    * Execute operation with retry logic
-    */
-   private async executeWithRetry<T>(
-      operation: () => Promise<T>,
-      maxAttempts: number,
-      operationName: string
-   ): Promise<T> {
-      let lastError: Error = new Error(`${operationName} failed: no attempts made`);
-      
-      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-         try {
-            const result = await operation();
-            if (attempt > 1) {
-               this.logger.log(`${operationName} succeeded on attempt ${attempt}`);
-            }
-            return result;
-         } catch (error) {
-            lastError = error as Error;
-            
-            // Check if we should retry
-            if (attempt === maxAttempts || !this.shouldRetry(error)) {
-               break;
-            }
-            
-            const delay = this.calculateBackoffDelay(attempt);
-            this.logger.warn(`${operationName} failed on attempt ${attempt}/${maxAttempts}: ${error.message}. Retrying in ${delay}ms...`);
-            
-            await this.sleep(delay);
-         }
-      }
-      
-      this.logger.error(`${operationName} failed after ${maxAttempts} attempts: ${lastError.message}`);
-      throw lastError;
-   }
-
-   /**
-    * Execute operation with circuit breaker
-    */
-   private async executeWithCircuitBreaker<T>(
-      operation: () => Promise<T>
-   ): Promise<T> {
-      // Check if circuit breaker is open
-      if (this.circuitBreaker.isOpen) {
-         const timeSinceLastFailure = Date.now() - this.circuitBreaker.lastFailureTime;
-         
-         if (timeSinceLastFailure < this.resetTimeoutMs) {
-            throw new Error('Circuit breaker is open - Gemini API temporarily unavailable');
-         }
-         
-         // Try to half-open the circuit
-         this.logger.log('Circuit breaker half-open - attempting to reset');
-      }
-
-      try {
-         const result = await operation();
-         
-         // Success - reset circuit breaker
-         if (this.circuitBreaker.isOpen || this.circuitBreaker.failureCount > 0) {
-            this.circuitBreaker.successCount++;
-            
-            if (this.circuitBreaker.successCount >= this.halfOpenMaxAttempts || !this.circuitBreaker.isOpen) {
-               this.resetCircuitBreaker();
-            }
-         }
-         
-         return result;
-         
-      } catch (error) {
-         this.recordCircuitBreakerFailure();
-         throw error;
-      }
-   }
-
-   /**
-    * Check if error should trigger a retry
-    */
-   private shouldRetry(error: any): boolean {
-      // Retry on network errors, rate limits, and temporary server errors
-      if (error.code === 'ECONNRESET' || 
-          error.code === 'ENOTFOUND' ||
-          error.code === 'ECONNREFUSED') {
-         return true;
-      }
-      
-      // Retry on HTTP 429 (rate limit) and 5xx errors
-      if (error.status === 429 || (error.status >= 500 && error.status < 600)) {
-         return true;
-      }
-      
-      // Check error message for specific patterns
-      const errorMessage = error.message?.toLowerCase() || '';
-      if (errorMessage.includes('rate limit') ||
-          errorMessage.includes('quota exceeded') ||
-          errorMessage.includes('service unavailable') ||
-          errorMessage.includes('timeout')) {
-         return true;
-      }
-      
-      return false;
-   }
-
-   /**
-    * Calculate exponential backoff delay
-    */
-   private calculateBackoffDelay(attempt: number): number {
-      const baseDelay = 1000; // 1 second
-      const maxDelay = 30000; // 30 seconds
-      
-      // Exponential backoff with jitter
-      const delay = Math.min(baseDelay * Math.pow(2, attempt - 1), maxDelay);
-      const jitter = Math.random() * 0.1 * delay; // Add up to 10% jitter
-      
-      return Math.floor(delay + jitter);
-   }
-
-   /**
-    * Record circuit breaker failure
-    */
-   private recordCircuitBreakerFailure(): void {
-      this.circuitBreaker.failureCount++;
-      this.circuitBreaker.lastFailureTime = Date.now();
-      this.circuitBreaker.successCount = 0;
-      
-      if (this.circuitBreaker.failureCount >= this.maxFailures) {
-         this.circuitBreaker.isOpen = true;
-         this.logger.error(`Circuit breaker opened after ${this.circuitBreaker.failureCount} failures. Gemini API calls will be blocked for ${this.resetTimeoutMs}ms`);
-      }
-   }
-
-   /**
-    * Reset circuit breaker to closed state
-    */
-   private resetCircuitBreaker(): void {
-      this.circuitBreaker.isOpen = false;
-      this.circuitBreaker.failureCount = 0;
-      this.circuitBreaker.successCount = 0;
-      this.logger.log('Circuit breaker reset - Gemini API calls restored');
-   }
-
-   /**
-    * Sleep utility for delays
-    */
-   private sleep(ms: number): Promise<void> {
-      return new Promise(resolve => setTimeout(resolve, ms));
-   }
 
    /**
     * Store embedding in database with idempotent support
@@ -583,6 +441,7 @@ export class CvEmbeddingService {
          where: { embeddingId },
       });
    }
+
 
    /**
     * Delete embeddings for an application

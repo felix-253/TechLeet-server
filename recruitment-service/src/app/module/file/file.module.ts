@@ -4,25 +4,20 @@ import { FileController } from './file.controller';
 import { BrevoWebhookController } from './brevo-webhook.controller';
 import { FileService } from './file.service';
 import { FileEntity } from '../../../entities/recruitment/file.entity';
-import { InformationService } from '../cv-screening/information.service';
+import { InformationService } from '../cv-screening/services/information.service';
 import { CandidateEntity } from '../../../entities/recruitment/candidate.entity';
 import { ApplicationEntity } from '../../../entities/recruitment/application.entity';
-import { CvTextExtractionService } from '../cv-screening/cv-text-extraction.service';
-import { CvNlpProcessingService } from '../cv-screening/cv-nlp-processing.service';
-import { CvLlmSummaryService } from '../cv-screening/cv-llm-summary.service';
+import { CvTextExtractionService } from '../cv-screening/processors/cv-text-extraction.service';
+import { CvNlpProcessingService } from '../cv-screening/processors/cv-nlp-processing.service';
+import { CvLlmSummaryService } from '../cv-screening/processors/cv-llm-summary.service';
 import { ApplicationService } from '../application/application.service';
 import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
 import { CvScreeningService } from '../cv-screening/cv-screening.service';
 import { CvScreeningResultEntity } from '../../../entities/recruitment/cv-screening-result.entity';
-import { CvScreeningWorkerService } from '../cv-screening/cv-screening-worker.service';
-import { CvQueueService } from '../cv-screening/cv-queue.service';
-import { CvEmbeddingService } from '../cv-screening/cv-embedding.service';
-import { CvChunkingService } from '../cv-screening/cv-chunking.service';
-import { SkillTaxonomyService } from '../cv-screening/skill-taxonomy.service';
+import { CvScreeningWorkerService } from '../cv-screening/services/cv-screening-worker.service';
+import { CvQueueService } from '../cv-screening/services/cv-queue.service';
+import { CvEmbeddingService } from '../cv-screening/processors/cv-embedding.service';
 import { CvEmbeddingEntity } from '../../../entities/recruitment/cv-embedding.entity';
-import { CvEmbeddingChunkEntity } from '../../../entities/recruitment/cv-embedding-chunk.entity';
-import { SkillEntity } from '../../../entities/recruitment/skill.entity';
-import { SkillAliasEntity } from '../../../entities/recruitment/skill-alias.entity';
 import { FilterScoreEntity } from '../../../entities/recruitment/filter-score.entity';
 
 // Import new modular services
@@ -36,6 +31,8 @@ import { FileManagementHandler } from './handlers/file-management.service';
 import { RecruitmentEmailService } from '../email/email.service';
 import { AdaptiveThresholdService } from '../cv-screening/adaptive-threshold.service';
 import { QuestionModule } from '../question/question.module';
+import { ScoringService } from '../cv-screening/services/scoring.service';
+
 
 @Module({
    imports: [
@@ -46,9 +43,6 @@ import { QuestionModule } from '../question/question.module';
          JobPostingEntity,
          CvScreeningResultEntity,
          CvEmbeddingEntity,
-         CvEmbeddingChunkEntity,
-         SkillEntity,
-         SkillAliasEntity,
          FilterScoreEntity,
       ]),
       QuestionModule,
@@ -66,8 +60,7 @@ import { QuestionModule } from '../question/question.module';
       CvScreeningWorkerService,
       CvQueueService,
       CvEmbeddingService,
-      CvChunkingService,
-      SkillTaxonomyService,
+      ScoringService,
       // New modular services
       OcrService,
       CvAnalyzer,

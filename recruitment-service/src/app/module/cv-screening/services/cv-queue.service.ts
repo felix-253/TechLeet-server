@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue, Worker, Job } from 'bullmq';
-import { createQueueOptions } from '../../../config/queue.config';
+import { createQueueOptions } from '../../../../config/queue.config';
 import { CvScreeningWorkerService } from './cv-screening-worker.service';
 
 export enum QueueNames {
@@ -53,8 +53,6 @@ export class CvQueueService implements OnModuleInit, OnModuleDestroy {
    
    // Workers
    private cvProcessingWorker: Worker;
-   private similarityWorker: Worker;
-   private summaryWorker: Worker;
 
    constructor(
       private readonly configService: ConfigService,
@@ -124,35 +122,6 @@ export class CvQueueService implements OnModuleInit, OnModuleDestroy {
          }
       );
 
-      // Similarity Calculation Worker
-      this.similarityWorker = new Worker(
-         QueueNames.SIMILARITY_CALCULATION,
-         async (job: Job) => {
-            this.logger.log(`Processing similarity job: ${job.id} - ${job.name}`);
-            // For now, this is handled within the main pipeline
-            // Could be split out for more granular processing later
-            return { processed: true, jobId: job.id, note: 'Handled within main pipeline' };
-         },
-         {
-            connection: queueOptions.connection,
-            concurrency: 3, // Higher concurrency for similarity calculations
-         }
-      );
-
-      // Summary Generation Worker
-      this.summaryWorker = new Worker(
-         QueueNames.SUMMARY_GENERATION,
-         async (job: Job) => {
-            this.logger.log(`Processing summary job: ${job.id} - ${job.name}`);
-            // For now, this is handled within the main pipeline
-            // Could be split out for more granular processing later
-            return { processed: true, jobId: job.id, note: 'Handled within main pipeline' };
-         },
-         {
-            connection: queueOptions.connection,
-            concurrency: 1, // Lower concurrency for LLM calls to avoid rate limits
-         }
-      );
 
       // Add event listeners
       this.addEventListeners();
@@ -173,23 +142,6 @@ export class CvQueueService implements OnModuleInit, OnModuleDestroy {
          this.logger.error(`CV processing job ${job?.id} failed: ${err.message}`);
       });
 
-      // Similarity Queue Events
-      this.similarityWorker.on('completed', (job) => {
-         this.logger.log(`Similarity job ${job.id} completed`);
-      });
-
-      this.similarityWorker.on('failed', (job, err) => {
-         this.logger.error(`Similarity job ${job?.id} failed: ${err.message}`);
-      });
-
-      // Summary Queue Events
-      this.summaryWorker.on('completed', (job) => {
-         this.logger.log(`Summary job ${job.id} completed`);
-      });
-
-      this.summaryWorker.on('failed', (job, err) => {
-         this.logger.error(`Summary job ${job?.id} failed: ${err.message}`);
-      });
    }
 
    /**
@@ -363,10 +315,6 @@ export class CvQueueService implements OnModuleInit, OnModuleDestroy {
    }
 
    private async closeWorkers() {
-      await Promise.all([
-         this.cvProcessingWorker?.close(),
-         this.similarityWorker?.close(),
-         this.summaryWorker?.close(),
-      ]);
+      await this.cvProcessingWorker?.close();
    }
 }

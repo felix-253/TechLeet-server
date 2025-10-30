@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Not, IsNull } from 'typeorm';
 import { RagDocumentEntity, DocumentEntityType } from '../../../../entities/recruitment/rag-document.entity';
-import { CvEmbeddingService } from '../../cv-screening/cv-embedding.service';
+import { CvEmbeddingService } from '../../cv-screening/processors/cv-embedding.service';
 import { MetadataFiltersDto, RetrievalResultDto } from '../dto/session.dto';
 
 export interface RetrievalOptions {

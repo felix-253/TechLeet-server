@@ -1,14 +1,14 @@
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { CvTextExtractionService } from './cv-text-extraction.service';
-import { CvNlpProcessingService, ProcessedCvData } from './cv-nlp-processing.service';
-import { CvLlmSummaryService } from './cv-llm-summary.service';
+import { Repository, DataSource } from 'typeorm';
+import { CvTextExtractionService } from '../processors/cv-text-extraction.service';
+import { CvNlpProcessingService, ProcessedCvData } from '../processors/cv-nlp-processing.service';
+import { CvLlmSummaryService } from '../processors/cv-llm-summary.service';
 import { AdaptiveThresholdService } from './adaptive-threshold.service';
-import { CandidateEntity } from '../../../entities/recruitment/candidate.entity';
-import { ApplicationEntity } from '../../../entities/recruitment/application.entity';
-import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
-import { RecruitmentEmailService } from '../email/email.service';
+import { CvQueueService } from './cv-queue.service';
+import { CandidateEntity } from '../../../../entities/recruitment/candidate.entity';
+import { ApplicationEntity } from '../../../../entities/recruitment/application.entity';
+import { JobPostingEntity } from '../../../../entities/recruitment/job-posting.entity';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -79,7 +79,8 @@ export class InformationService {
       private readonly nlpProcessingService: CvNlpProcessingService,
       private readonly llmSummaryService: CvLlmSummaryService,
       private readonly adaptiveThresholdService: AdaptiveThresholdService,
-      private readonly recruitmentEmailService: RecruitmentEmailService,
+      private readonly cvQueueService: CvQueueService,
+      private readonly dataSource: DataSource,
    ) {}
 
    /**
@@ -500,13 +501,19 @@ export class InformationService {
       processedData: ProcessedCvData,
       aiAnalysis?: any,
    ): Promise<ApplicationEntity> {
+      // Use transaction for creating application with related data
+      const queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+
       try {
          // Kiểm tra xem application đã tồn tại chưa
-         const existingApplication = await this.applicationRepository.findOne({
+         const existingApplication = await queryRunner.manager.findOne(ApplicationEntity, {
             where: { candidateId, jobPostingId },
          });
 
          if (existingApplication) {
+            await queryRunner.commitTransaction();
             this.logger.log(
                `Application đã tồn tại cho candidate ${candidateId} và job ${jobPostingId}`,
             );
@@ -514,49 +521,56 @@ export class InformationService {
          }
 
          // Tạo application mới
-         const application = this.applicationRepository.create({
+         const application = queryRunner.manager.create(ApplicationEntity, {
             candidateId,
             jobPostingId,
             status: 'submitted',
             appliedDate: new Date(),
-            isScreeningCompleted: true,
-            screeningStatus: 'completed',
-            screeningCompletedAt: new Date(),
+            isScreeningCompleted: false,
+            screeningStatus: 'pending',
          });
 
-         // Cập nhật screening score và áp dụng Adaptive Threshold
+         // Lưu initial screening score từ AI analysis nếu có
          if (aiAnalysis) {
             application.screeningScore = aiAnalysis.fitScore;
-
-            // Áp dụng Adaptive Threshold để xác định pass/fail
-            const screeningResult = await this.adaptiveThresholdService.processNewCV(
-               jobPostingId,
-               aiAnalysis.fitScore,
-            );
-
-            // Cập nhật trạng thái application dựa trên kết quả sàng lọc
-            if (screeningResult.decision === 'pass') {
-               application.status = 'screening_passed';
-               application.screeningStatus = 'passed';
-            } else {
-               application.status = 'screening_failed';
-               application.screeningStatus = 'failed';
-            }
-
-            this.logger.log(
-               `Adaptive Threshold Result for Job ${jobPostingId}: Score ${aiAnalysis.fitScore.toFixed(3)} → ${screeningResult.decision.toUpperCase()} | Threshold: ${screeningResult.newThreshold.toFixed(3)} | Mean: ${screeningResult.newState.mean.toFixed(3)} | Std: ${Math.sqrt(screeningResult.newState.m2 / (screeningResult.newState.n - 1)).toFixed(3)}`,
-            );
+            this.logger.log(`Initial AI fit score for application: ${aiAnalysis.fitScore.toFixed(3)}`);
          }
 
-         const savedApplication = await this.applicationRepository.save(application);
+         const savedApplication = await queryRunner.manager.save(application);
+
+         await queryRunner.commitTransaction();
+
+         // Auto-trigger screening pipeline for the new application
+         try {
+            await this.cvQueueService.addCvProcessingJob(
+               {
+                  applicationId: savedApplication.applicationId,
+                  jobPostingId: savedApplication.jobPostingId,
+                  resumeUrl: '', // Will be resolved from application in worker
+                  priority: 0,
+               },
+               { priority: 0 }
+            );
+            this.logger.log(
+               `Auto-triggered screening pipeline for application ${savedApplication.applicationId}`
+            );
+         } catch (queueError) {
+            // Log but don't fail application creation if queue fails
+            this.logger.warn(
+               `Failed to auto-trigger screening for application ${savedApplication.applicationId}: ${queueError.message}`
+            );
+         }
 
          // Note: Email sending moved to FileService after successful Brevo processing
          // Direct uploads still send emails in ApplicationService
 
          return savedApplication;
       } catch (error) {
+         await queryRunner.rollbackTransaction();
          this.logger.error(`Lỗi khi tạo application: ${error.message}`, error.stack);
          throw error;
+      } finally {
+         await queryRunner.release();
       }
    }
 
@@ -595,22 +609,9 @@ export class InformationService {
                   .getRawOne(),
             ]);
 
-         // Lấy top skills (simplified - trong thực tế cần query phức tạp hơn)
-         const topSkills = [
-            { skill: 'JavaScript', count: 45 },
-            { skill: 'Python', count: 38 },
-            { skill: 'React', count: 32 },
-            { skill: 'Node.js', count: 28 },
-            { skill: 'Java', count: 25 },
-         ];
-
-         // Phân bố học vấn
-         const educationDistribution = [
-            { level: 'Bachelor', count: 60 },
-            { level: 'Master', count: 25 },
-            { level: 'PhD', count: 5 },
-            { level: 'Other', count: 10 },
-         ];
+         // TODO: Implement real aggregation queries for top skills and education distribution
+         const topSkills = [];
+         const educationDistribution = [];
 
          return {
             totalCandidates,
