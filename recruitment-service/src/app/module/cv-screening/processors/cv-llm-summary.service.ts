@@ -2,7 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { ProcessedCvData } from './cv-nlp-processing.service';
-import { GeminiModelName } from './enum';
+import { GeminiModelName } from '../enum';
+import { CV_SCREENING_CONFIG } from '../config';
 
 export interface ModelConfig {
    modelName: GeminiModelName;
@@ -15,24 +16,24 @@ export interface ModelConfig {
 export const MODEL_CONFIGS = {
    gemini: {
       modelName: GeminiModelName.GEMINI_2_5_PRO,
-      temperature: 0.6,
-      topK: 40,
-      topP: 0.95,
-      maxOutputTokens: 4096,
+      temperature: CV_SCREENING_CONFIG.LLM.SUMMARY_TEMPERATURE,
+      topK: CV_SCREENING_CONFIG.LLM.TOP_K,
+      topP: CV_SCREENING_CONFIG.LLM.TOP_P,
+      maxOutputTokens: CV_SCREENING_CONFIG.LLM.MAX_OUTPUT_TOKENS,
    } as ModelConfig,
    chatgpt: {
       modelName: GeminiModelName.CHATGPT_4o,
       temperature: 0.5,
       topK: 30,
       topP: 0.9,
-      maxOutputTokens: 4096,
+      maxOutputTokens: CV_SCREENING_CONFIG.LLM.MAX_OUTPUT_TOKENS,
    } as ModelConfig,
    deepseek: {
       modelName: GeminiModelName.DEEPSEEK_V3,
       temperature: 0.7,
-      topK: 40,
-      topP: 0.95,
-      maxOutputTokens: 4096,
+      topK: CV_SCREENING_CONFIG.LLM.TOP_K,
+      topP: CV_SCREENING_CONFIG.LLM.TOP_P,
+      maxOutputTokens: CV_SCREENING_CONFIG.LLM.MAX_OUTPUT_TOKENS,
    } as ModelConfig,
 };
 
@@ -257,8 +258,8 @@ QUAN TRỌNG: Chỉ trả về JSON, không thêm bất kỳ text nào khác.`;
          const model = this.genAI.getGenerativeModel({
             model: config.modelName,
             generationConfig: {
-               temperature: 0.3, // Lower temperature for more structured output
-               maxOutputTokens: 4096,
+               temperature: CV_SCREENING_CONFIG.LLM.STRUCTURED_OUTPUT_TEMPERATURE,
+               maxOutputTokens: CV_SCREENING_CONFIG.LLM.MAX_OUTPUT_TOKENS,
             },
          });
 

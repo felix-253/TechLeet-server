@@ -7,7 +7,7 @@ import { JobPostingEntity } from '../../../../entities/recruitment/job-posting.e
 import { ApplicationEntity } from '../../../../entities/recruitment/application.entity';
 import { CandidateEntity } from '../../../../entities/recruitment/candidate.entity';
 import { InterviewEntity } from '../../../../entities/recruitment/interview.entity';
-import { CvEmbeddingService } from '../../cv-screening/cv-embedding.service';
+import { CvEmbeddingService } from '../../cv-screening/processors/cv-embedding.service';
 
 @Injectable()
 export class EmbeddingIndexerService {

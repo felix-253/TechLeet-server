@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
-import { ApplicationEntity } from '../../../entities/recruitment/application.entity';
-import { FilterScoreEntity } from '../../../entities/recruitment/filter-score.entity';
+import { JobPostingEntity } from '../../../../entities/recruitment/job-posting.entity';
+import { ApplicationEntity } from '../../../../entities/recruitment/application.entity';
+import { FilterScoreEntity } from '../../../../entities/recruitment/filter-score.entity';
 
 // Định nghĩa cấu trúc dữ liệu cho trạng thái sàng lọc
 export interface IScreeningState {
