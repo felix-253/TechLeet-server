@@ -1,9 +1,10 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, FindManyOptions } from 'typeorm';
+import { Repository, FindManyOptions, In } from 'typeorm';
 import { ApplicationEntity } from '../../../entities/recruitment/application.entity';
 import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
 import { CandidateEntity } from '../../../entities/recruitment/candidate.entity';
+import { InterviewEntity } from '../../../entities/recruitment/interview.entity';
 import {
    CreateApplicationDto,
    UpdateApplicationDto,
@@ -25,6 +26,8 @@ export class ApplicationService {
       private readonly jobPostingRepository: Repository<JobPostingEntity>,
       @InjectRepository(CandidateEntity)
       private readonly candidateRepository: Repository<CandidateEntity>,
+      @InjectRepository(InterviewEntity)
+      private readonly interviewRepository: Repository<InterviewEntity>,
       private readonly cvScreeningService: CvScreeningService,
       private readonly informationService: InformationService,
       private readonly recruitmentEmailService: RecruitmentEmailService,
@@ -144,12 +147,24 @@ export class ApplicationService {
             throw new BadRequestException('Candidate has already applied for this job posting');
          }
 
+         // Create application - explicitly exclude status to prevent client manipulation
+         // Extract only allowed fields, explicitly ignore status if present
+         const applicationData: Partial<CreateApplicationDto> = {
+            jobPostingId: createApplicationDto.jobPostingId,
+            candidateId: createApplicationDto.candidateId,
+            coverLetter: createApplicationDto.coverLetter,
+            resumeUrl: createApplicationDto.resumeUrl,
+            expectedStartDate: createApplicationDto.expectedStartDate,
+            priority: createApplicationDto.priority,
+            applicationNotes: createApplicationDto.applicationNotes,
+            tags: createApplicationDto.tags,
+         };
          const application = this.applicationRepository.create({
-            ...createApplicationDto,
-            expectedStartDate: createApplicationDto.expectedStartDate
-               ? new Date(createApplicationDto.expectedStartDate)
+            ...applicationData,
+            expectedStartDate: applicationData.expectedStartDate
+               ? new Date(applicationData.expectedStartDate)
                : undefined,
-            status: 'submitted', // Default status
+            status: 'submitted', // Always set to submitted - client cannot override
             appliedDate: new Date(),
          });
 
@@ -487,6 +502,111 @@ export class ApplicationService {
       });
 
       return applications.map((app) => this.mapToResponseDto(app));
+   }
+
+   async findByCandidateEmail(email: string): Promise<ApplicationResponseDto[]> {
+      const candidate = await this.candidateRepository.findOne({
+         where: { email },
+      });
+
+      if (!candidate) {
+         return [];
+      }
+
+      return this.findByCandidate(candidate.candidateId);
+   }
+
+   /**
+    * Find applications that need interview scheduling
+    * Returns applications with status='screening_passed' that don't have a scheduled interview yet
+    */
+   async findInterviewRequests(query?: {
+      page?: number;
+      limit?: number;
+      jobPostingId?: number;
+      minScreeningScore?: number;
+   }): Promise<{ data: ApplicationResponseDto[]; total: number; page: number; limit: number }> {
+      const page = query?.page || 0;
+      const limit = query?.limit || 20;
+
+      // Use query builder to find applications with status='screening_passed'
+      // that don't have a scheduled interview (no interview OR interview.status='pending')
+      const qb = this.applicationRepository
+         .createQueryBuilder('application')
+         .leftJoin(
+            InterviewEntity,
+            'interview',
+            'interview.candidate_id = application.candidateId AND interview.job_id = application.jobPostingId'
+         )
+         .where('application.status = :status', { status: 'screening_passed' })
+         .andWhere('(interview.interview_id IS NULL OR interview.status = :pendingStatus)', {
+            pendingStatus: 'pending',
+         });
+
+      if (query?.jobPostingId) {
+         qb.andWhere('application.jobPostingId = :jobPostingId', { jobPostingId: query.jobPostingId });
+      }
+
+      if (query?.minScreeningScore !== undefined) {
+         qb.andWhere('application.screeningScore >= :minScreeningScore', {
+            minScreeningScore: query.minScreeningScore,
+         });
+      }
+
+      // Order by screening score (highest first), then by applied date (oldest first)
+      qb.orderBy('application.screeningScore', 'DESC', 'NULLS LAST')
+         .addOrderBy('application.appliedDate', 'ASC')
+         .skip(page * limit)
+         .take(limit);
+
+      const [applications, total] = await qb.getManyAndCount();
+
+      // Load candidate and jobPosting data separately
+      const candidateIds = [...new Set(applications.map((app) => app.candidateId))];
+      const jobPostingIds = [...new Set(applications.map((app) => app.jobPostingId))];
+
+      const [candidates, jobPostings] = await Promise.all([
+         candidateIds.length > 0
+            ? this.candidateRepository.find({ where: { candidateId: In(candidateIds) } })
+            : Promise.resolve([]),
+         jobPostingIds.length > 0
+            ? this.jobPostingRepository.find({ where: { jobPostingId: In(jobPostingIds) } })
+            : Promise.resolve([]),
+      ]);
+
+      // Create maps for quick lookup
+      const candidateMap = new Map(candidates.map((c) => [c.candidateId, c]));
+      const jobPostingMap = new Map(jobPostings.map((j) => [j.jobPostingId, j]));
+
+      // Map to response DTO with candidate and jobPosting info
+      const responseData = applications.map((app) => {
+         const dto = this.mapToResponseDto(app);
+         const candidate = candidateMap.get(app.candidateId);
+         const jobPosting = jobPostingMap.get(app.jobPostingId);
+
+         if (candidate) {
+            (dto as any).candidate = {
+               candidateId: candidate.candidateId,
+               firstName: candidate.firstName,
+               lastName: candidate.lastName,
+               email: candidate.email,
+            };
+         }
+         if (jobPosting) {
+            (dto as any).jobPosting = {
+               jobPostingId: jobPosting.jobPostingId,
+               title: jobPosting.title,
+            };
+         }
+         return dto;
+      });
+
+      return {
+         data: responseData,
+         total,
+         page,
+         limit,
+      };
    }
 
    private mapToResponseDto(application: ApplicationEntity): ApplicationResponseDto {

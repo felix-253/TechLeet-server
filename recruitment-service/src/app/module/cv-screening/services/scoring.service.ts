@@ -7,13 +7,15 @@ export interface ScoringResult {
    educationScore: number;
    vectorSimilarity: number;
    chunkSimilarity: number;
+   autoFail: boolean; // True if candidate should be automatically rejected (e.g., severe experience gap)
 }
 
 @Injectable()
 export class ScoringService {
    /**
     * Calculate overall similarity score with weighting
-    * Applies hard requirement checks - if experience score is too low, caps overall score
+    * Applies hard requirement checks - if experience score is 0 (severe gap), auto-fails candidate
+    * Education weight reduced to 3% as it's only for reference
     */
    calculateOverallScore(
       vectorSimilarity: number,
@@ -22,22 +24,31 @@ export class ScoringService {
       educationScore: number,
       chunkSimilarity: number
    ): ScoringResult {
+      // Auto-fail if experience score is 0 (severe under-qualification: gap > 3 years)
+      const autoFail = experienceScore === 0;
+
       // Calculate base overall score
+      // Education weight reduced from 10% to 3% as it's only for reference
       let overallScore = (
-         vectorSimilarity * 0.4 +
-         skillsScore * 0.3 +
-         experienceScore * 0.2 +
-         educationScore * 0.1
+         vectorSimilarity * 0.42 +
+         skillsScore * 0.30 +
+         experienceScore * 0.25 +
+         educationScore * 0.03
       );
 
-      // Hard requirement penalty: If experience score is very low (severe under-qualification),
-      // cap the overall score to prevent false positives
-      if (experienceScore < 0.3) {
-         // Severe under-qualification: max overall score is 50% regardless of other factors
-         overallScore = Math.min(overallScore, 0.5);
-      } else if (experienceScore < 0.5) {
-         // Moderate under-qualification: cap at 70%
-         overallScore = Math.min(overallScore, 0.7);
+      // If auto-fail, set overall score to very low value
+      if (autoFail) {
+         overallScore = 0;
+      } else {
+         // Hard requirement penalty: If experience score is very low (severe under-qualification),
+         // cap the overall score to prevent false positives
+         if (experienceScore < 0.3) {
+            // Severe under-qualification: max overall score is 50% regardless of other factors
+            overallScore = Math.min(overallScore, 0.5);
+         } else if (experienceScore < 0.5) {
+            // Moderate under-qualification: cap at 70%
+            overallScore = Math.min(overallScore, 0.7);
+         }
       }
 
       // Convert to 0-100 scale
@@ -50,6 +61,7 @@ export class ScoringService {
          educationScore: Math.round(educationScore * 100 * 100) / 100,
          vectorSimilarity,
          chunkSimilarity,
+         autoFail,
       };
    }
 

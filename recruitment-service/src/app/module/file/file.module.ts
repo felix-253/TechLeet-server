@@ -19,6 +19,7 @@ import { CvQueueService } from '../cv-screening/services/cv-queue.service';
 import { CvEmbeddingService } from '../cv-screening/processors/cv-embedding.service';
 import { CvEmbeddingEntity } from '../../../entities/recruitment/cv-embedding.entity';
 import { FilterScoreEntity } from '../../../entities/recruitment/filter-score.entity';
+import { InterviewEntity } from '../../../entities/recruitment/interview.entity';
 
 // Import new modular services
 import { OcrService } from './ocr/ocr.service';
@@ -42,6 +43,7 @@ import { ScoringService } from '../cv-screening/services/scoring.service';
          CvScreeningResultEntity,
          CvEmbeddingEntity,
          FilterScoreEntity,
+         InterviewEntity,
       ]),
    ],
    controllers: [FileController, BrevoWebhookController],
