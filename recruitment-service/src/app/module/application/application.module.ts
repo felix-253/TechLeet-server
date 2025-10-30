@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ApplicationController } from './application.controller';
 import { ApplicationService } from './application.service';
@@ -18,7 +18,7 @@ import { QuestionModule } from '../question/question.module';
          CandidateEntity,
          InterviewEntity,
       ]),
-      CvScreeningModule,
+      forwardRef(() => CvScreeningModule),
       RecruitmentEmailModule,
       QuestionModule,
    ],

@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { CvTextExtractionService } from '../processors/cv-text-extraction.service';
@@ -11,6 +11,7 @@ import { ApplicationEntity } from '../../../../entities/recruitment/application.
 import { JobPostingEntity } from '../../../../entities/recruitment/job-posting.entity';
 import * as fs from 'fs';
 import * as path from 'path';
+import { ApplicationService } from '../../application/application.service';
 
 export interface CandidateInformationResult {
    success: boolean;
@@ -81,6 +82,7 @@ export class InformationService {
       private readonly adaptiveThresholdService: AdaptiveThresholdService,
       private readonly cvQueueService: CvQueueService,
       private readonly dataSource: DataSource,
+      @Inject(forwardRef(() => ApplicationService)) private readonly applicationService: ApplicationService,
    ) {}
 
    /**
@@ -495,83 +497,50 @@ export class InformationService {
    /**
     * Tạo application cho candidate
     */
-   private async createApplication(
+  private async createApplication(
       candidateId: number,
       jobPostingId: number,
       processedData: ProcessedCvData,
       aiAnalysis?: any,
    ): Promise<ApplicationEntity> {
-      // Use transaction for creating application with related data
-      const queryRunner = this.dataSource.createQueryRunner();
-      await queryRunner.connect();
-      await queryRunner.startTransaction();
+     try {
+        // Delegate to ApplicationService to handle business rules and side effects
+        const dto = {
+           jobPostingId,
+           candidateId,
+           resumeUrl: '',
+           coverLetter: aiAnalysis?.summary || undefined,
+           applicationNotes: aiAnalysis ? `AI Analysis: ${JSON.stringify(aiAnalysis)}` : undefined,
+           priority: 'medium' as const,
+        };
 
-      try {
-         // Kiểm tra xem application đã tồn tại chưa
-         const existingApplication = await queryRunner.manager.findOne(ApplicationEntity, {
-            where: { candidateId, jobPostingId },
-         });
+        let created = await this.applicationService.create(dto as any);
 
-         if (existingApplication) {
-            await queryRunner.commitTransaction();
-            this.logger.log(
-               `Application đã tồn tại cho candidate ${candidateId} và job ${jobPostingId}`,
-            );
-            return existingApplication;
-         }
+        // If already exists, fallback to fetch existing entity by unique pair
+        if (!created?.applicationId) {
+           const existing = await this.applicationRepository.findOne({ where: { candidateId, jobPostingId } });
+           if (existing) return existing;
+        }
 
-         // Tạo application mới
-         const application = queryRunner.manager.create(ApplicationEntity, {
-            candidateId,
-            jobPostingId,
-            status: 'submitted',
-            appliedDate: new Date(),
-            isScreeningCompleted: false,
-            screeningStatus: 'pending',
-         });
+        // Load full entity to keep return type consistent
+        const savedEntity = await this.applicationRepository.findOne({ where: { applicationId: created.applicationId } });
+        if (savedEntity) return savedEntity as ApplicationEntity;
 
-         // Lưu initial screening score từ AI analysis nếu có
-         if (aiAnalysis) {
-            application.screeningScore = aiAnalysis.fitScore;
-            this.logger.log(`Initial AI fit score for application: ${aiAnalysis.fitScore.toFixed(3)}`);
-         }
-
-         const savedApplication = await queryRunner.manager.save(application);
-
-         await queryRunner.commitTransaction();
-
-         // Auto-trigger screening pipeline for the new application
-         try {
-            await this.cvQueueService.addCvProcessingJob(
-               {
-                  applicationId: savedApplication.applicationId,
-                  jobPostingId: savedApplication.jobPostingId,
-                  resumeUrl: '', // Will be resolved from application in worker
-                  priority: 0,
-               },
-               { priority: 0 }
-            );
-            this.logger.log(
-               `Auto-triggered screening pipeline for application ${savedApplication.applicationId}`
-            );
-         } catch (queueError) {
-            // Log but don't fail application creation if queue fails
-            this.logger.warn(
-               `Failed to auto-trigger screening for application ${savedApplication.applicationId}: ${queueError.message}`
-            );
-         }
-
-         // Note: Email sending moved to FileService after successful Brevo processing
-         // Direct uploads still send emails in ApplicationService
-
-         return savedApplication;
-      } catch (error) {
-         await queryRunner.rollbackTransaction();
-         this.logger.error(`Lỗi khi tạo application: ${error.message}`, error.stack);
-         throw error;
-      } finally {
-         await queryRunner.release();
-      }
+        // As a last resort, return a minimal entity-like object
+        return {
+           applicationId: created.applicationId,
+           jobPostingId,
+           candidateId,
+           status: 'submitted',
+           appliedDate: new Date(),
+        } as unknown as ApplicationEntity;
+     } catch (error) {
+        this.logger.error(`Lỗi khi tạo application: ${error.message}`, error.stack);
+        // Attempt to return existing application if duplication error
+        const existing = await this.applicationRepository.findOne({ where: { candidateId, jobPostingId } });
+        if (existing) return existing;
+        throw error;
+     }
    }
 
    /**
