@@ -148,16 +148,21 @@ export class ApplicationController {
       },
    })
    async findInterviewRequests(
-      @Query('page') page?: number,
-      @Query('limit') limit?: number,
-      @Query('jobPostingId') jobPostingId?: number,
-      @Query('minScreeningScore') minScreeningScore?: number,
+      @Query('page') page?: string,
+      @Query('limit') limit?: string,
+      @Query('jobPostingId') jobPostingId?: string,
+      @Query('minScreeningScore') minScreeningScore?: string,
    ) {
+      const parsedPage = page && !isNaN(Number(page)) ? parseInt(page, 10) : undefined;
+      const parsedLimit = limit && !isNaN(Number(limit)) ? parseInt(limit, 10) : undefined;
+      const parsedJobPostingId = jobPostingId && !isNaN(Number(jobPostingId)) ? parseInt(jobPostingId, 10) : undefined;
+      const parsedMinScreeningScore = minScreeningScore && !isNaN(Number(minScreeningScore)) ? parseFloat(minScreeningScore) : undefined;
+
       return this.applicationService.findInterviewRequests({
-         page: page ? Number(page) : undefined,
-         limit: limit ? Number(limit) : undefined,
-         jobPostingId: jobPostingId ? Number(jobPostingId) : undefined,
-         minScreeningScore: minScreeningScore ? Number(minScreeningScore) : undefined,
+         page: parsedPage,
+         limit: parsedLimit,
+         jobPostingId: parsedJobPostingId,
+         minScreeningScore: parsedMinScreeningScore,
       });
    }
 

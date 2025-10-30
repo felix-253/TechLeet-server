@@ -727,6 +727,14 @@ export class ApplicationService {
          tags: application.tags,
          reviewedBy: application.reviewedBy,
          hiringManagerId: application.hiringManagerId,
+         isScreeningCompleted: application.isScreeningCompleted ?? false,
+         screeningScore: application.screeningScore,
+         screeningStatus: application.screeningStatus,
+         screeningCompletedAt: application.screeningCompletedAt
+            ? application.screeningCompletedAt instanceof Date
+               ? application.screeningCompletedAt.toISOString()
+               : new Date(application.screeningCompletedAt).toISOString()
+            : undefined,
          daysSinceApplied: getDaysSinceApplied(),
          formattedOfferedSalary: getFormattedOfferedSalary(),
          isOfferActive: getIsOfferActive(),
