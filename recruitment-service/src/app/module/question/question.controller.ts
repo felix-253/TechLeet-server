@@ -9,6 +9,7 @@ import {
    ParseIntPipe,
    Query,
 } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { QuestionService } from './question.service';
 import { CreateQuestionDto, UpdateQuestionDto, FilterQuestionDto } from './dto/question.dto';
 import {
@@ -18,11 +19,30 @@ import {
 } from './dto/question-set.dto';
 import { CreateExaminationDto, SubmitExaminationDto, UpdateScoreDto } from './dto/examination.dto';
 
+@ApiTags('Questions')
 @Controller('question')
 export class QuestionController {
    constructor(private readonly questionService: QuestionService) {}
 
    @Get('questions')
+   @ApiOperation({
+      summary: 'Get all questions with pagination',
+      description: 'Retrieves a paginated list of questions with optional filtering and sorting',
+   })
+   @ApiResponse({
+      status: 200,
+      description: 'Questions retrieved successfully',
+      schema: {
+         type: 'object',
+         properties: {
+            data: {
+               type: 'array',
+               items: { type: 'object' },
+            },
+            total: { type: 'number', example: 25 },
+         },
+      },
+   })
    async getQuestions(@Query() filter: FilterQuestionDto) {
       return this.questionService.findQuestions(filter);
    }
@@ -43,6 +63,25 @@ export class QuestionController {
    }
 
    @Get('question-sets')
+   @ApiOperation({
+      summary: 'Get all question sets with pagination',
+      description:
+         'Retrieves a paginated list of question sets with optional filtering and sorting',
+   })
+   @ApiResponse({
+      status: 200,
+      description: 'Question sets retrieved successfully',
+      schema: {
+         type: 'object',
+         properties: {
+            data: {
+               type: 'array',
+               items: { type: 'object' },
+            },
+            total: { type: 'number', example: 10 },
+         },
+      },
+   })
    async getQuestionSets(@Query() filter: FilterQuestionSetDto) {
       return this.questionService.findQuestionSets(filter);
    }

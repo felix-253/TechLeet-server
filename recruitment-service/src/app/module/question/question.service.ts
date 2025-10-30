@@ -31,6 +31,9 @@ export class QuestionService {
 
    async findQuestions(filter: FilterQuestionDto) {
       const where: any = {};
+      const page = filter.page || 0;
+      const limit = filter.limit || 10;
+      const skip = page * limit;
 
       if (filter.text) {
          where.content = Like(`%${filter.text}%`);
@@ -42,7 +45,16 @@ export class QuestionService {
          where.createdAt = Between(new Date(filter.startDate), new Date(filter.endDate));
       }
 
-      return this.questionRepository.find({ where, order: { createdAt: 'DESC' } });
+      const [questions, total] = await this.questionRepository.findAndCount({
+         where,
+         order: {
+            [filter.sortBy || 'createdAt']: filter.sortOrder || 'DESC',
+         },
+         skip,
+         take: limit,
+      });
+
+      return { data: questions, total };
    }
 
    async createQuestion(dto: CreateQuestionDto) {
@@ -62,21 +74,30 @@ export class QuestionService {
       const question = await this.questionRepository.findOne({ where: { questionId: id } });
       if (!question) throw new NotFoundException('Question not found');
 
-      return this.questionRepository.softRemove(question);
+      return this.questionRepository.remove(question);
    }
 
    async findQuestionSets(filter: FilterQuestionSetDto) {
       const where: any = {};
+      const page = filter.page || 0;
+      const limit = filter.limit || 10;
+      const skip = page * limit;
 
       if (filter.text) {
          where.title = Like(`%${filter.text}%`);
       }
 
-      return this.questionSetRepository.find({
+      const [questionSets, total] = await this.questionSetRepository.findAndCount({
          where,
          relations: ['questionSetItems', 'questionSetItems.question'],
-         order: { createdAt: 'DESC' },
+         order: {
+            [filter.sortBy || 'createdAt']: filter.sortOrder || 'DESC',
+         },
+         skip,
+         take: limit,
       });
+
+      return { data: questionSets, total };
    }
 
    async createQuestionSet(dto: CreateQuestionSetDto) {
@@ -149,7 +170,19 @@ export class QuestionService {
       });
       const savedExam = await this.examinationRepository.save(examination);
 
-      const examQuestions = questionSet.questionSetItems.map((item) => ({
+      // Use all questions or the requested quantity
+      let selectedQuestions = questionSet.questionSetItems;
+      const requestedQuantity = dto.quantityQuestion;
+
+      if (requestedQuantity && requestedQuantity < questionSet.questionSetItems.length) {
+         // Randomly select questions with balanced difficulty distribution
+         selectedQuestions = this.selectBalancedQuestions(
+            questionSet.questionSetItems,
+            requestedQuantity,
+         );
+      }
+
+      const examQuestions = selectedQuestions.map((item) => ({
          examinationId: savedExam.examinationId,
          questionId: item.questionId,
       }));
@@ -224,7 +257,10 @@ export class QuestionService {
          where: { examinationId: examQuestion.examinationId },
       });
 
-      examination.totalScore = examQuestions.reduce((sum, eq) => sum + (eq.score || 0), 0);
+      // Calculate average score (total / number of questions)
+      const totalScore = examQuestions.reduce((sum, eq) => sum + (eq.score || 0), 0);
+      const questionCount = examQuestions.length;
+      examination.totalScore = questionCount > 0 ? totalScore / questionCount : 0;
       await this.examinationRepository.save(examination);
 
       return examQuestion;
@@ -235,5 +271,93 @@ export class QuestionService {
          where: { applicationId, status: 'pending' },
          relations: ['examQuestions', 'examQuestions.question'],
       });
+   }
+
+   /**
+    * Select balanced questions from a question set based on difficulty distribution
+    * @param questionSetItems - All available questions in the set
+    * @param quantity - Number of questions to select
+    * @returns Selected questions with balanced difficulty distribution
+    */
+   private selectBalancedQuestions(
+      questionSetItems: QuestionSetItemEntity[],
+      quantity: number,
+   ): QuestionSetItemEntity[] {
+      // Group questions by difficulty
+      const difficultyGroups = {
+         easy: [] as QuestionSetItemEntity[],
+         medium: [] as QuestionSetItemEntity[],
+         hard: [] as QuestionSetItemEntity[],
+      };
+
+      questionSetItems.forEach((item) => {
+         const difficulty = item.question?.difficulty;
+         if (difficulty && difficulty in difficultyGroups) {
+            difficultyGroups[difficulty as keyof typeof difficultyGroups].push(item);
+         }
+      });
+
+      // Calculate distribution: 30% easy, 50% medium, 20% hard
+      let easyCount = Math.ceil(quantity * 0.3);
+      let mediumCount = Math.ceil(quantity * 0.5);
+      let hardCount = Math.max(1, quantity - easyCount - mediumCount);
+
+      // Shuffle arrays using Fisher-Yates algorithm
+      const shuffle = <T>(array: T[]): T[] => {
+         const shuffled = [...array];
+         for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+         }
+         return shuffled;
+      };
+
+      // Adjust counts based on availability
+      const availableEasy = difficultyGroups.easy.length;
+      const availableMedium = difficultyGroups.medium.length;
+      const availableHard = difficultyGroups.hard.length;
+
+      // Adjust if we don't have enough questions in any category
+      if (easyCount > availableEasy) {
+         const diff = easyCount - availableEasy;
+         easyCount = availableEasy;
+         mediumCount += Math.floor(diff * 0.6);
+         hardCount += Math.floor(diff * 0.4);
+      }
+      if (mediumCount > availableMedium) {
+         const diff = mediumCount - availableMedium;
+         mediumCount = availableMedium;
+         easyCount += Math.floor(diff * 0.4);
+         hardCount += Math.ceil(diff * 0.6);
+      }
+      if (hardCount > availableHard) {
+         const diff = hardCount - availableHard;
+         hardCount = availableHard;
+         easyCount += Math.floor(diff * 0.5);
+         mediumCount += Math.ceil(diff * 0.5);
+      }
+
+      // Select random questions from each difficulty group
+      const selectedQuestions: QuestionSetItemEntity[] = [];
+
+      // Select from each difficulty group
+      const shuffledEasy = shuffle(difficultyGroups.easy);
+      const shuffledMedium = shuffle(difficultyGroups.medium);
+      const shuffledHard = shuffle(difficultyGroups.hard);
+
+      // Add questions from each group
+      selectedQuestions.push(...shuffledEasy.slice(0, easyCount));
+      selectedQuestions.push(...shuffledMedium.slice(0, mediumCount));
+      selectedQuestions.push(...shuffledHard.slice(0, hardCount));
+
+      // If we still don't have enough questions, fill the rest with any available questions
+      if (selectedQuestions.length < quantity) {
+         const remaining = questionSetItems.filter((item) => !selectedQuestions.includes(item));
+         const shuffledRemaining = shuffle(remaining);
+         selectedQuestions.push(...shuffledRemaining.slice(0, quantity - selectedQuestions.length));
+      }
+
+      // Shuffle the final result to randomize order
+      return shuffle(selectedQuestions);
    }
 }

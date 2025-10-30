@@ -7,16 +7,14 @@ import { JobPostingEntity } from '../../../entities/recruitment/job-posting.enti
 import { CandidateEntity } from '../../../entities/recruitment/candidate.entity';
 import { CvScreeningModule } from '../cv-screening/cv-screening.module';
 import { RecruitmentEmailModule } from '../email/email.module';
+import { QuestionModule } from '../question/question.module';
 
 @Module({
    imports: [
-      TypeOrmModule.forFeature([
-         ApplicationEntity,
-         JobPostingEntity,
-         CandidateEntity,
-      ]),
+      TypeOrmModule.forFeature([ApplicationEntity, JobPostingEntity, CandidateEntity]),
       CvScreeningModule,
       RecruitmentEmailModule,
+      QuestionModule,
    ],
    controllers: [ApplicationController],
    providers: [ApplicationService],

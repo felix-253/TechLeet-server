@@ -6,6 +6,10 @@ export class CreateExaminationDto {
 
    @IsNumber()
    sourceSetId: number;
+
+   @IsNumber()
+   @IsOptional()
+   quantityQuestion?: number;
 }
 
 export class SubmitExaminationDto {
