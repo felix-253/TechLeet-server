@@ -79,6 +79,93 @@ export class ApplicationController {
       return this.applicationService.findAll(query);
    }
 
+   @Get('by-email')
+   @ApiOperation({
+      summary: 'Get applications by candidate email (Public)',
+      description: 'Public endpoint to retrieve all applications for a candidate by email address',
+   })
+   @ApiQuery({
+      name: 'email',
+      description: 'Candidate email address',
+      required: true,
+      example: 'candidate@example.com',
+   })
+   @ApiResponse({
+      status: HttpStatus.OK,
+      description: 'Applications retrieved successfully',
+      type: [ApplicationResponseDto],
+   })
+   async findByEmail(@Query('email') email: string): Promise<ApplicationResponseDto[]> {
+      if (!email) {
+         throw new BadRequestException('Email query parameter is required');
+      }
+      return this.applicationService.findByCandidateEmail(email);
+   }
+
+   @Get('interview-requests')
+   @ApiOperation({
+      summary: 'Get applications that need interview scheduling',
+      description: 'Returns applications with status=screening_passed that don\'t have a scheduled interview yet',
+   })
+   @ApiQuery({
+      name: 'page',
+      description: 'Page number (0-based)',
+      required: false,
+      example: 0,
+   })
+   @ApiQuery({
+      name: 'limit',
+      description: 'Number of items per page',
+      required: false,
+      example: 20,
+   })
+   @ApiQuery({
+      name: 'jobPostingId',
+      description: 'Filter by job posting ID',
+      required: false,
+      example: 1,
+   })
+   @ApiQuery({
+      name: 'minScreeningScore',
+      description: 'Filter by minimum screening score',
+      required: false,
+      example: 70,
+   })
+   @ApiResponse({
+      status: HttpStatus.OK,
+      description: 'Interview requests retrieved successfully',
+      schema: {
+         type: 'object',
+         properties: {
+            data: {
+               type: 'array',
+               items: { $ref: '#/components/schemas/ApplicationResponseDto' },
+            },
+            total: { type: 'number', example: 10 },
+            page: { type: 'number', example: 0 },
+            limit: { type: 'number', example: 20 },
+         },
+      },
+   })
+   async findInterviewRequests(
+      @Query('page') page?: string,
+      @Query('limit') limit?: string,
+      @Query('jobPostingId') jobPostingId?: string,
+      @Query('minScreeningScore') minScreeningScore?: string,
+   ) {
+      const parsedPage = page && !isNaN(Number(page)) ? parseInt(page, 10) : undefined;
+      const parsedLimit = limit && !isNaN(Number(limit)) ? parseInt(limit, 10) : undefined;
+      const parsedJobPostingId = jobPostingId && !isNaN(Number(jobPostingId)) ? parseInt(jobPostingId, 10) : undefined;
+      const parsedMinScreeningScore = minScreeningScore && !isNaN(Number(minScreeningScore)) ? parseFloat(minScreeningScore) : undefined;
+
+      return this.applicationService.findInterviewRequests({
+         page: parsedPage,
+         limit: parsedLimit,
+         jobPostingId: parsedJobPostingId,
+         minScreeningScore: parsedMinScreeningScore,
+      });
+   }
+
    @Get(':id')
    @ApiOperation({
       summary: 'Get application by ID',

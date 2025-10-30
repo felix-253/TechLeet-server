@@ -59,7 +59,7 @@ export class RecruitmentEmailService {
             nextSteps:
                'Chúng tôi sẽ xem xét hồ sơ của bạn và liên hệ trong vòng 3-5 ngày làm việc.',
             contactEmail: 'hr@techleet.me',
-            dashboardUrl: `${this.configService.get<string>('FRONTEND_URL')}/application/${application.applicationId}`,
+            dashboardUrl: `${this.configService.get<string>('FRONTEND_URL')}/applications?email=${encodeURIComponent(candidate.email)}`,
          };
 
          await this.apiInstance.sendTransacEmail(sendSmtpEmail);
@@ -69,6 +69,62 @@ export class RecruitmentEmailService {
       } catch (error) {
          console.error(`❌ Failed to send thank you email to ${candidate.email}:`, error);
          // Don't throw error - email failure shouldn't break the application process
+      }
+   }
+
+   /**
+    * Send screening rejection email to candidate
+    */
+   async sendScreeningRejectionEmail(
+      candidate: CandidateEntity,
+      jobPosting: JobPostingEntity,
+      application: ApplicationEntity,
+   ): Promise<void> {
+      try {
+         const sendSmtpEmail: brevo.SendSmtpEmail = new brevo.SendSmtpEmail();
+
+         sendSmtpEmail.subject = `Cập nhật về đơn ứng tuyển của bạn - TechLeet`;
+         sendSmtpEmail.templateId = 10;
+         sendSmtpEmail.to = [
+            {
+               email: candidate.email,
+               name: `${candidate.firstName} ${candidate.lastName}`,
+            },
+         ];
+         sendSmtpEmail.replyTo = {
+            email: 'hr@techleet.me',
+            name: 'TechLeet HR Team',
+         };
+         sendSmtpEmail.sender = {
+            email: 'ldmhieu205@gmail.com',
+            name: 'TechLeet Recruitment',
+         };
+         sendSmtpEmail.headers = {
+            'X-Application-Id': application.applicationId.toString(),
+            'X-Candidate-Id': candidate.candidateId.toString(),
+         };
+
+         sendSmtpEmail.params = {
+            candidateName: `${candidate.firstName} ${candidate.lastName}`,
+            jobTitle: jobPosting.title,
+            companyName: 'TechLeet',
+            applicationId: application.applicationId,
+            applicationDate: application.appliedDate
+               ? new Date(application.appliedDate).toLocaleDateString('vi-VN')
+               : new Date().toLocaleDateString('vi-VN'),
+            nextSteps:
+               'Rất tiếc, chúng tôi đã xem xét kỹ lưỡng hồ sơ của bạn nhưng hiện tại không phù hợp với vị trí này. Chúng tôi cảm ơn sự quan tâm của bạn và khuyến khích bạn tiếp tục theo dõi các vị trí khác tại TechLeet.',
+            contactEmail: 'hr@techleet.me',
+            dashboardUrl: `${this.configService.get<string>('FRONTEND_URL')}/jobs`,
+         };
+
+         await this.apiInstance.sendTransacEmail(sendSmtpEmail);
+         console.log(
+            `✅ Screening rejection email sent to ${candidate.email} for application ${application.applicationId}`,
+         );
+      } catch (error) {
+         console.error(`❌ Failed to send rejection email to ${candidate.email}:`, error);
+         // Don't throw error - email failure shouldn't break the screening process
       }
    }
 

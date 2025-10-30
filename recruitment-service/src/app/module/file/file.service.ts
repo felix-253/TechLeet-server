@@ -76,8 +76,20 @@ export class FileService {
                break;
          }
 
+         // Generate fileUrl if not provided
+         let fileUrl = fileData.fileUrl;
+         if (!fileUrl || fileUrl === '') {
+            // File is in temp-uploads, use relative path
+            // For candidate_resume, use resumes folder
+            const uploadFolder = fileData.fileType === FileType.CANDIDATE_RESUME 
+               ? 'candidate_resume' 
+               : folder;
+            fileUrl = `./uploads/${uploadFolder}/${fileData.fileName}`;
+         }
+
          const fileEntity = this.fileRepository.create({
             ...fileData,
+            fileUrl,
             status: FileStatus.ACTIVE,
          });
 

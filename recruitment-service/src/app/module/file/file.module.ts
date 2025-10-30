@@ -19,6 +19,7 @@ import { CvQueueService } from '../cv-screening/services/cv-queue.service';
 import { CvEmbeddingService } from '../cv-screening/processors/cv-embedding.service';
 import { CvEmbeddingEntity } from '../../../entities/recruitment/cv-embedding.entity';
 import { FilterScoreEntity } from '../../../entities/recruitment/filter-score.entity';
+import { InterviewEntity } from '../../../entities/recruitment/interview.entity';
 
 // Import new modular services
 import { OcrService } from './ocr/ocr.service';
@@ -33,6 +34,9 @@ import { QuestionModule } from '../question/question.module';
 import { ScoringService } from '../cv-screening/services/scoring.service';
 import { AdaptiveThresholdService } from '../cv-screening/services';
 
+import { CandidateModule } from '../candidate/candidate.module';
+
+
 @Module({
    imports: [
       TypeOrmModule.forFeature([
@@ -43,8 +47,10 @@ import { AdaptiveThresholdService } from '../cv-screening/services';
          CvScreeningResultEntity,
          CvEmbeddingEntity,
          FilterScoreEntity,
+         InterviewEntity,
       ]),
       QuestionModule,
+      CandidateModule,
    ],
    controllers: [FileController, BrevoWebhookController],
    providers: [
