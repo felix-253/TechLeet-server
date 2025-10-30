@@ -206,6 +206,17 @@ export class CreateJobPostingDto {
    @IsInt()
    @Type(() => Number)
    questionSetId?: number;
+
+   @ApiPropertyOptional({
+      description: 'Number of questions for this job',
+      example: 10,
+      minimum: 0,
+   })
+   @IsOptional()
+   @IsInt()
+   @Min(0)
+   @Type(() => Number)
+   quantityQuestion?: number;
 }
 
 export class UpdateJobPostingDto {
@@ -410,6 +421,17 @@ export class UpdateJobPostingDto {
    @IsInt()
    @Type(() => Number)
    questionSetId?: number;
+
+   @ApiPropertyOptional({
+      description: 'Number of questions for this job',
+      example: 10,
+      minimum: 0,
+   })
+   @IsOptional()
+   @IsInt()
+   @Min(0)
+   @Type(() => Number)
+   quantityQuestion?: number;
 }
 
 export class JobPostingResponseDto {
@@ -544,6 +566,12 @@ export class JobPostingResponseDto {
       example: 1,
    })
    questionSetId?: number;
+
+   @ApiPropertyOptional({
+      description: 'Number of questions for this job',
+      example: 10,
+   })
+   quantityQuestion?: number;
 
    @ApiPropertyOptional({
       description: 'Formatted salary range',

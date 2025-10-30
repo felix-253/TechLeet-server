@@ -13,6 +13,7 @@ import {
 import { CvScreeningService } from '../cv-screening/cv-screening.service';
 import { InformationService } from '../cv-screening/information.service';
 import { RecruitmentEmailService } from '../email/email.service';
+import { QuestionService } from '../question/question.service';
 
 @Injectable()
 export class ApplicationService {
@@ -28,6 +29,7 @@ export class ApplicationService {
       private readonly cvScreeningService: CvScreeningService,
       private readonly informationService: InformationService,
       private readonly recruitmentEmailService: RecruitmentEmailService,
+      private readonly questionService: QuestionService,
    ) {}
 
    /**
@@ -109,6 +111,7 @@ export class ApplicationService {
          // Verify job posting exists and is active
          const jobPosting = await this.jobPostingRepository.findOne({
             where: { jobPostingId: createApplicationDto.jobPostingId },
+            relations: ['questionSet'],
          });
 
          if (!jobPosting) {
@@ -153,7 +156,34 @@ export class ApplicationService {
             appliedDate: new Date(),
          });
 
+         if (jobPosting.isTest) {
+            application.status = 'test';
+         }
+
          const savedApplication = await this.applicationRepository.save(application);
+
+         // Create examination if job requires test
+         if (jobPosting.isTest && jobPosting.questionSetId) {
+            try {
+               this.logger.log(
+                  `Creating examination for application ${savedApplication.applicationId}`,
+               );
+               await this.questionService.createExamination({
+                  applicationId: savedApplication.applicationId,
+                  sourceSetId: jobPosting.questionSetId,
+                  quantityQuestion: jobPosting.quantityQuestion,
+               });
+               this.logger.log(
+                  `Examination created successfully for application ${savedApplication.applicationId}`,
+               );
+            } catch (error) {
+               this.logger.error(
+                  `Failed to create examination for application ${savedApplication.applicationId}: ${error.message}`,
+                  error.stack,
+               );
+               // Don't fail the application creation if examination creation fails
+            }
+         }
 
          // Trigger CV screening if resume is provided
          if (savedApplication.resumeUrl) {
@@ -180,13 +210,17 @@ export class ApplicationService {
 
          // Send thank you email to candidate
          try {
-            this.logger.log(`Sending thank you email for application ${savedApplication.applicationId}`);
+            this.logger.log(
+               `Sending thank you email for application ${savedApplication.applicationId}`,
+            );
             await this.recruitmentEmailService.sendApplicationThankYouEmail(
                candidate,
                jobPosting,
-               savedApplication
+               savedApplication,
             );
-            this.logger.log(`✅ Thank you email sent successfully for application ${savedApplication.applicationId}`);
+            this.logger.log(
+               `✅ Thank you email sent successfully for application ${savedApplication.applicationId}`,
+            );
          } catch (emailError) {
             this.logger.error(
                `❌ Failed to send thank you email for application ${savedApplication.applicationId}: ${emailError.message}`,

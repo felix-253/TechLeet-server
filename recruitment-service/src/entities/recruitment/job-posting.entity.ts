@@ -139,7 +139,7 @@ export class JobPostingEntity extends BaseEntity {
 
    @Column({
       type: 'boolean',
-      name: 'is_test',
+      name: 'isTest',
       nullable: false,
       default: false,
       comment: 'Indicates whether the job requires a test',
@@ -153,6 +153,14 @@ export class JobPostingEntity extends BaseEntity {
       comment: 'Reference to question set used for this job',
    })
    questionSetId?: number;
+
+   @Column({
+      type: 'int',
+      name: 'quantityquestion',
+      nullable: true,
+      comment: 'Number of questions for this job',
+   })
+   quantityQuestion?: number;
 
    // Foreign Keys (references to Company Service and User Service)
    @Column({
