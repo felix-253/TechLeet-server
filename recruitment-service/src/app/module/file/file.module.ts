@@ -35,6 +35,7 @@ import { FileManagementHandler } from './handlers/file-management.service';
 // Import email service directly (not module to avoid circular dependency)
 import { RecruitmentEmailService } from '../email/email.service';
 import { AdaptiveThresholdService } from '../cv-screening/adaptive-threshold.service';
+import { QuestionModule } from '../question/question.module';
 
 @Module({
    imports: [
@@ -50,6 +51,7 @@ import { AdaptiveThresholdService } from '../cv-screening/adaptive-threshold.ser
          SkillAliasEntity,
          FilterScoreEntity,
       ]),
+      QuestionModule,
    ],
    controllers: [FileController, BrevoWebhookController],
    providers: [
