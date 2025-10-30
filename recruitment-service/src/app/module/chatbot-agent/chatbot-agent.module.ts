@@ -27,7 +27,7 @@ import { CandidateTool } from './tools/candidate.tool';
 import { AnalyticsTool } from './tools/analytics.tool';
 
 // External services (reuse from existing modules)
-import { CvEmbeddingService } from '../cv-screening/cv-embedding.service';
+import { CvEmbeddingService } from '../cv-screening/processors/cv-embedding.service';
 
 // Controller
 import { ChatbotAgentController } from './chatbot-agent.controller';

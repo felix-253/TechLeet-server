@@ -11,7 +11,7 @@ import {
    GetApplicationsQueryDto,
 } from './dto/application.dto';
 import { CvScreeningService } from '../cv-screening/cv-screening.service';
-import { InformationService } from '../cv-screening/information.service';
+import { InformationService } from '../cv-screening/services/information.service';
 import { RecruitmentEmailService } from '../email/email.service';
 
 @Injectable()
