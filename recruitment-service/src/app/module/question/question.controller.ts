@@ -140,6 +140,20 @@ export class QuestionController {
       return this.questionService.updateExamScore(id, dto);
    }
 
+   @Post('examinations/:id/revaluate')
+   @ApiOperation({
+      summary: 'Revaluate examination score',
+      description: 'Recalculate average score and update application status based on min_score',
+   })
+   @ApiParam({ name: 'id', description: 'Examination ID', type: 'number' })
+   @ApiResponse({
+      status: 200,
+      description: 'Examination revaluated successfully',
+   })
+   async revaluateExamination(@Param('id', ParseIntPipe) examinationId: number) {
+      return this.questionService.revaluateExamination(examinationId);
+   }
+
    @Get('examinations/todo/:applicationId')
    async getExaminationsToDo(@Param('applicationId', ParseIntPipe) applicationId: number) {
       return this.questionService.getExaminationsToDo(applicationId);

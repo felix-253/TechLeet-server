@@ -310,6 +310,7 @@ export class JobPostingService {
          isTest: jobPosting.isTest,
          questionSetId: jobPosting.questionSetId,
          quantityQuestion: jobPosting.quantityQuestion,
+         minScore: jobPosting.minScore,
          salaryRange: getSalaryRange(),
          isJobActive:
             jobPosting.status === 'published' &&

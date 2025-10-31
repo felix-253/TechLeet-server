@@ -6,6 +6,7 @@ import { ExaminationEntity } from '../../../entities/question/examination.entity
 import { QuestionSetItemEntity } from '../../../entities/question/question_set_item.entity';
 import { ApplicationEntity } from '../../../entities/recruitment/application.entity';
 import { CandidateEntity } from '../../../entities/recruitment/candidate.entity';
+import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
 import { QuestionController } from './question.controller';
 import { QuestionService } from './question.service';
 import { ExamQuestionEntity } from '../../../entities/question/exam_question.entity';
@@ -21,6 +22,7 @@ import { CvScreeningModule } from '../cv-screening/cv-screening.module';
          ApplicationEntity,
          CandidateEntity,
          ExamQuestionEntity,
+         JobPostingEntity,
       ]),
       CvScreeningModule,
    ],
