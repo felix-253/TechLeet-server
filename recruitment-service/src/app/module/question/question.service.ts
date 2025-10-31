@@ -6,6 +6,8 @@ import { ExaminationEntity } from '../../../entities/question/examination.entity
 import { QuestionEntity } from '../../../entities/question/question.entity';
 import { QuestionSetEntity } from '../../../entities/question/question_set.entity';
 import { QuestionSetItemEntity } from '../../../entities/question/question_set_item.entity';
+import { ApplicationEntity } from '../../../entities/recruitment/application.entity';
+import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
 import { CreateQuestionDto, FilterQuestionDto, UpdateQuestionDto } from './dto/question.dto';
 import { CreateExaminationDto, SubmitExaminationDto, UpdateScoreDto } from './dto/examination.dto';
 import {
@@ -32,6 +34,10 @@ export class QuestionService {
       private readonly questionSetItemRepository: Repository<QuestionSetItemEntity>,
       @InjectRepository(ExamQuestionEntity)
       private readonly examQuestionRepository: Repository<ExamQuestionEntity>,
+      @InjectRepository(ApplicationEntity)
+      private readonly applicationRepository: Repository<ApplicationEntity>,
+      @InjectRepository(JobPostingEntity)
+      private readonly jobPostingRepository: Repository<JobPostingEntity>,
       private readonly configService: ConfigService,
    ) {
       const apiKey = this.configService.get<string>('GEMINI_API_KEY');
@@ -252,13 +258,43 @@ export class QuestionService {
 
       await this.examQuestionRepository.save(examQuestions);
 
+      // Calculate average score
+      const averageScore = examQuestions.length > 0 ? totalScore / examQuestions.length : 0;
+
       examination.status = 'completed';
       examination.submittedAt = new Date();
-      examination.totalScore = totalScore;
+      examination.totalScore = averageScore;
       await this.examinationRepository.save(examination);
 
+      // Get application and job posting to check min score
+      const application = await this.applicationRepository.findOne({
+         where: { applicationId: examination.applicationId },
+      });
+
+      if (application) {
+         const jobPosting = await this.jobPostingRepository.findOne({
+            where: { jobPostingId: application.jobPostingId },
+         });
+
+         if (jobPosting && jobPosting.minScore !== undefined && jobPosting.minScore !== null) {
+            // Update application status based on score
+            if (averageScore >= jobPosting.minScore) {
+               application.status = 'passed_exam';
+               this.logger.log(
+                  `Application ${application.applicationId} passed exam with score ${averageScore.toFixed(2)} >= ${jobPosting.minScore}`,
+               );
+            } else {
+               application.status = 'failed_exam';
+               this.logger.log(
+                  `Application ${application.applicationId} failed exam with score ${averageScore.toFixed(2)} < ${jobPosting.minScore}`,
+               );
+            }
+            await this.applicationRepository.save(application);
+         }
+      }
+
       this.logger.log(
-         `Examination ${id} submitted successfully. Total score: ${totalScore} / ${examQuestions.length * 10}`,
+         `Examination ${id} submitted successfully. Average score: ${averageScore.toFixed(2)} / 10`,
       );
 
       return this.getExaminationDetail(id);
@@ -294,10 +330,106 @@ export class QuestionService {
       // Calculate average score (total / number of questions)
       const totalScore = examQuestions.reduce((sum, eq) => sum + (eq.score || 0), 0);
       const questionCount = examQuestions.length;
-      examination.totalScore = questionCount > 0 ? totalScore / questionCount : 0;
+      const averageScore = questionCount > 0 ? totalScore / questionCount : 0;
+
+      examination.totalScore = averageScore;
       await this.examinationRepository.save(examination);
 
+      // Auto-revaluate if examination is completed
+      if (examination.status === 'completed') {
+         // Get application and job posting to check min score
+         const application = await this.applicationRepository.findOne({
+            where: { applicationId: examination.applicationId },
+         });
+
+         if (application) {
+            const jobPosting = await this.jobPostingRepository.findOne({
+               where: { jobPostingId: application.jobPostingId },
+            });
+
+            if (jobPosting && jobPosting.minScore !== undefined && jobPosting.minScore !== null) {
+               // Update application status based on score
+               if (averageScore >= jobPosting.minScore) {
+                  application.status = 'passed_exam';
+                  this.logger.log(
+                     `Application ${application.applicationId} passed exam after score update with score ${averageScore.toFixed(2)} >= ${jobPosting.minScore}`,
+                  );
+               } else {
+                  application.status = 'failed_exam';
+                  this.logger.log(
+                     `Application ${application.applicationId} failed exam after score update with score ${averageScore.toFixed(2)} < ${jobPosting.minScore}`,
+                  );
+               }
+               await this.applicationRepository.save(application);
+            }
+         }
+      }
+
       return examQuestion;
+   }
+
+   async revaluateExamination(examinationId: number) {
+      const examination = await this.examinationRepository.findOne({
+         where: { examinationId },
+      });
+      if (!examination) throw new NotFoundException('Examination not found');
+
+      if (examination.status !== 'completed') {
+         throw new BadRequestException('Examination is not completed yet');
+      }
+
+      const examQuestions = await this.examQuestionRepository.find({
+         where: { examinationId },
+      });
+
+      // Calculate average score
+      const totalScore = examQuestions.reduce((sum, eq) => sum + (eq.score || 0), 0);
+      const questionCount = examQuestions.length;
+      const averageScore = questionCount > 0 ? totalScore / questionCount : 0;
+
+      examination.totalScore = averageScore;
+      await this.examinationRepository.save(examination);
+
+      // Get application and job posting to check min score
+      const application = await this.applicationRepository.findOne({
+         where: { applicationId: examination.applicationId },
+      });
+      console.log('function revaluateExamination');
+      if (application) {
+         console.log('application have');
+
+         const jobPosting = await this.jobPostingRepository.findOne({
+            where: { jobPostingId: application.jobPostingId },
+         });
+
+         if (jobPosting && jobPosting.minScore !== undefined && jobPosting.minScore !== null) {
+            // Update application status based on score
+            console.log('compare');
+
+            if (averageScore >= jobPosting.minScore) {
+               console.log('pass');
+
+               application.status = 'passed_exam';
+               this.logger.log(
+                  `Application ${application.applicationId} passed exam after revaluation with score ${averageScore.toFixed(2)} >= ${jobPosting.minScore}`,
+               );
+            } else {
+               console.log('failed ');
+
+               application.status = 'failed_exam';
+               this.logger.log(
+                  `Application ${application.applicationId} failed exam after revaluation with score ${averageScore.toFixed(2)} < ${jobPosting.minScore}`,
+               );
+            }
+            await this.applicationRepository.save(application);
+         }
+      }
+
+      this.logger.log(
+         `Examination ${examinationId} revaluated successfully. Average score: ${averageScore.toFixed(2)} / 10`,
+      );
+
+      return this.getExaminationDetail(examinationId);
    }
 
    async getExaminationsToDo(applicationId: number) {

@@ -33,7 +33,7 @@ export class ApplicationEntity extends BaseEntity {
       nullable: false,
       default: 'submitted',
       comment:
-         'Application status (submitted, screening, interviewing, offer, hired, rejected, withdrawn)',
+         'Application status (submitted, screening, interviewing, offer, hired, rejected, withdrawn, passed_exam, failed_exam)',
    })
    status: string;
 
@@ -264,6 +264,8 @@ export class ApplicationEntity extends BaseEntity {
          hired: 'green',
          rejected: 'red',
          withdrawn: 'gray',
+         passed_exam: 'green',
+         failed_exam: 'red',
       };
       return statusColors[this.status] || 'gray';
    }
