@@ -183,6 +183,10 @@ export class ApplicationService {
                this.logger.log(
                   `Creating examination for application ${savedApplication.applicationId}`,
                );
+               /**
+                * thêm giúp t gửi email có link bài test format: /exam/3 (examinationId)
+                * điều kiện: nếu mà jobPostingId có isTest = true và pass screening
+                *  */
                await this.questionService.createExamination({
                   applicationId: savedApplication.applicationId,
                   sourceSetId: jobPosting.questionSetId,
@@ -570,7 +574,7 @@ export class ApplicationService {
          .leftJoin(
             InterviewEntity,
             'interview',
-            'interview.candidate_id = application.candidateId AND interview.job_id = application.jobPostingId'
+            'interview.candidate_id = application.candidateId AND interview.job_id = application.jobPostingId',
          )
          .where('application.status = :status', { status: 'screening_passed' })
          .andWhere('(interview.interview_id IS NULL OR interview.status = :pendingStatus)', {
@@ -578,7 +582,9 @@ export class ApplicationService {
          });
 
       if (query?.jobPostingId) {
-         qb.andWhere('application.jobPostingId = :jobPostingId', { jobPostingId: query.jobPostingId });
+         qb.andWhere('application.jobPostingId = :jobPostingId', {
+            jobPostingId: query.jobPostingId,
+         });
       }
 
       if (query?.minScreeningScore !== undefined) {
