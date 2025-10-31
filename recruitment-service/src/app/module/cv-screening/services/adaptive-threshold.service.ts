@@ -97,13 +97,13 @@ export class AdaptiveThresholdService {
     */
    async processNewCV(jobPostingId: number, cvScore: number): Promise<IScreeningResult> {
       try {
-         // Kiểm tra job posting có tồn tại không
-         const jobExists = await this.jobPostingRepository
+         // Kiểm tra job posting có tồn tại không và lấy thông tin vacancies
+         const jobPosting = await this.jobPostingRepository
             .createQueryBuilder('job')
             .where('job.jobPostingId = :jobPostingId', { jobPostingId })
             .getOne();
 
-         if (!jobExists) {
+         if (!jobPosting) {
             throw new Error(`Job posting ${jobPostingId} not found`);
          }
 
@@ -151,8 +151,41 @@ export class AdaptiveThresholdService {
             };
          }
 
-         // Áp dụng thuật toán Adaptive Threshold
-         const result = this.updateAdaptiveThreshold(currentState, cvScore);
+         // === Bổ sung logic Dynamic K ===
+         // Tính toán hệ số k động dựa trên số CV đã pass và số vị trí tuyển dụng
+         const INTERVIEW_BUFFER = 5; // Mục tiêu phỏng vấn 5 người / vị trí
+         const N_slots = jobPosting.vacancies || 1;
+         const TargetPassed = N_slots * INTERVIEW_BUFFER;
+
+         // Đếm số CV đã pass thực tế
+         const N_passed = await this.applicationRepository.count({
+            where: { jobPostingId, status: 'screening_passed' },
+         });
+
+         // Tính toán sai số (error > 0 nghĩa là thừa CV, error < 0 nghĩa là thiếu CV)
+         const error = N_passed - TargetPassed;
+
+         // Tính toán k mới dựa trên error
+         const k_base = 0.0; // Giờ k_base có thể là 0 (mặc định lấy 50% CV trên mean)
+         const k_adjustment_factor = 0.1; // Độ nhạy của hệ thống
+
+         let dynamic_k = k_base + error * k_adjustment_factor;
+
+         // Giới hạn k trong khoảng hợp lý (-1.0 đến 2.0)
+         dynamic_k = Math.max(-1.0, Math.min(2.0, dynamic_k));
+
+         // Cập nhật currentState.k với giá trị dynamic k
+         const currentStateWithDynamicK: IScreeningState = {
+            ...currentState,
+            k: dynamic_k,
+         };
+
+         this.logger.log(
+            `Dynamic K calculation: N_slots=${N_slots}, TargetPassed=${TargetPassed}, N_passed=${N_passed}, error=${error}, k_dynamic=${dynamic_k.toFixed(3)}`,
+         );
+
+         // Áp dụng thuật toán Adaptive Threshold với dynamic k
+         const result = this.updateAdaptiveThreshold(currentStateWithDynamicK, cvScore);
 
          // Cập nhật filter_score với trạng thái mới
          await this.filterScoreRepository.update(
@@ -167,7 +200,7 @@ export class AdaptiveThresholdService {
          );
 
          this.logger.log(
-            `Job ${jobPostingId}: CV score ${cvScore.toFixed(3)} → ${result.decision.toUpperCase()} | threshold=${result.newThreshold.toFixed(3)} | mean=${result.newState.mean.toFixed(3)} | n=${result.newState.n}`,
+            `Job ${jobPostingId}: CV score ${cvScore.toFixed(3)} → ${result.decision.toUpperCase()} | threshold=${result.newThreshold.toFixed(3)} | mean=${result.newState.mean.toFixed(3)} | n=${result.newState.n} | k=${dynamic_k.toFixed(3)}`,
          );
 
          return result;
