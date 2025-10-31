@@ -42,6 +42,9 @@ export class InterviewEntity {
    @Column({ type: 'varchar', length: 32, default: 'scheduled' })
    status: string;
 
+   @Column({ type: 'text', nullable: true })
+   notes?: string;
+
    @CreateDateColumn({
       type: 'timestamp',
       default: () => 'CURRENT_TIMESTAMP',

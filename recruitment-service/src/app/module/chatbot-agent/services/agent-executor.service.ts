@@ -11,6 +11,7 @@ import { CandidateTool } from '../tools/candidate.tool';
 import { AnalyticsTool } from '../tools/analytics.tool';
 import { ChatRequestDto, ChatResponseDto, ChatSource, ToolCallResult } from '../dto/chat.dto';
 import { DocumentEntityType } from '../../../../entities/recruitment/rag-document.entity';
+import { ChatMessage } from '../../../../entities/recruitment/chat-session.entity';
 
 export interface AgentContext {
   userId: number;
@@ -18,6 +19,7 @@ export interface AgentContext {
   sessionContext: any;
   retrievedDocuments: any[];
   availableTools: BaseTool[];
+  conversationHistory: ChatMessage[];
 }
 
 @Injectable()
@@ -84,13 +86,16 @@ export class AgentExecutorService {
         }
       });
 
-      // Build agent context
+      // Build agent context with conversation history
+      const conversationHistory = session.messages.slice(-10);
+      
       const context: AgentContext = {
         userId,
         sessionId: session.sessionId,
         sessionContext: session.context,
         retrievedDocuments,
-        availableTools: this.getAvailableTools()
+        availableTools: this.getAvailableTools(),
+        conversationHistory
       };
 
       // Execute agent with tools
@@ -149,13 +154,10 @@ export class AgentExecutorService {
       // Build system prompt
       const systemPrompt = this.buildSystemPrompt(context);
       
-      // Build user prompt with context
-      const userPrompt = this.buildUserPrompt(query, context);
-      
       // Get available tools for Gemini function calling
       const tools = context.availableTools.map(tool => tool.getToolDefinition());
       
-      // Call Gemini with function calling
+      // Initialize chat session with conversation history
       const model = this.genAI.getGenerativeModel({
         model: this.defaultModel,
         generationConfig: {
@@ -166,11 +168,22 @@ export class AgentExecutorService {
         },
         tools: tools.length > 0 ? tools.map(tool => ({
           functionDeclarations: [tool as any]
-        })) as any : undefined
+        })) as any : undefined,
+        systemInstruction: {
+          parts: [{ text: systemPrompt }]
+        }
       });
 
-      const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
-      const response = await model.generateContent(fullPrompt);
+      // Start chat session with conversation history
+      const chat = model.startChat({
+        history: this.buildConversationHistory(context.conversationHistory),
+      });
+
+      // Build user prompt with retrieved documents context
+      const userPrompt = this.buildUserPrompt(query, context);
+      
+      // Send message to chat
+      const response = await chat.sendMessage(userPrompt);
       const content = response.response.text();
 
       // Check for function calls
@@ -178,8 +191,9 @@ export class AgentExecutorService {
       let toolResults: ToolCallResult[] = [];
       let finalReply = content;
 
+      // Execute function calls if any
       if (functionCalls && functionCalls.length > 0) {
-        // Execute tool calls
+        // Execute all tool calls
         for (const functionCall of functionCalls) {
           try {
             const tool = context.availableTools.find(t => t.name === functionCall.name);
@@ -218,9 +232,13 @@ export class AgentExecutorService {
           }
         }
 
-        // Generate final response with tool results
+        // Send tool results back to Gemini for final response
         if (toolResults.length > 0) {
-          finalReply = await this.generateFinalResponse(query, content, toolResults, context);
+          const toolResultsText = this.formatToolResultsForLLM(toolResults);
+          const followUpResponse = await chat.sendMessage(
+            `Tool execution results:\n${toolResultsText}\n\nPlease provide a comprehensive response that incorporates these results and answers the user's question: ${query}`
+          );
+          finalReply = followUpResponse.response.text();
         }
       }
 
@@ -301,49 +319,29 @@ Available tools: ${context.availableTools.map(t => t.name).join(', ')}
   }
 
   /**
-   * Generate final response with tool results
+   * Build conversation history for Gemini ChatSession
    */
-  private async generateFinalResponse(
-    originalQuery: string,
-    initialResponse: string,
-    toolResults: ToolCallResult[],
-    context: AgentContext
-  ): Promise<string> {
-    try {
-      const toolSummary = toolResults.map(result => {
-        const status = result.result.success ? '✅' : '❌';
-        const summary = result.result.success 
-          ? `Tool ${result.toolName} executed successfully`
-          : `Tool ${result.toolName} failed: ${result.result.error}`;
-        return `${status} ${summary}`;
-      }).join('\n');
+  private buildConversationHistory(messages: ChatMessage[]): Array<{ role: string; parts: Array<{ text: string }> }> {
+    return messages
+      .slice(-10)
+      .map(msg => ({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [{ text: msg.content }]
+      }));
+  }
 
-      const prompt = `
-Initial response: ${initialResponse}
-
-Tool execution results:
-${toolSummary}
-
-Original query: ${originalQuery}
-
-Please provide a comprehensive final response that incorporates the tool results and answers the user's question effectively. Use Markdown formatting and include relevant data from the tool results.
-      `;
-
-      const model = this.genAI.getGenerativeModel({
-        model: this.defaultModel,
-        generationConfig: {
-          temperature: 0.5,
-          maxOutputTokens: 2048,
-        }
-      });
-
-      const response = await model.generateContent(prompt);
-      return response.response.text();
-
-    } catch (error) {
-      this.logger.error('Failed to generate final response:', error);
-      return initialResponse; // Fallback to initial response
-    }
+  /**
+   * Format tool results for LLM consumption
+   */
+  private formatToolResultsForLLM(toolResults: ToolCallResult[]): string {
+    return toolResults.map(result => {
+      const status = result.result.success ? '✅' : '❌';
+      const data = result.result.success && result.result.data
+        ? JSON.stringify(result.result.data, null, 2)
+        : result.result.error || 'No data';
+      
+      return `${status} ${result.toolName}:\n${data}`;
+    }).join('\n\n');
   }
 
   /**

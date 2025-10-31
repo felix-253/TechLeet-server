@@ -254,6 +254,7 @@ export class RecruitmentEmailService {
          interviewerNames: string[]; // Array of interviewer names
          interviewerEmails: string[]; // Array of interviewer emails for CC
          dueDate?: Date; // Deadline to respond
+         notesLink?: string; // Optional notes page link for interviewers
       },
    ): Promise<void> {
       try {
@@ -317,15 +318,15 @@ export class RecruitmentEmailService {
          };
 
          // Add meeting link for online interviews (template #8)
+         // Add notes link if provided (for interviewers)
+         const params: any = { ...baseParams };
          if (isOnline && interviewDetails.meetingLink) {
-            sendSmtpEmail.params = {
-               ...baseParams,
-               meetingLink: interviewDetails.meetingLink,
-            };
-         } else {
-            // For onsite interviews (template #9), just use base params
-            sendSmtpEmail.params = baseParams;
+            params.meetingLink = interviewDetails.meetingLink;
          }
+         if (interviewDetails.notesLink) {
+            params.notesLink = interviewDetails.notesLink;
+         }
+         sendSmtpEmail.params = params;
 
          await this.apiInstance.sendTransacEmail(sendSmtpEmail);
          console.log(
