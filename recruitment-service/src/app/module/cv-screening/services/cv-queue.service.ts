@@ -60,9 +60,14 @@ export class CvQueueService implements OnModuleInit, OnModuleDestroy {
    ) {}
 
    async onModuleInit() {
-      await this.initializeQueues();
-      await this.initializeWorkers();
-      this.logger.log('CV Queue Service initialized successfully');
+      try {
+         await this.initializeQueues();
+         await this.initializeWorkers();
+         this.logger.log('CV Queue Service initialized successfully');
+      } catch (error) {
+         this.logger.error(`Failed to initialize CV Queue Service: ${error.message}`, error.stack);
+         throw error;
+      }
    }
 
    async onModuleDestroy() {
@@ -122,6 +127,19 @@ export class CvQueueService implements OnModuleInit, OnModuleDestroy {
          }
       );
 
+      // Add error handler for worker connection issues
+      this.cvProcessingWorker.on('error', (error) => {
+         this.logger.error(`CV Processing Worker error: ${error.message}`, error.stack);
+      });
+
+      // Add event listeners for monitoring worker state
+      this.cvProcessingWorker.on('ready', () => {
+         this.logger.log('CV Processing Worker is ready and listening for jobs');
+      });
+
+      this.cvProcessingWorker.on('active', (job) => {
+         this.logger.log(`CV Processing Worker: Job ${job.id} is now active`);
+      });
 
       // Add event listeners
       this.addEventListeners();

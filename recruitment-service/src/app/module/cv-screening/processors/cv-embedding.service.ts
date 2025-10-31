@@ -138,22 +138,21 @@ export class CvEmbeddingService {
       metadata?: any
    ): Promise<CvEmbeddingEntity> {
       try {
-         // Use ON CONFLICT DO UPDATE for idempotent operations
          const query = `
             INSERT INTO cv_embedding (
-               application_id, job_posting_id, embedding_type, original_text, 
-               embedding, model, dimensions, metadata, created_at, updated_at
+               "applicationId", "jobPostingId", "embeddingType", "originalText", 
+               embedding, model, dimensions, metadata, "createdAt", "updatedAt"
             ) VALUES (
                $1, $2, $3, $4, $5::vector, $6, $7, $8, NOW(), NOW()
             )
-            ON CONFLICT (embedding_type, COALESCE(application_id, 0), COALESCE(job_posting_id, 0))
+            ON CONFLICT ("embeddingType", "applicationId", "jobPostingId")
             DO UPDATE SET
-               original_text = EXCLUDED.original_text,
+               "originalText" = EXCLUDED."originalText",
                embedding = EXCLUDED.embedding,
                model = EXCLUDED.model,
                dimensions = EXCLUDED.dimensions,
                metadata = EXCLUDED.metadata,
-               updated_at = NOW()
+               "updatedAt" = NOW()
             RETURNING *
          `;
 
@@ -169,20 +168,20 @@ export class CvEmbeddingService {
          ]);
 
          const savedEmbedding = result[0];
-         this.logger.log(`Embedding stored/updated with ID: ${savedEmbedding.embedding_id}`);
+         this.logger.log(`Embedding stored/updated with ID: ${savedEmbedding.embeddingId}`);
 
          return this.embeddingRepository.create({
-            embeddingId: savedEmbedding.embedding_id,
-            applicationId: savedEmbedding.application_id,
-            jobPostingId: savedEmbedding.job_posting_id,
-            embeddingType: savedEmbedding.embedding_type,
-            originalText: savedEmbedding.original_text,
+            embeddingId: savedEmbedding.embeddingId,
+            applicationId: savedEmbedding.applicationId,
+            jobPostingId: savedEmbedding.jobPostingId,
+            embeddingType: savedEmbedding.embeddingType,
+            originalText: savedEmbedding.originalText,
             embedding: savedEmbedding.embedding,
             model: savedEmbedding.model,
             dimensions: savedEmbedding.dimensions,
             metadata: savedEmbedding.metadata,
-            createdAt: savedEmbedding.created_at,
-            updatedAt: savedEmbedding.updated_at,
+            createdAt: savedEmbedding.createdAt,
+            updatedAt: savedEmbedding.updatedAt,
          });
       } catch (error) {
          this.logger.error(`Failed to store embedding: ${error.message}`, error.stack);
@@ -271,11 +270,10 @@ export class CvEmbeddingService {
             throw new Error(`Job embedding not found for job posting ${jobPostingId}`);
          }
 
-         // Calculate cosine similarity using pgvector <=> operator
          const result = await this.embeddingRepository.query(`
-            SELECT 1 - (cv.embedding <=> job.embedding) as similarity
+            SELECT 1 - (cv.embedding::vector <=> job.embedding::vector) as similarity
             FROM cv_embedding cv, cv_embedding job
-            WHERE cv.embedding_id = $1 AND job.embedding_id = $2
+            WHERE cv."embeddingId" = $1 AND job."embeddingId" = $2
          `, [cvEmbedding.embeddingId, jobEmbedding.embeddingId]);
 
          const similarity = parseFloat(result[0]?.similarity || '0');
@@ -311,18 +309,19 @@ export class CvEmbeddingService {
          }
 
          // Find similar CV embeddings using cosine similarity
+         // Cast embedding to vector type before using <=> operator
          const results = await this.embeddingRepository.query(`
             SELECT
-               cv.embedding_id,
-               cv.application_id,
-               cv.embedding_type,
-               cv.original_text,
-               (1 - (cv.embedding <=> $1::vector)) as similarity
+               cv."embeddingId",
+               cv."applicationId",
+               cv."embeddingType",
+               cv."originalText",
+               (1 - (cv.embedding::vector <=> $1::vector)) as similarity
             FROM cv_embedding cv
-            WHERE cv.application_id IS NOT NULL
-               AND cv.embedding_type = $2
-               AND (1 - (cv.embedding <=> $1::vector)) >= $3
-            ORDER BY cv.embedding <=> $1::vector
+            WHERE cv."applicationId" IS NOT NULL
+               AND cv."embeddingType" = $2
+               AND (1 - (cv.embedding::vector <=> $1::vector)) >= $3
+            ORDER BY cv.embedding::vector <=> $1::vector
             LIMIT $4
          `, [
             jobEmbedding.embedding,
@@ -333,10 +332,10 @@ export class CvEmbeddingService {
 
          return results.map((row: any) => ({
             similarity: parseFloat(row.similarity),
-            embeddingId: row.embedding_id,
-            applicationId: row.application_id,
-            embeddingType: row.embedding_type,
-            originalText: row.original_text,
+            embeddingId: row.embeddingId,
+            applicationId: row.applicationId,
+            embeddingType: row.embeddingType,
+            originalText: row.originalText,
          }));
 
       } catch (error) {
@@ -367,18 +366,19 @@ export class CvEmbeddingService {
          }
 
          // Find similar job embeddings using cosine similarity
+         // Cast embedding to vector type before using <=> operator
          const results = await this.embeddingRepository.query(`
             SELECT
-               job.embedding_id,
-               job.job_posting_id,
-               job.embedding_type,
-               job.original_text,
-               (1 - (job.embedding <=> $1::vector)) as similarity
+               job."embeddingId",
+               job."jobPostingId",
+               job."embeddingType",
+               job."originalText",
+               (1 - (job.embedding::vector <=> $1::vector)) as similarity
             FROM cv_embedding job
-            WHERE job.job_posting_id IS NOT NULL
-               AND job.embedding_type = $2
-               AND (1 - (job.embedding <=> $1::vector)) >= $3
-            ORDER BY job.embedding <=> $1::vector
+            WHERE job."jobPostingId" IS NOT NULL
+               AND job."embeddingType" = $2
+               AND (1 - (job.embedding::vector <=> $1::vector)) >= $3
+            ORDER BY job.embedding::vector <=> $1::vector
             LIMIT $4
          `, [
             cvEmbedding.embedding,
@@ -389,10 +389,10 @@ export class CvEmbeddingService {
 
          return results.map((row: any) => ({
             similarity: parseFloat(row.similarity),
-            embeddingId: row.embedding_id,
-            jobPostingId: row.job_posting_id,
-            embeddingType: row.embedding_type,
-            originalText: row.original_text,
+            embeddingId: row.embeddingId,
+            jobPostingId: row.jobPostingId,
+            embeddingType: row.embeddingType,
+            originalText: row.originalText,
          }));
 
       } catch (error) {
