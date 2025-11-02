@@ -30,7 +30,8 @@ async function bootstrap() {
          `${configService.get<string>('FRONTEND_URL', 'http://localhost:3000')}`,
          `${configService.get<string>('FRONTEND_CANDIDATE_URL', 'http://localhost:8080')}`,
          `${configService.get<string>('DOMAIN', 'http://localhost:3030')}`,
-         "http://localhost:8080"
+         "http://localhost:8080",
+         "https://techleet-candidate-client.vercel.app"
       ],
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
