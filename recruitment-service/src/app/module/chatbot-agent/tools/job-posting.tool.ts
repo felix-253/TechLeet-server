@@ -14,7 +14,7 @@ export class JobPostingTool extends BaseTool {
     properties: {
       action: {
         type: 'string',
-        enum: ['create', 'update', 'delete', 'get', 'get_stats'],
+        enum: ['create', 'update', 'delete', 'get', 'list', 'get_stats'],
         description: 'Action to perform on job postings'
       },
       id: {
@@ -62,6 +62,20 @@ export class JobPostingTool extends BaseTool {
           department: { type: 'string' },
           location: { type: 'string' }
         }
+      },
+      limit: {
+        type: 'number',
+        description: 'Limit number of results (for list action, default: 10)'
+      },
+      sortBy: {
+        type: 'string',
+        enum: ['createdAt', 'updatedAt', 'title'],
+        description: 'Field to sort by (for list action, default: createdAt)'
+      },
+      sortOrder: {
+        type: 'string',
+        enum: ['ASC', 'DESC'],
+        description: 'Sort order (for list action, default: DESC)'
       }
     },
     required: ['action']
@@ -90,6 +104,8 @@ export class JobPostingTool extends BaseTool {
           return await this.deleteJobPosting(params, context);
         case 'get':
           return await this.getJobPosting(params, context);
+        case 'list':
+          return await this.listJobPostings(params, context);
         case 'get_stats':
           return await this.getJobStats(params, context);
         default:
@@ -215,6 +231,60 @@ export class JobPostingTool extends BaseTool {
         updatedAt: jobPosting.updatedAt
       },
       `Job posting "${jobPosting.title}" retrieved successfully`
+    );
+  }
+
+  private async listJobPostings(params: any, context: ToolContext): Promise<ToolResult> {
+    const limit = params.limit || 10;
+    const sortBy = params.sortBy || 'createdAt';
+    const sortOrder = params.sortOrder || 'DESC';
+
+    const queryBuilder = this.jobPostingRepository.createQueryBuilder('job');
+
+    // Apply filters
+    if (params.filters) {
+      if (params.filters.status) {
+        queryBuilder.andWhere('job.status = :status', { status: params.filters.status });
+      }
+      if (params.filters.department) {
+        queryBuilder.andWhere('job.departmentId = :department', { department: params.filters.department });
+      }
+      if (params.filters.location) {
+        queryBuilder.andWhere('job.location ILIKE :location', { location: `%${params.filters.location}%` });
+      }
+    }
+
+    // Apply sorting
+    const validSortFields = ['createdAt', 'updatedAt', 'title'];
+    const sortField = validSortFields.includes(sortBy) ? sortBy : 'createdAt';
+    const order = sortOrder.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+    queryBuilder.orderBy(`job.${sortField}`, order);
+
+    // Apply limit
+    queryBuilder.limit(limit);
+
+    const jobs = await queryBuilder.getMany();
+
+    return this.createSuccessResult(
+      {
+        jobs: jobs.map(job => ({
+          jobPostingId: job.jobPostingId,
+          title: job.title,
+          description: job.description,
+          status: job.status,
+          departmentId: job.departmentId,
+          location: job.location,
+          salaryMin: job.salaryMin,
+          salaryMax: job.salaryMax,
+          createdAt: job.createdAt,
+          updatedAt: job.updatedAt
+        })),
+        total: jobs.length,
+        limit,
+        sortBy: sortField,
+        sortOrder: order
+      },
+      `Found ${jobs.length} job posting(s)`
     );
   }
 

@@ -74,9 +74,9 @@ export class RetrieverService {
 
     let query = `
       SELECT 
-        doc.documentId,
-        doc.entityType,
-        doc.entityId,
+        doc."documentId",
+        doc.entity_type AS "entityType",
+        doc.entity_id AS "entityId",
         doc.content,
         doc.metadata,
         (1 - (doc.embedding <=> $1::vector)) as similarity
@@ -91,7 +91,7 @@ export class RetrieverService {
     // Add entity type filter
     if (filters.entityTypes && filters.entityTypes.length > 0) {
       const entityTypePlaceholders = filters.entityTypes.map(() => `$${paramIndex++}`).join(',');
-      query += ` AND doc.entityType IN (${entityTypePlaceholders})`;
+      query += ` AND doc.entity_type IN (${entityTypePlaceholders})`;
       params.push(...filters.entityTypes);
     }
 
