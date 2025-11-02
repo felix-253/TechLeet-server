@@ -73,6 +73,17 @@ export class AuthMiddleware implements NestMiddleware {
             req.headers['x-user-is-admin'] = authPayload.isAdmin.toString();
          }
 
+         // Verify headers were set correctly
+         console.log(`[AuthMiddleware] ✅ Setting headers for user ${authPayload.employeeId}:`);
+         console.log(`[AuthMiddleware]   x-user-id: ${req.headers['x-user-id']}`);
+         console.log(`[AuthMiddleware]   x-user-permissions: ${req.headers['x-user-permissions']}`);
+         console.log(`[AuthMiddleware]   x-user-is-admin: ${req.headers['x-user-is-admin']}`);
+         console.log(`[AuthMiddleware]   All headers keys: ${Object.keys(req.headers).join(', ')}`);
+
+         this.logger.debug(
+            `Setting headers for user ${authPayload.employeeId}: x-user-id=${req.headers['x-user-id']}, x-user-permissions=${req.headers['x-user-permissions']}, x-user-is-admin=${req.headers['x-user-is-admin']}`,
+         );
+
          this.logger.log(
             `Authenticated user ${authPayload.employeeId} for ${method} ${originalUrl}`,
          );

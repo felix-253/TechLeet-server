@@ -5,6 +5,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { SuccessResponseInterceptor } from './common/interceptors/response.interceptor';
+import { CurrentUserInterceptor } from './common/interceptor/currentUser.interceptor';
 
 async function bootstrap() {
    const app = await NestFactory.create(AppModule);
@@ -36,6 +37,7 @@ async function bootstrap() {
 
    app.use(helmet());
    app.useGlobalInterceptors(
+      new CurrentUserInterceptor(),
       new SuccessResponseInterceptor(),
       new ClassSerializerInterceptor(app.get(Reflector))
    );
