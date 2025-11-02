@@ -2,53 +2,60 @@
 hide footbox
 skinparam ParticipantPadding 10
 skinparam BoxPadding 5
+
 actor "Nhân viên/Quản trị viên" as User
 boundary "Giao diện đăng nhập" as LoginUI
 control "AuthController" as AuthController
+control "LocalStrategy" as LocalStrategy
+control "AuthService" as AuthService
 entity "EmployeeRepository" as EmployeeRepo
-entity "PermissionRepository" as PermissionRepo
-database "Cơ sở dữ liệu" as Database
-database "Redis Cache" as Redis
 
 User -> LoginUI: Nhập email và mật khẩu
 User -> LoginUI: Nhấn "Đăng nhập"
 
-LoginUI -> AuthController: Gửi thông tin đăng nhập
+LoginUI -> AuthController: POST /auth/login\n(email, password)
 
-AuthController -> EmployeeRepo: Tìm nhân viên theo email
-EmployeeRepo -> Database: Truy vấn thông tin nhân viên
-Database --> EmployeeRepo: Trả về thông tin nhân viên
-EmployeeRepo --> AuthController: Dữ liệu nhân viên
+AuthController -> LocalStrategy: validate(email, password)
 
-AuthController -> AuthController: Xác thực mật khẩu
+LocalStrategy -> EmployeeRepo: employeeLogin(email)
+activate EmployeeRepo
+EmployeeRepo -> EmployeeRepo: findOne({ email })\nrelations: ['permissions']
+EmployeeRepo --> LocalStrategy: EmployeeEntity
+deactivate EmployeeRepo
 
-alt [Đăng nhập thành công]
-    AuthController -> PermissionRepo: Lấy danh sách quyền của nhân viên
-    PermissionRepo -> Database: Truy vấn quyền truy cập
-    Database --> PermissionRepo: Danh sách quyền
-    PermissionRepo --> AuthController: Dữ liệu quyền
+LocalStrategy -> LocalStrategy: bcrypt.compareSync(password, employee.password)
+
+alt [Password valid]
+    LocalStrategy --> AuthController: EmployeeEntity
+    AuthController -> AuthService: login(employee)
+    activate AuthService
     
-    AuthController -> Redis: Lưu quyền vào bộ nhớ đệm
-    Redis --> AuthController: Lưu thành công
+    AuthService -> AuthService: Get permissions from employee.permissions
+    AuthService -> AuthService: Check if admin (permissionType == FULL)
+    AuthService -> AuthService: removeSet(REDIS_KEY_EMPLOYEE_PERMISSION + employeeId)
     
-    AuthController -> AuthController: Tạo token truy cập
-    AuthController -> AuthController: Tạo token làm mới
-    
-    AuthController -> Database: Lưu token làm mới
-    Database --> AuthController: Lưu token thành công
-    
-    alt [Quyền quản trị viên]
-        AuthController -> LoginUI: Trả về token và quyền admin
-        LoginUI -> User: Chuyển đến trang quản trị
-    else [Quyền nhân viên]
-        AuthController -> LoginUI: Trả về token và quyền nhân viên
-        LoginUI -> User: Chuyển đến trang nhân viên
-    else [Không có quyền]
-        AuthController -> LoginUI: Thông báo không có quyền truy cập
-        LoginUI -> User: Hiển thị lỗi quyền truy cập
+    alt [Is Admin]
+        AuthService -> AuthService: setSet(REDIS_KEY, [{permissionType: FULL}], TTL)
+    else [Has Permissions]
+        AuthService -> AuthService: Map permissions to Redis format
+        AuthService -> AuthService: setSet(REDIS_KEY, permissionArray)
+    else [No Permissions]
+        AuthService -> AuthService: setSet(REDIS_KEY, [{VIEW, null, null}], TTL)
     end
-else [Đăng nhập thất bại]
-    AuthController -> LoginUI: Thông báo đăng nhập thất bại
+    
+    AuthService -> AuthService: Create payloadJwt = { employeeId }
+    AuthService -> AuthService: Create payloadRefresh = { employeeId, isRefresh }
+    AuthService -> AuthService: sign(payload) → accessToken
+    AuthService -> AuthService: sign(payloadRefresh, expiresIn) → refreshToken
+    
+    AuthService --> AuthController: LoginResDto\n{ token, refreshToken, email, fullName, phoneNumber, avatarUrl, employeeId }
+    deactivate AuthService
+    
+    AuthController --> LoginUI: 200 OK\nLoginResDto
+    LoginUI -> User: Hiển thị trang chủ theo quyền
+else [Password invalid]
+    LocalStrategy --> AuthController: NotFoundException\n"Wrong email or password"
+    AuthController --> LoginUI: 404 Not Found
     LoginUI -> User: Hiển thị lỗi đăng nhập
 end
 
