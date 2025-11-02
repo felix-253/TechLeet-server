@@ -82,7 +82,7 @@ export class RecruitmentEmailService {
    ): Promise<void> {
       try {
          const sendSmtpEmail: brevo.SendSmtpEmail = new brevo.SendSmtpEmail();
-         const candidatePortalUrl = this.configService.get<string>('FRONTEND_CANDIDATE_URL', 'http://localhost:8080');
+         const candidatePortalUrl = this.configService.get<string>('FRONTEND_CANDIDATE_URL', 'https://techleet.me');
          const examinationLink = `${candidatePortalUrl}/exam/${examinationId}`;
 
          sendSmtpEmail.subject = `Bài kiểm tra cho vị trí ${jobPosting.title} - TechLeet`;
