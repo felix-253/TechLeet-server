@@ -672,8 +672,23 @@ export class CvScreeningWorkerService {
       let screeningStatus = 'pending';
 
       if (screeningResult.status === ScreeningStatus.PASSED) {
-         applicationStatus = 'screening_passed';
-         screeningStatus = 'passed';
+         // Check if examination already failed before setting screening_passed
+         // If exam failed, keep failed_exam status instead of overriding
+         const application = await this.applicationRepository.findOne({
+            where: { applicationId },
+         });
+
+         if (application && application.status === 'failed_exam') {
+            // Examination already failed, keep failed_exam status
+            applicationStatus = 'failed_exam';
+            screeningStatus = 'passed';
+            this.logger.log(
+               `Application ${applicationId} CV screening passed but exam failed. Keeping failed_exam status.`,
+            );
+         } else {
+            applicationStatus = 'screening_passed';
+            screeningStatus = 'passed';
+         }
       } else if (screeningResult.status === ScreeningStatus.SCREENING_FAILED) {
          applicationStatus = 'screening_failed';
          screeningStatus = 'failed';
@@ -792,6 +807,17 @@ export class CvScreeningWorkerService {
                         const savedInterview = await this.interviewRepository.save(interviewRequest);
                         this.logger.log(
                            `Created interview request (interview_id: ${savedInterview.interview_id}) for application ${applicationId} after CV screening passed and examination already completed`,
+                        );
+                     }
+                     return;
+                  } else {
+                     // Examination failed, ensure application status is failed_exam
+                     if (application.status !== 'failed_exam') {
+                        await this.applicationRepository.update(applicationId, {
+                           status: 'failed_exam',
+                        });
+                        this.logger.log(
+                           `Updated application ${applicationId} status to failed_exam after CV screening passed but examination failed`,
                         );
                      }
                      return;
