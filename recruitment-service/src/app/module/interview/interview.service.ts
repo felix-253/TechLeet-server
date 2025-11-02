@@ -175,22 +175,25 @@ export class InterviewService {
 
          // Send separate emails to each interviewer (with notes link)
          if (interviewerEmails && interviewerEmails.length > 0 && notesLink) {
-            for (const interviewerEmail of interviewerEmails) {
+            for (let i = 0; i < interviewerEmails.length; i++) {
                try {
+                  const interviewerEmail = interviewerEmails[i];
+                  const interviewerName = interviewerNames[i] || 'Interviewer';
+                  
                   await this.emailService.sendInterviewConfirmationEmailToInterviewer(
                      interviewerEmail,
+                     interviewerName,
                      candidate,
                      jobPosting,
                      {
                         scheduledAt,
                         meetingLink,
                         location,
-                        interviewerNames,
                         notesLink,
                      },
                   );
                } catch (error) {
-                  console.error(`❌ Failed to send email to interviewer ${interviewerEmail}:`, error);
+                  console.error(`❌ Failed to send email to interviewer ${interviewerEmails[i]}:`, error);
                }
             }
          }
@@ -368,8 +371,11 @@ export class InterviewService {
 
          // Send separate emails to each interviewer (with notes link)
          if (interviewerEmails && interviewerEmails.length > 0 && notesLink) {
-            for (const interviewerEmail of interviewerEmails) {
+            for (let i = 0; i < interviewerEmails.length; i++) {
                try {
+                  const interviewerEmail = interviewerEmails[i];
+                  const interviewerName = interviewerNames[i] || 'Interviewer';
+                  
                   // Build change description
                   let changeDescription: string | undefined;
                   if (changedFields && changedFields.length > 0) {
@@ -401,13 +407,13 @@ export class InterviewService {
 
                   await this.emailService.sendInterviewUpdateEmailToInterviewer(
                      interviewerEmail,
+                     interviewerName,
                      candidate,
                      jobPosting,
                      {
                         scheduledAt,
                         meetingLink,
                         location,
-                        interviewerNames,
                         changedFields,
                         previousScheduledAt,
                         changeDescription,
@@ -415,7 +421,7 @@ export class InterviewService {
                      },
                   );
                } catch (error) {
-                  console.error(`❌ Failed to send email to interviewer ${interviewerEmail}:`, error);
+                  console.error(`❌ Failed to send email to interviewer ${interviewerEmails[i]}:`, error);
                }
             }
          }

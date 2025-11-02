@@ -736,7 +736,6 @@ export class CvScreeningWorkerService {
          try {
             const application = await this.applicationRepository.findOne({
                where: { applicationId },
-               relations: ['jobPosting'],
             });
 
             if (!application) {

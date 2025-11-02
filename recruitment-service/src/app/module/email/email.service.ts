@@ -390,26 +390,25 @@ export class RecruitmentEmailService {
 
    /**
     * Send interview confirmation email to a single interviewer (with notes link)
-    * Used when sending separate emails to each interviewer
+    * Uses template #12 for interviewers
     */
    async sendInterviewConfirmationEmailToInterviewer(
       recipientEmail: string,
+      interviewerName: string,
       candidate: CandidateEntity,
       jobPosting: JobPostingEntity,
       interviewDetails: {
          scheduledAt: Date;
          meetingLink?: string;
          location?: string;
-         interviewerNames: string[];
          notesLink: string;
       },
    ): Promise<void> {
       try {
          const sendSmtpEmail: brevo.SendSmtpEmail = new brevo.SendSmtpEmail();
-         const isOnline = !!interviewDetails.meetingLink;
-         const templateId = isOnline ? 8 : 9;
-         const interviewerNamesString = interviewDetails.interviewerNames.join(', ');
-         const dueDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+         
+         // Use template #12 for interviewers
+         const templateId = 12;
 
          sendSmtpEmail.subject = `Xác nhận lịch phỏng vấn vị trí ${jobPosting.title} - TechLeet`;
          sendSmtpEmail.templateId = templateId;
@@ -423,35 +422,31 @@ export class RecruitmentEmailService {
             name: 'TechLeet Recruitment',
          };
 
+         // Format scheduledAt
+         const scheduledAtFormatted = interviewDetails.scheduledAt.toLocaleString('vi-VN', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+         });
+
          const params: any = {
+            interviewerName: interviewerName,
             candidateName: `${candidate.firstName} ${candidate.lastName}`,
-            jobTitle: jobPosting.title,
-            scheduledAt: interviewDetails.scheduledAt.toLocaleString('vi-VN', {
-               weekday: 'long',
-               year: 'numeric',
-               month: 'long',
-               day: 'numeric',
-               hour: '2-digit',
-               minute: '2-digit',
-            }),
-            interviewer: interviewerNamesString,
-            dueDate: dueDate.toLocaleString('vi-VN', {
-               year: 'numeric',
-               month: 'long',
-               day: 'numeric',
-               hour: '2-digit',
-               minute: '2-digit',
-            }),
+            scheduledAt: scheduledAtFormatted,
             notesLink: interviewDetails.notesLink,
          };
 
-         if (isOnline && interviewDetails.meetingLink) {
+         // Only include meetingLink if it's an online interview
+         if (interviewDetails.meetingLink) {
             params.meetingLink = interviewDetails.meetingLink;
          }
 
          sendSmtpEmail.params = params;
          await this.apiInstance.sendTransacEmail(sendSmtpEmail);
-         console.log(`✅ Interview confirmation email sent to interviewer ${recipientEmail} with notes link`);
+         console.log(`✅ Interview confirmation email sent to interviewer ${recipientEmail} using template #${templateId}`);
       } catch (error) {
          console.error(`❌ Failed to send interview confirmation email to interviewer ${recipientEmail}:`, error);
          throw error;
@@ -460,17 +455,17 @@ export class RecruitmentEmailService {
 
    /**
     * Send interview update email to a single interviewer (with notes link)
-    * Used when sending separate emails to each interviewer
+    * Uses template #12 for interviewers
     */
    async sendInterviewUpdateEmailToInterviewer(
       recipientEmail: string,
+      interviewerName: string,
       candidate: CandidateEntity,
       jobPosting: JobPostingEntity,
       interviewDetails: {
          scheduledAt: Date;
          meetingLink?: string;
          location?: string;
-         interviewerNames: string[];
          changedFields?: string[];
          previousScheduledAt?: Date;
          changeDescription?: string;
@@ -479,39 +474,9 @@ export class RecruitmentEmailService {
    ): Promise<void> {
       try {
          const sendSmtpEmail: brevo.SendSmtpEmail = new brevo.SendSmtpEmail();
-         const isOnline = !!interviewDetails.meetingLink;
-         const templateId = isOnline ? 8 : 9;
-         const interviewerNamesString = interviewDetails.interviewerNames.join(', ');
-         const dueDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
-
-         // Build change description if not provided
-         let changeDescription = interviewDetails.changeDescription;
-         if (!changeDescription && interviewDetails.changedFields && interviewDetails.changedFields.length > 0) {
-            const fieldNames: Record<string, string> = {
-               date: 'Ngày phỏng vấn',
-               time: 'Thời gian',
-               location: 'Địa điểm',
-               meetingLink: 'Link meeting',
-               format: 'Hình thức phỏng vấn',
-            };
-            
-            const changedFieldsText = interviewDetails.changedFields
-               .map((field) => fieldNames[field] || field)
-               .join(', ');
-            
-            changeDescription = `Lịch phỏng vấn đã được cập nhật với những thay đổi sau:\n- ${changedFieldsText}`;
-         }
-
-         if (interviewDetails.previousScheduledAt && changeDescription) {
-            changeDescription += `\n\nThời gian cũ: ${interviewDetails.previousScheduledAt.toLocaleString('vi-VN', {
-               weekday: 'long',
-               year: 'numeric',
-               month: 'long',
-               day: 'numeric',
-               hour: '2-digit',
-               minute: '2-digit',
-            })}`;
-         }
+         
+         // Use template #12 for interviewers
+         const templateId = 12;
 
          sendSmtpEmail.subject = `[CẬP NHẬT] Xác nhận lịch phỏng vấn vị trí ${jobPosting.title} - TechLeet`;
          sendSmtpEmail.templateId = templateId;
@@ -525,36 +490,31 @@ export class RecruitmentEmailService {
             name: 'TechLeet Recruitment',
          };
 
+         // Format scheduledAt
+         const scheduledAtFormatted = interviewDetails.scheduledAt.toLocaleString('vi-VN', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+         });
+
          const params: any = {
+            interviewerName: interviewerName,
             candidateName: `${candidate.firstName} ${candidate.lastName}`,
-            jobTitle: jobPosting.title,
-            scheduledAt: interviewDetails.scheduledAt.toLocaleString('vi-VN', {
-               weekday: 'long',
-               year: 'numeric',
-               month: 'long',
-               day: 'numeric',
-               hour: '2-digit',
-               minute: '2-digit',
-            }),
-            interviewer: interviewerNamesString,
-            dueDate: dueDate.toLocaleString('vi-VN', {
-               year: 'numeric',
-               month: 'long',
-               day: 'numeric',
-               hour: '2-digit',
-               minute: '2-digit',
-            }),
+            scheduledAt: scheduledAtFormatted,
             notesLink: interviewDetails.notesLink,
-            changeDescription: changeDescription || '',
          };
 
-         if (isOnline && interviewDetails.meetingLink) {
+         // Only include meetingLink if it's an online interview
+         if (interviewDetails.meetingLink) {
             params.meetingLink = interviewDetails.meetingLink;
          }
 
          sendSmtpEmail.params = params;
          await this.apiInstance.sendTransacEmail(sendSmtpEmail);
-         console.log(`✅ Interview update email sent to interviewer ${recipientEmail} with notes link`);
+         console.log(`✅ Interview update email sent to interviewer ${recipientEmail} using template #${templateId}`);
       } catch (error) {
          console.error(`❌ Failed to send interview update email to interviewer ${recipientEmail}:`, error);
          throw error;
