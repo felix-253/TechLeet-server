@@ -8,6 +8,7 @@ import { QuestionSetEntity } from '../../../entities/question/question_set.entit
 import { QuestionSetItemEntity } from '../../../entities/question/question_set_item.entity';
 import { ApplicationEntity } from '../../../entities/recruitment/application.entity';
 import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
+import { InterviewEntity } from '../../../entities/recruitment/interview.entity';
 import { CreateQuestionDto, FilterQuestionDto, UpdateQuestionDto } from './dto/question.dto';
 import { CreateExaminationDto, SubmitExaminationDto, UpdateScoreDto } from './dto/examination.dto';
 import {
@@ -38,6 +39,8 @@ export class QuestionService {
       private readonly applicationRepository: Repository<ApplicationEntity>,
       @InjectRepository(JobPostingEntity)
       private readonly jobPostingRepository: Repository<JobPostingEntity>,
+      @InjectRepository(InterviewEntity)
+      private readonly interviewRepository: Repository<InterviewEntity>,
       private readonly configService: ConfigService,
    ) {
       const apiKey = this.configService.get<string>('GEMINI_API_KEY');
@@ -277,12 +280,66 @@ export class QuestionService {
          });
 
          if (jobPosting && jobPosting.minScore !== undefined && jobPosting.minScore !== null) {
-            // Update application status based on score
-            if (averageScore >= jobPosting.minScore) {
+            // Check if examination passed
+            const examinationPassed = averageScore >= jobPosting.minScore;
+            // Check if CV screening also passed (before updating status)
+            const cvScreeningPassed = application.status === 'screening_passed' || application.screeningStatus === 'passed';
+
+            if (examinationPassed) {
+               // Update application status
                application.status = 'passed_exam';
                this.logger.log(
                   `Application ${application.applicationId} passed exam with score ${averageScore.toFixed(2)} >= ${jobPosting.minScore}`,
                );
+
+               // Check if CV screening also passed, then create interview request
+               if (cvScreeningPassed) {
+                  try {
+                     // Check if interview request already exists
+                     const existingInterview = await this.interviewRepository.findOne({
+                        where: {
+                           candidate_id: application.candidateId,
+                           job_id: application.jobPostingId,
+                        },
+                     });
+
+                     if (!existingInterview) {
+                        // Create interview request with status='pending'
+                        const placeholderDate = new Date();
+                        placeholderDate.setFullYear(placeholderDate.getFullYear() + 1);
+
+                        const interviewRequest = this.interviewRepository.create({
+                           candidate_id: application.candidateId,
+                           job_id: application.jobPostingId,
+                           interviewer_ids: [],
+                           scheduled_at: placeholderDate,
+                           duration_minutes: 60,
+                           meeting_link: '',
+                           location: '',
+                           status: 'pending',
+                        });
+
+                        const savedInterview = await this.interviewRepository.save(interviewRequest);
+                        this.logger.log(
+                           `Created interview request (interview_id: ${savedInterview.interview_id}) for application ${application.applicationId} after examination passed`,
+                        );
+                     } else {
+                        this.logger.log(
+                           `Interview request already exists for application ${application.applicationId} (interview_id: ${existingInterview.interview_id})`,
+                        );
+                     }
+                  } catch (error) {
+                     this.logger.error(
+                        `Failed to create interview request for application ${application.applicationId}: ${error.message}`,
+                        error.stack,
+                     );
+                     // Don't throw error - interview request creation failure shouldn't break the exam submission
+                  }
+               } else {
+                  this.logger.log(
+                     `Application ${application.applicationId} passed exam but CV screening not passed yet. Waiting for CV screening to complete.`,
+                  );
+               }
             } else {
                application.status = 'failed_exam';
                this.logger.log(
@@ -290,6 +347,54 @@ export class QuestionService {
                );
             }
             await this.applicationRepository.save(application);
+         } else {
+            // If no minScore set, consider exam passed if score > 0
+            // Check if CV screening also passed (before checking score)
+            const cvScreeningPassed = application.status === 'screening_passed' || application.screeningStatus === 'passed';
+            
+            if (averageScore > 0) {
+               this.logger.log(
+                  `Application ${application.applicationId} exam completed with score ${averageScore.toFixed(2)} (no minScore threshold set)`,
+               );
+
+               // Check if CV screening also passed, then create interview request
+               if (cvScreeningPassed) {
+                  try {
+                     const existingInterview = await this.interviewRepository.findOne({
+                        where: {
+                           candidate_id: application.candidateId,
+                           job_id: application.jobPostingId,
+                        },
+                     });
+
+                     if (!existingInterview) {
+                        const placeholderDate = new Date();
+                        placeholderDate.setFullYear(placeholderDate.getFullYear() + 1);
+
+                        const interviewRequest = this.interviewRepository.create({
+                           candidate_id: application.candidateId,
+                           job_id: application.jobPostingId,
+                           interviewer_ids: [],
+                           scheduled_at: placeholderDate,
+                           duration_minutes: 60,
+                           meeting_link: '',
+                           location: '',
+                           status: 'pending',
+                        });
+
+                        const savedInterview = await this.interviewRepository.save(interviewRequest);
+                        this.logger.log(
+                           `Created interview request (interview_id: ${savedInterview.interview_id}) for application ${application.applicationId} after examination completed`,
+                        );
+                     }
+                  } catch (error) {
+                     this.logger.error(
+                        `Failed to create interview request for application ${application.applicationId}: ${error.message}`,
+                        error.stack,
+                     );
+                  }
+               }
+            }
          }
       }
 

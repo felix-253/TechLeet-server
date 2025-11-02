@@ -5,6 +5,7 @@ import { ApplicationEntity } from '../../../entities/recruitment/application.ent
 import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
 import { CandidateEntity } from '../../../entities/recruitment/candidate.entity';
 import { InterviewEntity } from '../../../entities/recruitment/interview.entity';
+import { ExaminationEntity } from '../../../entities/question/examination.entity';
 import {
    CreateApplicationDto,
    UpdateApplicationDto,
@@ -171,38 +172,7 @@ export class ApplicationService {
             appliedDate: new Date(),
          });
 
-         if (jobPosting.isTest) {
-            application.status = 'test';
-         }
-
          const savedApplication = await this.applicationRepository.save(application);
-
-         // Create examination if job requires test
-         if (jobPosting.isTest && jobPosting.questionSetId) {
-            try {
-               this.logger.log(
-                  `Creating examination for application ${savedApplication.applicationId}`,
-               );
-               /**
-                * thêm giúp t gửi email có link bài test format: /exam/3 (examinationId)
-                * điều kiện: nếu mà jobPostingId có isTest = true và pass screening
-                *  */
-               await this.questionService.createExamination({
-                  applicationId: savedApplication.applicationId,
-                  sourceSetId: jobPosting.questionSetId,
-                  quantityQuestion: jobPosting.quantityQuestion,
-               });
-               this.logger.log(
-                  `Examination created successfully for application ${savedApplication.applicationId}`,
-               );
-            } catch (error) {
-               this.logger.error(
-                  `Failed to create examination for application ${savedApplication.applicationId}: ${error.message}`,
-                  error.stack,
-               );
-               // Don't fail the application creation if examination creation fails
-            }
-         }
 
          // Trigger CV screening if resume is provided
          if (savedApplication.resumeUrl) {
@@ -569,6 +539,7 @@ export class ApplicationService {
 
       // Use query builder to find applications with status='screening_passed'
       // that don't have a scheduled interview (no interview OR interview.status='pending')
+      // AND if job has test, examination must be completed and passed
       const qb = this.applicationRepository
          .createQueryBuilder('application')
          .leftJoin(
@@ -576,10 +547,33 @@ export class ApplicationService {
             'interview',
             'interview.candidate_id = application.candidateId AND interview.job_id = application.jobPostingId',
          )
+         .leftJoin(
+            JobPostingEntity,
+            'jobPosting',
+            'jobPosting.jobPostingId = application.jobPostingId',
+         )
+         .leftJoin(
+            ExaminationEntity,
+            'examination',
+            'examination.applicationId = application.applicationId',
+         )
          .where('application.status = :status', { status: 'screening_passed' })
          .andWhere('(interview.interview_id IS NULL OR interview.status = :pendingStatus)', {
             pendingStatus: 'pending',
-         });
+         })
+         .andWhere(
+            // If job has test: examination must exist and be completed with passing score
+            // If job has no test: no examination required
+            `(
+               (jobPosting.isTest = false OR jobPosting.isTest IS NULL)
+               OR
+               (jobPosting.isTest = true AND examination.examinationId IS NOT NULL AND examination.status = :completedStatus AND (
+                  jobPosting.minScore IS NULL
+                  OR examination.totalScore >= jobPosting.minScore
+               ))
+            )`,
+            { completedStatus: 'completed' },
+         );
 
       if (query?.jobPostingId) {
          qb.andWhere('application.jobPostingId = :jobPostingId', {

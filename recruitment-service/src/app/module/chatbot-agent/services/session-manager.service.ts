@@ -103,10 +103,54 @@ export class SessionManagerService {
   }
 
   /**
-   * Add message to session
+   * Add message to session - optimized to keep only last 100 messages
    */
   async addMessage(sessionId: string, message: ChatMessage): Promise<void> {
     try {
+      // Use raw SQL to append message and limit array size without fetching entire array
+      const expiresAt = new Date(Date.now() + this.sessionTimeoutHours * 60 * 60 * 1000);
+      const messageJson = JSON.stringify(message);
+      
+      // First verify session exists
+      const sessionExists = await this.sessionRepository.findOne({
+        where: { sessionId },
+        select: ['sessionId']
+      });
+
+      if (!sessionExists) {
+        throw new Error(`Session ${sessionId} not found`);
+      }
+
+      // Use raw query to append message and keep only last 100 messages
+      await this.sessionRepository.query(
+        `UPDATE chat_session 
+         SET messages = (
+           SELECT COALESCE(jsonb_agg(msg ORDER BY idx), '[]'::jsonb)
+           FROM (
+             SELECT msg, idx
+             FROM (
+               SELECT jsonb_array_elements(messages) as msg, 
+                      generate_subscripts(messages, 1) as idx
+               FROM chat_session
+               WHERE "sessionId" = $1
+             ) existing
+             UNION ALL
+             SELECT $2::jsonb as msg, 999999 as idx
+             ORDER BY idx DESC
+             LIMIT 100
+           ) limited
+         ),
+         "lastActiveAt" = CURRENT_TIMESTAMP,
+         "expiresAt" = $3::timestamp
+         WHERE "sessionId" = $1`,
+        [sessionId, messageJson, expiresAt]
+      );
+
+      this.logger.log(`Added message to session ${sessionId}`);
+    } catch (error) {
+      // Fallback to standard method if raw query fails
+      this.logger.warn(`Optimized addMessage failed, using fallback: ${error.message}`);
+      
       const session = await this.sessionRepository.findOne({
         where: { sessionId }
       });
@@ -117,16 +161,16 @@ export class SessionManagerService {
 
       const updatedMessages = [...session.messages, message];
       
+      // Keep only last 100 messages to prevent unbounded growth
+      const limitedMessages = updatedMessages.slice(-100);
+      
       await this.sessionRepository.update(sessionId, {
-        messages: updatedMessages,
+        messages: limitedMessages,
         lastActiveAt: new Date(),
         expiresAt: new Date(Date.now() + this.sessionTimeoutHours * 60 * 60 * 1000)
       });
 
-      this.logger.log(`Added message to session ${sessionId}`);
-    } catch (error) {
-      this.logger.error(`Failed to add message to session ${sessionId}:`, error);
-      throw error;
+      this.logger.log(`Added message to session ${sessionId} (fallback method)`);
     }
   }
 

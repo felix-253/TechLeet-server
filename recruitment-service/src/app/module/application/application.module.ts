@@ -6,6 +6,7 @@ import { ApplicationEntity } from '../../../entities/recruitment/application.ent
 import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
 import { CandidateEntity } from '../../../entities/recruitment/candidate.entity';
 import { InterviewEntity } from '../../../entities/recruitment/interview.entity';
+import { ExaminationEntity } from '../../../entities/question/examination.entity';
 import { CvScreeningModule } from '../cv-screening/cv-screening.module';
 import { RecruitmentEmailModule } from '../email/email.module';
 import { QuestionModule } from '../question/question.module';
@@ -17,6 +18,7 @@ import { QuestionModule } from '../question/question.module';
          JobPostingEntity,
          CandidateEntity,
          InterviewEntity,
+         ExaminationEntity,
       ]),
       forwardRef(() => CvScreeningModule),
       RecruitmentEmailModule,
