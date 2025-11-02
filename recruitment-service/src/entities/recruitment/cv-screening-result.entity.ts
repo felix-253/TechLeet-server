@@ -5,6 +5,8 @@ export enum ScreeningStatus {
    PENDING = 'pending',
    PROCESSING = 'processing',
    COMPLETED = 'completed',
+   PASSED = 'passed',
+   SCREENING_FAILED = 'screening_failed',
    FAILED = 'failed'
 }
 

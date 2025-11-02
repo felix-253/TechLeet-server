@@ -1,0 +1,483 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { ConfigService } from '@nestjs/config';
+import * as pgvector from 'pgvector';
+import { CvEmbeddingEntity, EmbeddingType } from '../../../../entities/recruitment/cv-embedding.entity';
+import { RetryUtil } from '../utils/retry.util';
+import { CircuitBreakerUtil } from '../utils/circuit-breaker.util';
+import { CV_SCREENING_CONFIG } from '../config';
+
+export interface EmbeddingResult {
+   embedding: number[];
+   model: string;
+   dimensions: number;
+   tokenCount?: number;
+   processingTimeMs: number;
+}
+
+export interface SimilarityResult {
+   similarity: number;
+   embeddingId: number;
+   applicationId?: number;
+   jobPostingId?: number;
+   embeddingType: EmbeddingType;
+   originalText: string;
+}
+
+@Injectable()
+export class CvEmbeddingService {
+   private readonly logger = new Logger(CvEmbeddingService.name);
+   private readonly genAI: GoogleGenerativeAI;
+   private readonly defaultModel = CV_SCREENING_CONFIG.MODELS.EMBEDDING_DEFAULT;
+   private readonly defaultDimensions = CV_SCREENING_CONFIG.MODELS.EMBEDDING_DIMENSIONS;
+   
+   // Circuit breaker for Gemini API calls
+   private readonly circuitBreaker: CircuitBreakerUtil;
+
+   constructor(
+      @InjectRepository(CvEmbeddingEntity)
+      private readonly embeddingRepository: Repository<CvEmbeddingEntity>,
+      private readonly configService: ConfigService,
+   ) {
+      const apiKey = this.configService.get<string>('GEMINI_API_KEY');
+      if (!apiKey) {
+         this.logger.warn('Gemini API key not configured. Embedding service will not work.');
+      }
+
+      this.genAI = new GoogleGenerativeAI(apiKey || 'dummy-key');
+      
+      // Initialize circuit breaker with config
+      this.circuitBreaker = new CircuitBreakerUtil({
+         failureThreshold: CV_SCREENING_CONFIG.CIRCUIT_BREAKER.FAILURE_THRESHOLD,
+         successThreshold: CV_SCREENING_CONFIG.CIRCUIT_BREAKER.SUCCESS_THRESHOLD,
+         timeout: CV_SCREENING_CONFIG.CIRCUIT_BREAKER.TIMEOUT_MS,
+         resetTimeout: CV_SCREENING_CONFIG.CIRCUIT_BREAKER.RESET_TIMEOUT_MS,
+      });
+   }
+
+   /**
+    * Generate embedding for text using Google Gemini with retry and circuit breaker
+    */
+   async generateEmbedding(
+      text: string,
+      model: string = this.defaultModel,
+      dimensions: number = this.defaultDimensions
+   ): Promise<EmbeddingResult> {
+      return this.circuitBreaker.execute(
+         () => RetryUtil.executeWithRetry(
+            () => this.generateEmbeddingInternal(text, model, dimensions),
+            {
+               maxAttempts: CV_SCREENING_CONFIG.RETRY.MAX_ATTEMPTS,
+               baseDelayMs: CV_SCREENING_CONFIG.RETRY.BASE_DELAY_MS,
+               maxDelayMs: CV_SCREENING_CONFIG.RETRY.MAX_DELAY_MS,
+               onRetry: (attempt, error) => {
+                  this.logger.warn(`Embedding generation attempt ${attempt} failed: ${error.message}`);
+               },
+            }
+         ),
+         'CV Embedding Generation'
+      );
+   }
+
+   /**
+    * Internal embedding generation method
+    */
+   private async generateEmbeddingInternal(
+      text: string,
+      model: string,
+      dimensions: number
+   ): Promise<EmbeddingResult> {
+      const startTime = Date.now();
+      
+      try {
+         this.logger.log(`Generating embedding for text (${text.length} characters) using model: ${model}`);
+
+         if (!text || text.trim().length === 0) {
+            throw new Error('Text cannot be empty');
+         }
+
+         // Truncate text if too long (Gemini has token limits)
+         const truncatedText = this.truncateText(text, CV_SCREENING_CONFIG.TEXT.MAX_CHARACTERS);
+
+         const embeddingModel = this.genAI.getGenerativeModel({ model });
+         const result = await embeddingModel.embedContent(truncatedText);
+
+         const processingTime = Date.now() - startTime;
+         const embedding = result.embedding.values;
+
+         this.logger.log(`Embedding generated successfully in ${processingTime}ms. Vector dimensions: ${embedding.length}`);
+
+         return {
+            embedding,
+            model,
+            dimensions: embedding.length,
+            tokenCount: undefined, // Gemini doesn't provide token count in embedding response
+            processingTimeMs: processingTime,
+         };
+
+      } catch (error) {
+         const processingTime = Date.now() - startTime;
+         this.logger.error(`Embedding generation failed after ${processingTime}ms: ${error.message}`, error.stack);
+         throw error;
+      }
+   }
+
+
+   /**
+    * Store embedding in database with idempotent support
+    */
+   async storeEmbedding(
+      text: string,
+      embedding: number[],
+      embeddingType: EmbeddingType,
+      applicationId?: number,
+      jobPostingId?: number,
+      model: string = this.defaultModel,
+      metadata?: any
+   ): Promise<CvEmbeddingEntity> {
+      try {
+         const query = `
+            INSERT INTO cv_embedding (
+               "applicationId", "jobPostingId", "embeddingType", "originalText", 
+               embedding, model, dimensions, metadata, "createdAt", "updatedAt"
+            ) VALUES (
+               $1, $2, $3, $4, $5::vector, $6, $7, $8, NOW(), NOW()
+            )
+            ON CONFLICT ("embeddingType", "applicationId", "jobPostingId")
+            DO UPDATE SET
+               "originalText" = EXCLUDED."originalText",
+               embedding = EXCLUDED.embedding,
+               model = EXCLUDED.model,
+               dimensions = EXCLUDED.dimensions,
+               metadata = EXCLUDED.metadata,
+               "updatedAt" = NOW()
+            RETURNING *
+         `;
+
+         const result = await this.embeddingRepository.query(query, [
+            applicationId || null,
+            jobPostingId || null,
+            embeddingType,
+            text,
+            pgvector.toSql(embedding),
+            model,
+            embedding.length,
+            metadata ? JSON.stringify(metadata) : null,
+         ]);
+
+         const savedEmbedding = result[0];
+         this.logger.log(`Embedding stored/updated with ID: ${savedEmbedding.embeddingId}`);
+
+         return this.embeddingRepository.create({
+            embeddingId: savedEmbedding.embeddingId,
+            applicationId: savedEmbedding.applicationId,
+            jobPostingId: savedEmbedding.jobPostingId,
+            embeddingType: savedEmbedding.embeddingType,
+            originalText: savedEmbedding.originalText,
+            embedding: savedEmbedding.embedding,
+            model: savedEmbedding.model,
+            dimensions: savedEmbedding.dimensions,
+            metadata: savedEmbedding.metadata,
+            createdAt: savedEmbedding.createdAt,
+            updatedAt: savedEmbedding.updatedAt,
+         });
+      } catch (error) {
+         this.logger.error(`Failed to store embedding: ${error.message}`, error.stack);
+         throw error;
+      }
+   }
+
+   /**
+    * Generate and store CV embedding
+    */
+   async generateAndStoreCvEmbedding(
+      applicationId: number,
+      text: string,
+      embeddingType: EmbeddingType = EmbeddingType.CV_FULL_TEXT
+   ): Promise<CvEmbeddingEntity> {
+      const embeddingResult = await this.generateEmbedding(text);
+      
+      return this.storeEmbedding(
+         text,
+         embeddingResult.embedding,
+         embeddingType,
+         applicationId,
+         undefined,
+         embeddingResult.model,
+         {
+            tokenCount: embeddingResult.tokenCount,
+            processingTime: embeddingResult.processingTimeMs,
+         }
+      );
+   }
+
+   /**
+    * Generate and store job posting embedding
+    */
+   async generateAndStoreJobEmbedding(
+      jobPostingId: number,
+      text: string,
+      embeddingType: EmbeddingType = EmbeddingType.JOB_DESCRIPTION
+   ): Promise<CvEmbeddingEntity> {
+      const embeddingResult = await this.generateEmbedding(text);
+      
+      return this.storeEmbedding(
+         text,
+         embeddingResult.embedding,
+         embeddingType,
+         undefined,
+         jobPostingId,
+         embeddingResult.model,
+         {
+            tokenCount: embeddingResult.tokenCount,
+            processingTime: embeddingResult.processingTimeMs,
+         }
+      );
+   }
+
+   /**
+    * Calculate similarity between CV and job posting using cosine similarity
+    */
+   async calculateSimilarity(
+      applicationId: number,
+      jobPostingId: number,
+      embeddingType: EmbeddingType = EmbeddingType.CV_FULL_TEXT
+   ): Promise<number> {
+      try {
+         // Get CV embedding
+         const cvEmbedding = await this.embeddingRepository.findOne({
+            where: {
+               applicationId,
+               embeddingType,
+            },
+         });
+
+         if (!cvEmbedding) {
+            throw new Error(`CV embedding not found for application ${applicationId}`);
+         }
+
+         // Get job posting embedding - Fixed to use correct parameter
+         const jobEmbedding = await this.embeddingRepository.findOne({
+            where: {
+               jobPostingId,
+               embeddingType: EmbeddingType.JOB_DESCRIPTION,
+            },
+         });
+
+         if (!jobEmbedding) {
+            throw new Error(`Job embedding not found for job posting ${jobPostingId}`);
+         }
+
+         const result = await this.embeddingRepository.query(`
+            SELECT 1 - (cv.embedding::vector <=> job.embedding::vector) as similarity
+            FROM cv_embedding cv, cv_embedding job
+            WHERE cv."embeddingId" = $1 AND job."embeddingId" = $2
+         `, [cvEmbedding.embeddingId, jobEmbedding.embeddingId]);
+
+         const similarity = parseFloat(result[0]?.similarity || '0');
+
+         this.logger.log(`Calculated similarity: ${similarity} between application ${applicationId} and job ${jobPostingId}`);
+
+         return Math.max(0, Math.min(1, similarity)); // Ensure similarity is between 0 and 1
+      } catch (error) {
+         this.logger.error(`Similarity calculation failed: ${error.message}`, error.stack);
+         throw error;
+      }
+   }
+
+   /**
+    * Find similar CVs to a job posting
+    */
+   async findSimilarCvs(
+      jobPostingId: number,
+      limit: number = 10,
+      threshold: number = 0.7
+   ): Promise<SimilarityResult[]> {
+      try {
+         // Get job posting embedding
+         const jobEmbedding = await this.embeddingRepository.findOne({
+            where: {
+               jobPostingId,
+               embeddingType: EmbeddingType.JOB_DESCRIPTION,
+            },
+         });
+
+         if (!jobEmbedding) {
+            throw new Error(`Job embedding not found for job posting ${jobPostingId}`);
+         }
+
+         // Find similar CV embeddings using cosine similarity
+         // Cast embedding to vector type before using <=> operator
+         const results = await this.embeddingRepository.query(`
+            SELECT
+               cv."embeddingId",
+               cv."applicationId",
+               cv."embeddingType",
+               cv."originalText",
+               (1 - (cv.embedding::vector <=> $1::vector)) as similarity
+            FROM cv_embedding cv
+            WHERE cv."applicationId" IS NOT NULL
+               AND cv."embeddingType" = $2
+               AND (1 - (cv.embedding::vector <=> $1::vector)) >= $3
+            ORDER BY cv.embedding::vector <=> $1::vector
+            LIMIT $4
+         `, [
+            jobEmbedding.embedding,
+            EmbeddingType.CV_FULL_TEXT,
+            threshold,
+            limit
+         ]);
+
+         return results.map((row: any) => ({
+            similarity: parseFloat(row.similarity),
+            embeddingId: row.embeddingId,
+            applicationId: row.applicationId,
+            embeddingType: row.embeddingType,
+            originalText: row.originalText,
+         }));
+
+      } catch (error) {
+         this.logger.error(`Finding similar CVs failed: ${error.message}`, error.stack);
+         throw error;
+      }
+   }
+
+   /**
+    * Find similar job postings to a CV
+    */
+   async findSimilarJobs(
+      applicationId: number,
+      limit: number = 10,
+      threshold: number = 0.7
+   ): Promise<SimilarityResult[]> {
+      try {
+         // Get CV embedding
+         const cvEmbedding = await this.embeddingRepository.findOne({
+            where: {
+               applicationId,
+               embeddingType: EmbeddingType.CV_FULL_TEXT,
+            },
+         });
+
+         if (!cvEmbedding) {
+            throw new Error(`CV embedding not found for application ${applicationId}`);
+         }
+
+         // Find similar job embeddings using cosine similarity
+         // Cast embedding to vector type before using <=> operator
+         const results = await this.embeddingRepository.query(`
+            SELECT
+               job."embeddingId",
+               job."jobPostingId",
+               job."embeddingType",
+               job."originalText",
+               (1 - (job.embedding::vector <=> $1::vector)) as similarity
+            FROM cv_embedding job
+            WHERE job."jobPostingId" IS NOT NULL
+               AND job."embeddingType" = $2
+               AND (1 - (job.embedding::vector <=> $1::vector)) >= $3
+            ORDER BY job.embedding::vector <=> $1::vector
+            LIMIT $4
+         `, [
+            cvEmbedding.embedding,
+            EmbeddingType.JOB_DESCRIPTION,
+            threshold,
+            limit
+         ]);
+
+         return results.map((row: any) => ({
+            similarity: parseFloat(row.similarity),
+            embeddingId: row.embeddingId,
+            jobPostingId: row.jobPostingId,
+            embeddingType: row.embeddingType,
+            originalText: row.originalText,
+         }));
+
+      } catch (error) {
+         this.logger.error(`Finding similar jobs failed: ${error.message}`, error.stack);
+         throw error;
+      }
+   }
+
+   /**
+    * Ensure job embedding exists - create if missing
+    * Fixed: Use jobPostingId instead of embeddingId parameter
+    */
+   async ensureJobEmbedding(
+      jobPostingId: number,
+      jobText: string,
+      embeddingType: EmbeddingType = EmbeddingType.JOB_DESCRIPTION
+   ): Promise<CvEmbeddingEntity> {
+      try {
+         // Check if embedding already exists
+         const existingEmbedding = await this.embeddingRepository.findOne({
+            where: {
+               jobPostingId,
+               embeddingType,
+            },
+         });
+
+         if (existingEmbedding) {
+            this.logger.log(`Job embedding already exists for job posting ${jobPostingId}`);
+            return existingEmbedding;
+         }
+
+         // Generate and store new embedding
+         this.logger.log(`Generating new job embedding for job posting ${jobPostingId}`);
+         return this.generateAndStoreJobEmbedding(jobPostingId, jobText, embeddingType);
+      } catch (error) {
+         this.logger.error(`Failed to ensure job embedding: ${error.message}`, error.stack);
+         throw error;
+      }
+   }
+
+   /**
+    * Get embedding by ID
+    */
+   async getEmbedding(embeddingId: number): Promise<CvEmbeddingEntity | null> {
+      return this.embeddingRepository.findOne({
+         where: { embeddingId },
+      });
+   }
+
+
+   /**
+    * Delete embeddings for an application
+    */
+   async deleteApplicationEmbeddings(applicationId: number): Promise<void> {
+      await this.embeddingRepository.delete({ applicationId });
+      this.logger.log(`Deleted embeddings for application ${applicationId}`);
+   }
+
+   /**
+    * Delete embeddings for a job posting
+    */
+   async deleteJobEmbeddings(jobPostingId: number): Promise<void> {
+      await this.embeddingRepository.delete({ jobPostingId });
+      this.logger.log(`Deleted embeddings for job posting ${jobPostingId}`);
+   }
+
+
+
+   /**
+    * Truncate text to fit within token limits
+    */
+   private truncateText(text: string, maxTokens: number): string {
+      // Rough estimation: 1 token ≈ 4 characters
+      const maxChars = maxTokens * 4;
+
+      if (text.length <= maxChars) {
+         return text;
+      }
+
+      // Truncate and try to end at a word boundary
+      const truncated = text.substring(0, maxChars);
+      const lastSpaceIndex = truncated.lastIndexOf(' ');
+
+      return lastSpaceIndex > maxChars * 0.8
+         ? truncated.substring(0, lastSpaceIndex)
+         : truncated;
+   }
+}

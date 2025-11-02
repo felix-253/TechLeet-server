@@ -1,39 +1,57 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { CvScreeningController } from './cv-screening.controller';
+import {
+   ScreeningController,
+   InformationController,
+   ThresholdController,
+   TestingController,
+} from './controllers';
 import { CvScreeningService } from './cv-screening.service';
-import { CvScreeningWorkerService } from './cv-screening-worker.service';
-import { CvTextExtractionService } from './cv-text-extraction.service';
-import { CvNlpProcessingService } from './cv-nlp-processing.service';
-import { CvEmbeddingService } from './cv-embedding.service';
-import { CvLlmSummaryService } from './cv-llm-summary.service';
-import { CvChunkingService } from './cv-chunking.service';
-import { SkillTaxonomyService } from './skill-taxonomy.service';
-import { CvQueueService } from './cv-queue.service';
-import { InformationService } from './information.service';
+import {
+   CvScreeningWorkerService,
+   CvQueueService,
+   InformationService,
+   AdaptiveThresholdService,
+   ScoringService,
+} from './services';
+import {
+   CvTextExtractionService,
+   CvNlpProcessingService,
+   CvEmbeddingService,
+   CvLlmSummaryService,
+} from './processors';
 import { CvScreeningResultEntity } from '../../../entities/recruitment/cv-screening-result.entity';
 import { CvEmbeddingEntity } from '../../../entities/recruitment/cv-embedding.entity';
-import { CvEmbeddingChunkEntity } from '../../../entities/recruitment/cv-embedding-chunk.entity';
-import { SkillEntity } from '../../../entities/recruitment/skill.entity';
-import { SkillAliasEntity } from '../../../entities/recruitment/skill-alias.entity';
 import { ApplicationEntity } from '../../../entities/recruitment/application.entity';
 import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
+import { FilterScoreEntity } from '../../../entities/recruitment/filter-score.entity';
 import { CandidateEntity } from '../../../entities/recruitment/candidate.entity';
+import { InterviewEntity } from '../../../entities/recruitment/interview.entity';
+import { RecruitmentEmailModule } from '../email/email.module';
+import { CandidateModule } from '../candidate/candidate.module';
+import { ApplicationModule } from '../application/application.module';
 
 @Module({
    imports: [
       TypeOrmModule.forFeature([
          CvScreeningResultEntity,
          CvEmbeddingEntity,
-         CvEmbeddingChunkEntity,
-         SkillEntity,
-         SkillAliasEntity,
          ApplicationEntity,
          JobPostingEntity,
          CandidateEntity,
+         FilterScoreEntity,
+         InterviewEntity,
       ]),
+      RecruitmentEmailModule,
+      CandidateModule,
+      forwardRef(() => ApplicationModule),
    ],
-   controllers: [CvScreeningController],
+   controllers: [
+      ScreeningController,
+      InformationController,
+      ThresholdController,
+      TestingController,
+   ],
    providers: [
       CvScreeningService,
       CvScreeningWorkerService,
@@ -41,10 +59,10 @@ import { CandidateEntity } from '../../../entities/recruitment/candidate.entity'
       CvNlpProcessingService,
       CvEmbeddingService,
       CvLlmSummaryService,
-      CvChunkingService,
-      SkillTaxonomyService,
       CvQueueService,
       InformationService,
+      AdaptiveThresholdService,
+      ScoringService,
    ],
    exports: [
       CvScreeningService,
@@ -53,10 +71,10 @@ import { CandidateEntity } from '../../../entities/recruitment/candidate.entity'
       CvNlpProcessingService,
       CvEmbeddingService,
       CvLlmSummaryService,
-      CvChunkingService,
-      SkillTaxonomyService,
       CvQueueService,
       InformationService,
+      AdaptiveThresholdService,
+      ScoringService,
    ],
 })
 export class CvScreeningModule {}

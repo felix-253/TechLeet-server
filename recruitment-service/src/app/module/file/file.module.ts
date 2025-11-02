@@ -4,25 +4,22 @@ import { FileController } from './file.controller';
 import { BrevoWebhookController } from './brevo-webhook.controller';
 import { FileService } from './file.service';
 import { FileEntity } from '../../../entities/recruitment/file.entity';
-import { InformationService } from '../cv-screening/information.service';
+import { InformationService } from '../cv-screening/services/information.service';
 import { CandidateEntity } from '../../../entities/recruitment/candidate.entity';
 import { ApplicationEntity } from '../../../entities/recruitment/application.entity';
-import { CvTextExtractionService } from '../cv-screening/cv-text-extraction.service';
-import { CvNlpProcessingService } from '../cv-screening/cv-nlp-processing.service';
-import { CvLlmSummaryService } from '../cv-screening/cv-llm-summary.service';
+import { CvTextExtractionService } from '../cv-screening/processors/cv-text-extraction.service';
+import { CvNlpProcessingService } from '../cv-screening/processors/cv-nlp-processing.service';
+import { CvLlmSummaryService } from '../cv-screening/processors/cv-llm-summary.service';
 import { ApplicationService } from '../application/application.service';
 import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
 import { CvScreeningService } from '../cv-screening/cv-screening.service';
 import { CvScreeningResultEntity } from '../../../entities/recruitment/cv-screening-result.entity';
-import { CvScreeningWorkerService } from '../cv-screening/cv-screening-worker.service';
-import { CvQueueService } from '../cv-screening/cv-queue.service';
-import { CvEmbeddingService } from '../cv-screening/cv-embedding.service';
-import { CvChunkingService } from '../cv-screening/cv-chunking.service';
-import { SkillTaxonomyService } from '../cv-screening/skill-taxonomy.service';
+import { CvScreeningWorkerService } from '../cv-screening/services/cv-screening-worker.service';
+import { CvQueueService } from '../cv-screening/services/cv-queue.service';
+import { CvEmbeddingService } from '../cv-screening/processors/cv-embedding.service';
 import { CvEmbeddingEntity } from '../../../entities/recruitment/cv-embedding.entity';
-import { CvEmbeddingChunkEntity } from '../../../entities/recruitment/cv-embedding-chunk.entity';
-import { SkillEntity } from '../../../entities/recruitment/skill.entity';
-import { SkillAliasEntity } from '../../../entities/recruitment/skill-alias.entity';
+import { FilterScoreEntity } from '../../../entities/recruitment/filter-score.entity';
+import { InterviewEntity } from '../../../entities/recruitment/interview.entity';
 
 // Import new modular services
 import { OcrService } from './ocr/ocr.service';
@@ -33,6 +30,12 @@ import { FileManagementHandler } from './handlers/file-management.service';
 
 // Import email service directly (not module to avoid circular dependency)
 import { RecruitmentEmailService } from '../email/email.service';
+import { QuestionModule } from '../question/question.module';
+import { ScoringService } from '../cv-screening/services/scoring.service';
+import { AdaptiveThresholdService } from '../cv-screening/services';
+
+import { CandidateModule } from '../candidate/candidate.module';
+
 
 @Module({
    imports: [
@@ -43,10 +46,11 @@ import { RecruitmentEmailService } from '../email/email.service';
          JobPostingEntity,
          CvScreeningResultEntity,
          CvEmbeddingEntity,
-         CvEmbeddingChunkEntity,
-         SkillEntity,
-         SkillAliasEntity,
+         FilterScoreEntity,
+         InterviewEntity,
       ]),
+      QuestionModule,
+      CandidateModule,
    ],
    controllers: [FileController, BrevoWebhookController],
    providers: [
@@ -55,13 +59,13 @@ import { RecruitmentEmailService } from '../email/email.service';
       CvTextExtractionService,
       CvNlpProcessingService,
       CvLlmSummaryService,
+      AdaptiveThresholdService,
       ApplicationService,
       CvScreeningService,
       CvScreeningWorkerService,
       CvQueueService,
       CvEmbeddingService,
-      CvChunkingService,
-      SkillTaxonomyService,
+      ScoringService,
       // New modular services
       OcrService,
       CvAnalyzer,

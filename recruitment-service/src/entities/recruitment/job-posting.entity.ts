@@ -1,6 +1,7 @@
-import { Column, Entity, PrimaryGeneratedColumn, Index } from 'typeorm';
+import { Column, Entity, PrimaryGeneratedColumn, Index, ManyToOne, JoinColumn } from 'typeorm';
 import { BaseEntity } from '../base/base.entities';
-import { ApplicationEntity } from './application.entity';
+import { FilterScoreEntity } from './filter-score.entity';
+import { QuestionSetEntity } from '../question/question_set.entity';
 
 @Entity('job_posting')
 @Index(['title'])
@@ -8,7 +9,7 @@ import { ApplicationEntity } from './application.entity';
 @Index(['applicationDeadline'])
 export class JobPostingEntity extends BaseEntity {
    @PrimaryGeneratedColumn('identity', {
-      comment: 'Unique identifier for the job posting'
+      comment: 'Unique identifier for the job posting',
    })
    jobPostingId: number;
 
@@ -16,28 +17,28 @@ export class JobPostingEntity extends BaseEntity {
       type: 'varchar',
       length: 200,
       nullable: false,
-      comment: 'Job posting title'
+      comment: 'Job posting title',
    })
    title: string;
 
    @Column({
       type: 'text',
       nullable: false,
-      comment: 'Detailed job description'
+      comment: 'Detailed job description',
    })
    description: string;
 
    @Column({
       type: 'text',
       nullable: false,
-      comment: 'Job requirements and qualifications'
+      comment: 'Job requirements and qualifications',
    })
    requirements: string;
 
    @Column({
       type: 'text',
       nullable: true,
-      comment: 'Benefits and perks offered'
+      comment: 'Benefits and perks offered',
    })
    benefits?: string;
 
@@ -46,7 +47,7 @@ export class JobPostingEntity extends BaseEntity {
       precision: 10,
       scale: 2,
       nullable: true,
-      comment: 'Minimum salary offered (VND)'
+      comment: 'Minimum salary offered (VND)',
    })
    salaryMin?: number;
 
@@ -55,7 +56,7 @@ export class JobPostingEntity extends BaseEntity {
       precision: 10,
       scale: 2,
       nullable: true,
-      comment: 'Maximum salary offered (VND)'
+      comment: 'Maximum salary offered (VND)',
    })
    salaryMax?: number;
 
@@ -63,14 +64,14 @@ export class JobPostingEntity extends BaseEntity {
       type: 'int',
       nullable: false,
       default: 1,
-      comment: 'Number of open positions'
+      comment: 'Number of open positions',
    })
    vacancies: number;
 
    @Column({
       type: 'date',
       nullable: false,
-      comment: 'Application deadline'
+      comment: 'Application deadline',
    })
    applicationDeadline: Date;
 
@@ -79,7 +80,7 @@ export class JobPostingEntity extends BaseEntity {
       length: 50,
       nullable: false,
       default: 'draft',
-      comment: 'Job posting status (draft, published, closed, cancelled)'
+      comment: 'Job posting status (draft, published, closed, cancelled)',
    })
    status: string;
 
@@ -87,7 +88,7 @@ export class JobPostingEntity extends BaseEntity {
       type: 'varchar',
       length: 100,
       nullable: true,
-      comment: 'Work location or remote'
+      comment: 'Work location or remote',
    })
    location?: string;
 
@@ -95,7 +96,7 @@ export class JobPostingEntity extends BaseEntity {
       type: 'varchar',
       length: 50,
       nullable: true,
-      comment: 'Employment type (full-time, part-time, contract, internship)'
+      comment: 'Employment type (full-time, part-time, contract, internship)',
    })
    employmentType?: string;
 
@@ -103,28 +104,28 @@ export class JobPostingEntity extends BaseEntity {
       type: 'varchar',
       length: 50,
       nullable: true,
-      comment: 'Experience level required (entry, junior, senior, lead, manager)'
+      comment: 'Experience level required (entry, junior, senior, lead, manager)',
    })
    experienceLevel?: string;
 
    @Column({
       type: 'text',
       nullable: true,
-      comment: 'Required skills (comma-separated or JSON)'
+      comment: 'Required skills (comma-separated or JSON)',
    })
    skills?: string;
 
    @Column({
       type: 'int',
       nullable: true,
-      comment: 'Minimum years of experience required'
+      comment: 'Minimum years of experience required',
    })
    minExperience?: number;
 
    @Column({
       type: 'int',
       nullable: true,
-      comment: 'Maximum years of experience preferred'
+      comment: 'Maximum years of experience preferred',
    })
    maxExperience?: number;
 
@@ -132,29 +133,62 @@ export class JobPostingEntity extends BaseEntity {
       type: 'varchar',
       length: 100,
       nullable: true,
-      comment: 'Education level required'
+      comment: 'Education level required',
    })
    educationLevel?: string;
+
+   @Column({
+      type: 'boolean',
+      name: 'isTest',
+      nullable: false,
+      default: false,
+      comment: 'Indicates whether the job requires a test',
+   })
+   isTest: boolean;
+
+   @Column({
+      type: 'int',
+      name: 'question_set_id',
+      nullable: true,
+      comment: 'Reference to question set used for this job',
+   })
+   questionSetId?: number;
+
+   @Column({
+      type: 'int',
+      name: 'quantityquestion',
+      nullable: true,
+      comment: 'Number of questions for this job',
+   })
+   quantityQuestion?: number;
+
+   @Column({
+      type: 'int',
+      name: 'min_score',
+      nullable: true,
+      comment: 'Minimum score required for this job',
+   })
+   minScore?: number;
 
    // Foreign Keys (references to Company Service and User Service)
    @Column({
       type: 'int',
       nullable: false,
-      comment: 'Reference to department (Company Service)'
+      comment: 'Reference to department (Company Service)',
    })
    departmentId: number;
 
    @Column({
       type: 'int',
       nullable: false,
-      comment: 'Reference to position (Company Service)'
+      comment: 'Reference to position (Company Service)',
    })
    positionId: number;
 
    @Column({
       type: 'int',
       nullable: true,
-      comment: 'Reference to hiring manager (User Service)'
+      comment: 'Reference to hiring manager (User Service)',
    })
    hiringManagerId?: number;
 
@@ -163,6 +197,14 @@ export class JobPostingEntity extends BaseEntity {
    //    cascade: ['soft-remove']
    // })
    // applications: ApplicationEntity[];
+
+   @ManyToOne(() => QuestionSetEntity, { nullable: true, onDelete: 'SET NULL' })
+   @JoinColumn({
+      name: 'question_set_id',
+      referencedColumnName: 'setId',
+      foreignKeyConstraintName: 'fk_job_posting_question_set',
+   })
+   questionSet?: QuestionSetEntity;
 
    // Computed properties
    get salaryRange(): string | null {

@@ -1,11 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { 
-   IsString, 
-   IsOptional, 
-   IsNumber, 
-   IsNotEmpty, 
-   MinLength, 
-   MaxLength, 
+import {
+   IsString,
+   IsOptional,
+   IsNumber,
+   IsNotEmpty,
+   MinLength,
+   MaxLength,
    IsDateString,
    IsInt,
    Min,
@@ -13,7 +13,7 @@ import {
    IsIn,
    IsUrl,
    IsDecimal,
-   IsBoolean
+   IsBoolean,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -105,11 +105,31 @@ export class UpdateApplicationDto {
    @ApiPropertyOptional({
       description: 'Application status',
       example: 'screening',
-      enum: ['submitted', 'screening', 'interviewing', 'offer', 'hired', 'rejected', 'withdrawn'],
+      enum: [
+         'submitted',
+         'screening',
+         'interviewing',
+         'offer',
+         'hired',
+         'rejected',
+         'withdrawn',
+         'passed_exam',
+         'failed_exam',
+      ],
    })
    @IsOptional()
    @IsString()
-   @IsIn(['submitted', 'screening', 'interviewing', 'offer', 'hired', 'rejected', 'withdrawn'])
+   @IsIn([
+      'submitted',
+      'screening',
+      'interviewing',
+      'offer',
+      'hired',
+      'rejected',
+      'withdrawn',
+      'passed_exam',
+      'failed_exam',
+   ])
    status?: string;
 
    @ApiPropertyOptional({
@@ -508,11 +528,31 @@ export class GetApplicationsQueryDto {
    @ApiPropertyOptional({
       description: 'Filter by status',
       example: 'screening',
-      enum: ['submitted', 'screening', 'interviewing', 'offer', 'hired', 'rejected', 'withdrawn'],
+      enum: [
+         'submitted',
+         'screening',
+         'interviewing',
+         'offer',
+         'hired',
+         'rejected',
+         'withdrawn',
+         'passed_exam',
+         'failed_exam',
+      ],
    })
    @IsOptional()
    @IsString()
-   @IsIn(['submitted', 'screening', 'interviewing', 'offer', 'hired', 'rejected', 'withdrawn'])
+   @IsIn([
+      'submitted',
+      'screening',
+      'interviewing',
+      'offer',
+      'hired',
+      'rejected',
+      'withdrawn',
+      'passed_exam',
+      'failed_exam',
+   ])
    status?: string;
 
    @ApiPropertyOptional({

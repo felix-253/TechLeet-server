@@ -9,9 +9,12 @@ import { FileEntity, FileStatus, FileType } from '../../../entities/recruitment/
 import { InboundAttachment } from './brevo-webhook.dto';
 import * as fs from 'fs-extra';
 import axios from 'axios';
-import { InformationService } from '../cv-screening/information.service';
+import { InformationService } from '../cv-screening/services/information.service';
 import { ApplicationService } from '../application/application.service';
 import { ApplicationEntity } from '../../../entities/recruitment/application.entity';
+import { RecruitmentEmailService } from '../email/email.service';
+import { CandidateEntity } from '../../../entities/recruitment/candidate.entity';
+import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
 
 // Import modular components
 import { OcrService } from './ocr/ocr.service';
@@ -36,9 +39,16 @@ export class FileService {
    constructor(
       @InjectRepository(FileEntity)
       private readonly fileRepository: Repository<FileEntity>,
+      @InjectRepository(ApplicationEntity)
+      private readonly applicationRepository: Repository<ApplicationEntity>,
+      @InjectRepository(CandidateEntity)
+      private readonly candidateRepository: Repository<CandidateEntity>,
+      @InjectRepository(JobPostingEntity)
+      private readonly jobPostingRepository: Repository<JobPostingEntity>,
       private readonly dataSource: DataSource,
       private readonly informationService: InformationService,
       private readonly applicationService: ApplicationService,
+      private readonly recruitmentEmailService: RecruitmentEmailService,
       // New modular services
       private readonly ocrService: OcrService,
       private readonly cvAnalyzer: CvAnalyzer,
@@ -66,8 +76,20 @@ export class FileService {
                break;
          }
 
+         // Generate fileUrl if not provided
+         let fileUrl = fileData.fileUrl;
+         if (!fileUrl || fileUrl === '') {
+            // File is in temp-uploads, use relative path
+            // For candidate_resume, use resumes folder
+            const uploadFolder = fileData.fileType === FileType.CANDIDATE_RESUME 
+               ? 'candidate_resume' 
+               : folder;
+            fileUrl = `./uploads/${uploadFolder}/${fileData.fileName}`;
+         }
+
          const fileEntity = this.fileRepository.create({
             ...fileData,
+            fileUrl,
             status: FileStatus.ACTIVE,
          });
 
@@ -216,6 +238,8 @@ export class FileService {
          recipientEmail: string;
       },
    ): Promise<FileEntity[]> {
+      console.log(`🚀 Starting Brevo attachment processing pipeline...`);
+      
       // Extract job info from Brevo email
       const jobInfo = this.brevoHandler.extractJobInfoFromBrevoEmail({
          Recipient: [emailMetadata?.recipientEmail],
@@ -226,7 +250,8 @@ export class FileService {
          throw new BadRequestException('Unable to extract job ID or candidate email from Brevo data');
       }
 
-      // Process attachments using BrevoHandler
+      // Step 1: Save file metadata to database
+      console.log(`📝 Step 1: Saving file metadata for job ${jobInfo.jobId}`);
       const processedFiles = await this.brevoHandler.processBrevoAttachments(
          attachments,
          jobInfo.candidateEmail,
@@ -234,7 +259,7 @@ export class FileService {
          jobInfo.candidateName || undefined
       );
 
-      // Convert processed files back to FileEntity format for compatibility
+      // Convert processed files back to FileEntity format
       const fileEntities: FileEntity[] = [];
       for (const processedFile of processedFiles) {
          if (!processedFile.failed) {
@@ -245,7 +270,161 @@ export class FileService {
          }
       }
 
+      // Step 2: Download and process CV files asynchronously
+      console.log(`⬇️ Step 2: Triggering async CV download and processing...`);
+      this.downloadAndProcessBrevoFiles(fileEntities, jobInfo.jobId, jobInfo.candidateEmail, jobInfo.candidateName || undefined)
+         .catch(error => {
+            console.error('❌ Background CV processing failed:', error);
+            // Don't throw - let webhook succeed even if background processing fails
+         });
+
+      console.log(`✅ Brevo webhook processing complete. Background processing started.`);
       return fileEntities;
+   }
+
+   /**
+    * Background job: Download Brevo files, extract CV info, create application, send email
+    * This runs asynchronously after the webhook response is sent
+    */
+   private async downloadAndProcessBrevoFiles(
+      fileEntities: FileEntity[],
+      jobId: number,
+      candidateEmail: string,
+      candidateName?: string
+   ): Promise<void> {
+      console.log(`🔄 Background: Processing ${fileEntities.length} files for job ${jobId}`);
+      
+      const uploadDir = join(process.cwd(), 'uploads', 'brevo');
+      if (!existsSync(uploadDir)) {
+         mkdirSync(uploadDir, { recursive: true });
+      }
+
+      const downloadedFiles: string[] = [];
+
+      try {
+         // Step 1: Download all CV files from Brevo
+         for (const fileEntity of fileEntities) {
+            if (fileEntity.fileType !== FileType.CANDIDATE_RESUME) {
+               console.log(`⏭️ Skipping non-CV file: ${fileEntity.originalName}`);
+               continue;
+            }
+
+            try {
+               const downloadToken = fileEntity.metadata?.downloadToken || fileEntity.fileUrl;
+               
+               if (!downloadToken) {
+                  console.error(`❌ No download token for file ${fileEntity.fileId}`);
+                  continue;
+               }
+
+               console.log(`⬇️ Downloading file: ${fileEntity.originalName}`);
+               const fileBuffer = await this.downloadBrevoAttachment(downloadToken);
+               
+               // Save to disk with unique filename
+               const timestamp = Date.now();
+               const sanitizedName = fileEntity.originalName.replace(/[^a-zA-Z0-9.-]/g, '_');
+               const localFilePath = join(uploadDir, `${timestamp}_${sanitizedName}`);
+               
+               writeFileSync(localFilePath, fileBuffer);
+               console.log(`💾 Saved to: ${localFilePath}`);
+               
+               // Update file entity with local path
+               await this.fileRepository.update(fileEntity.fileId, {
+                  fileUrl: localFilePath,
+                  metadata: {
+                     ...fileEntity.metadata,
+                     localPath: localFilePath,
+                     downloadedAt: new Date().toISOString()
+                  }
+               });
+
+               downloadedFiles.push(localFilePath);
+               
+            } catch (downloadError) {
+               console.error(`❌ Failed to download file ${fileEntity.originalName}:`, downloadError);
+               // Continue with other files
+            }
+         }
+
+         if (downloadedFiles.length === 0) {
+            console.warn(`⚠️ No CV files downloaded for job ${jobId}`);
+            return;
+         }
+
+         console.log(`✅ Downloaded ${downloadedFiles.length} CV files`);
+
+         // Step 2: Extract CV information and create application
+         console.log(`🔍 Step 2: Extracting CV information...`);
+         
+         try {
+            // Process first CV file (if multiple CVs, process the first one)
+            const firstCvPath = downloadedFiles[0];
+            console.log(`🔍 Processing CV: ${firstCvPath}`);
+            console.log(`📧 Using Brevo sender email: ${candidateEmail}`);
+            
+            const extractionResult = await this.informationService.extractCandidateInformationFromPdf(
+               firstCvPath,
+               jobId,
+               undefined, // candidateId - let it find by email
+               candidateEmail // ✅ Pass sender email from Brevo
+            );
+
+            if (extractionResult.success && extractionResult.applicationId) {
+               console.log(`✅ Application created successfully with ID: ${extractionResult.applicationId}`);
+               
+               // Step 3: Send thank you email after successful processing
+               try {
+                  const application = await this.applicationRepository.findOne({
+                     where: { applicationId: extractionResult.applicationId }
+                  });
+
+                  if (application) {
+                     const candidate = await this.candidateRepository.findOne({
+                        where: { candidateId: application.candidateId }
+                     });
+                     const jobPosting = await this.jobPostingRepository.findOne({
+                        where: { jobPostingId: application.jobPostingId }
+                     });
+
+                     if (candidate && jobPosting) {
+                        console.log(`📧 Sending thank you email for application ${application.applicationId} (Brevo flow)`);
+                        await this.recruitmentEmailService.sendApplicationThankYouEmail(
+                           candidate,
+                           jobPosting,
+                           application
+                        );
+                        console.log(`✅ Thank you email sent successfully (Brevo flow)`);
+                     } else {
+                        console.warn(`⚠️ Cannot send email - missing candidate or job posting data`);
+                     }
+                  }
+               } catch (emailError) {
+                  console.error(`❌ Failed to send thank you email (Brevo flow):`, emailError);
+                  // Don't fail the entire process if email fails
+               }
+            } else {
+               console.warn(`⚠️ CV extraction succeeded but no application created for job ${jobId}`);
+            }
+            
+         } catch (extractError) {
+            console.error(`❌ CV extraction failed:`, extractError);
+            throw extractError;
+         }
+
+         // Step 3: Cleanup downloaded files (optional - keep for debugging)
+         // for (const filePath of downloadedFiles) {
+         //    try {
+         //       await unlink(filePath);
+         //       console.log(`🗑️ Cleaned up: ${filePath}`);
+         //    } catch (cleanupError) {
+         //       console.warn(`⚠️ Failed to cleanup file ${filePath}:`, cleanupError);
+         //    }
+         // }
+
+      } catch (error) {
+         console.error(`❌ Background processing failed for job ${jobId}:`, error);
+         throw error;
+      }
    }
 
    // Delegate methods to modular services
@@ -281,10 +460,16 @@ export class FileService {
 
    private async downloadBrevoAttachment(downloadToken: string): Promise<Buffer> {
       try {
-         const response = await axios.get(`https://files.sendinblue.com/${downloadToken}`, {
+         const url = `https://api.brevo.com/v3/inbound/attachments/${downloadToken}`;
+
+         const response = await axios.get<ArrayBuffer>(url, {
             responseType: 'arraybuffer',
+            headers: {
+               'api-key': process.env.SENDINBLUE_API_KEY!,
+            },
          });
-         return Buffer.from(response.data);
+
+         return Buffer.from(response.data as any);
       } catch (error) {
          throw new BadRequestException(`Failed to download attachment: ${error.message}`);
       }

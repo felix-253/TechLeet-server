@@ -1,5 +1,6 @@
-import { Column, Entity, PrimaryGeneratedColumn, Index } from 'typeorm';
+import { Column, Entity, PrimaryGeneratedColumn, Index, OneToOne, JoinColumn } from 'typeorm';
 import { BaseEntity } from '../base/base.entities';
+import { ExaminationEntity } from '../question/examination.entity';
 
 @Entity('application')
 @Index(['status'])
@@ -7,14 +8,14 @@ import { BaseEntity } from '../base/base.entities';
 @Index(['jobPostingId', 'candidateId'], { unique: true })
 export class ApplicationEntity extends BaseEntity {
    @PrimaryGeneratedColumn('identity', {
-      comment: 'Unique identifier for the application'
+      comment: 'Unique identifier for the application',
    })
    applicationId: number;
 
    @Column({
       type: 'text',
       nullable: true,
-      comment: 'Cover letter submitted by candidate'
+      comment: 'Cover letter submitted by candidate',
    })
    coverLetter?: string;
 
@@ -22,7 +23,7 @@ export class ApplicationEntity extends BaseEntity {
       type: 'varchar',
       length: 255,
       nullable: true,
-      comment: 'URL to resume file for this specific application'
+      comment: 'URL to resume file for this specific application',
    })
    resumeUrl?: string;
 
@@ -31,7 +32,8 @@ export class ApplicationEntity extends BaseEntity {
       length: 50,
       nullable: false,
       default: 'submitted',
-      comment: 'Application status (submitted, screening, interviewing, offer, hired, rejected, withdrawn)'
+      comment:
+         'Application status (submitted, screening, interviewing, offer, hired, rejected, withdrawn, passed_exam, failed_exam)',
    })
    status: string;
 
@@ -39,42 +41,42 @@ export class ApplicationEntity extends BaseEntity {
       type: 'timestamp',
       nullable: false,
       default: () => 'CURRENT_TIMESTAMP',
-      comment: 'Date when application was submitted'
+      comment: 'Date when application was submitted',
    })
    appliedDate: Date;
 
    @Column({
       type: 'timestamp',
       nullable: true,
-      comment: 'Date when application was reviewed'
+      comment: 'Date when application was reviewed',
    })
    reviewedDate?: Date;
 
    @Column({
       type: 'text',
       nullable: true,
-      comment: 'Notes from reviewer'
+      comment: 'Notes from reviewer',
    })
    reviewNotes?: string;
 
    @Column({
       type: 'int',
       nullable: true,
-      comment: 'Overall application score (1-10)'
+      comment: 'Overall application score (1-10)',
    })
    score?: number;
 
    @Column({
       type: 'text',
       nullable: true,
-      comment: 'Feedback on the application'
+      comment: 'Feedback on the application',
    })
    feedback?: string;
 
    @Column({
       type: 'date',
       nullable: true,
-      comment: 'Date when offer was made'
+      comment: 'Date when offer was made',
    })
    offerDate?: Date;
 
@@ -83,14 +85,14 @@ export class ApplicationEntity extends BaseEntity {
       precision: 10,
       scale: 2,
       nullable: true,
-      comment: 'Salary offered (VND)'
+      comment: 'Salary offered (VND)',
    })
    offeredSalary?: number;
 
    @Column({
       type: 'date',
       nullable: true,
-      comment: 'Offer expiration date'
+      comment: 'Offer expiration date',
    })
    offerExpiryDate?: Date;
 
@@ -98,35 +100,35 @@ export class ApplicationEntity extends BaseEntity {
       type: 'varchar',
       length: 50,
       nullable: true,
-      comment: 'Offer status (pending, accepted, rejected, expired)'
+      comment: 'Offer status (pending, accepted, rejected, expired)',
    })
    offerStatus?: string;
 
    @Column({
       type: 'date',
       nullable: true,
-      comment: 'Date when offer was responded to'
+      comment: 'Date when offer was responded to',
    })
    offerResponseDate?: Date;
 
    @Column({
       type: 'text',
       nullable: true,
-      comment: 'Reason for rejection (if applicable)'
+      comment: 'Reason for rejection (if applicable)',
    })
    rejectionReason?: string;
 
    @Column({
       type: 'date',
       nullable: true,
-      comment: 'Expected start date if hired'
+      comment: 'Expected start date if hired',
    })
    expectedStartDate?: Date;
 
    @Column({
       type: 'text',
       nullable: true,
-      comment: 'Additional notes about the application'
+      comment: 'Additional notes about the application',
    })
    applicationNotes?: string;
 
@@ -134,14 +136,14 @@ export class ApplicationEntity extends BaseEntity {
       type: 'varchar',
       length: 50,
       nullable: true,
-      comment: 'Priority level (low, medium, high, urgent)'
+      comment: 'Priority level (low, medium, high, urgent)',
    })
    priority?: string;
 
    @Column({
       type: 'text',
       nullable: true,
-      comment: 'Tags for categorization (JSON array)'
+      comment: 'Tags for categorization (JSON array)',
    })
    tags?: string;
 
@@ -149,28 +151,28 @@ export class ApplicationEntity extends BaseEntity {
    @Column({
       type: 'int',
       nullable: false,
-      comment: 'Reference to job posting'
+      comment: 'Reference to job posting',
    })
    jobPostingId: number;
 
    @Column({
       type: 'int',
       nullable: false,
-      comment: 'Reference to candidate'
+      comment: 'Reference to candidate',
    })
    candidateId: number;
 
    @Column({
       type: 'int',
       nullable: true,
-      comment: 'Reference to employee who reviewed application (User Service)'
+      comment: 'Reference to employee who reviewed application (User Service)',
    })
    reviewedBy?: number;
 
    @Column({
       type: 'int',
       nullable: true,
-      comment: 'Reference to hiring manager (User Service)'
+      comment: 'Reference to hiring manager (User Service)',
    })
    hiringManagerId?: number;
 
@@ -178,7 +180,7 @@ export class ApplicationEntity extends BaseEntity {
    @Column({
       type: 'boolean',
       default: false,
-      comment: 'Whether CV screening has been completed'
+      comment: 'Whether CV screening has been completed',
    })
    isScreeningCompleted: boolean;
 
@@ -187,7 +189,7 @@ export class ApplicationEntity extends BaseEntity {
       precision: 5,
       scale: 2,
       nullable: true,
-      comment: 'Overall CV screening score (0-100)'
+      comment: 'Overall CV screening score (0-100)',
    })
    screeningScore?: number;
 
@@ -195,16 +197,19 @@ export class ApplicationEntity extends BaseEntity {
       type: 'varchar',
       length: 50,
       nullable: true,
-      comment: 'CV screening status (pending, processing, completed, failed)'
+      comment: 'CV screening status (pending, processing, completed, failed)',
    })
    screeningStatus?: string;
 
    @Column({
       type: 'timestamp',
       nullable: true,
-      comment: 'When CV screening was completed'
+      comment: 'When CV screening was completed',
    })
    screeningCompletedAt?: Date;
+
+   @OneToOne(() => ExaminationEntity, (examination) => examination.application)
+   examination: ExaminationEntity;
 
    // Relationships will be added after all entities are created
    // @ManyToOne(() => JobPostingEntity, jobPosting => jobPosting.applications, {
@@ -252,13 +257,15 @@ export class ApplicationEntity extends BaseEntity {
 
    get statusColor(): string {
       const statusColors = {
-         'submitted': 'blue',
-         'screening': 'yellow',
-         'interviewing': 'orange',
-         'offer': 'purple',
-         'hired': 'green',
-         'rejected': 'red',
-         'withdrawn': 'gray'
+         submitted: 'blue',
+         screening: 'yellow',
+         interviewing: 'orange',
+         offer: 'purple',
+         hired: 'green',
+         rejected: 'red',
+         withdrawn: 'gray',
+         passed_exam: 'green',
+         failed_exam: 'red',
       };
       return statusColors[this.status] || 'gray';
    }

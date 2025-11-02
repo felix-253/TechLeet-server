@@ -29,10 +29,19 @@ export class BrevoHandler {
             try {
                console.log(`📎 Processing attachment: ${attachment.Name} (${attachment.Size} bytes)`);
                
+               // Generate unique filename to avoid conflicts
+               const timestamp = Date.now();
+               const randomSuffix = Math.random().toString(36).substring(2, 8);
+               const originalFileName = attachment.Name;
+               const fileExtension = originalFileName.includes('.') 
+                  ? originalFileName.substring(originalFileName.lastIndexOf('.'))
+                  : '';
+               const uniqueFileName = `${timestamp}_${randomSuffix}${fileExtension}`;
+               
                // Save file entity to database
                const fileEntity = new FileEntity();
                fileEntity.originalName = attachment.Name;
-               fileEntity.fileName = attachment.Name;
+               fileEntity.fileName = uniqueFileName; // Use unique filename to prevent duplicates
                fileEntity.fileUrl = attachment.DownloadToken || attachment.Url || '';
                fileEntity.fileSize = attachment.Size || 0;
                fileEntity.mimeType = attachment.ContentType || 'application/octet-stream';
@@ -78,16 +87,9 @@ export class BrevoHandler {
             }
          }
          
-         // Send thank you email after processing attachments
-         if (processedFiles.some(file => !file.failed)) {
-            await this.sendApplicationThankYouEmail(
-               candidateEmail,
-               jobId,
-               candidateName,
-               processedFiles.filter(file => !file.failed)
-            );
-         }
-         
+         // NOTE: Thank you email will be sent AFTER candidate and application are created
+         // This happens in the information.service.ts or application.service.ts flow
+         // We don't send email here because candidate/application don't exist yet
          console.log(`✅ Brevo attachment processing complete: ${processedFiles.length} files processed`);
          
          return processedFiles;
@@ -99,9 +101,23 @@ export class BrevoHandler {
    }
 
    /**
-    * Send thank you email after processing Brevo application
+    * ⛔ DEPRECATED - DO NOT USE
+    * 
+    * This method has been deprecated because it sends emails with temporary objects
+    * that don't exist in the database.
+    * 
+    * The proper email flow is now:
+    * 1. Brevo webhook receives email with CV attachments
+    * 2. Files are saved to database (processBrevoAttachments)
+    * 3. file.service.ts automatically triggers CV extraction (processResumeFilesAsync)
+    * 4. application.service.extractApplicationFromPdfs() is called
+    * 5. Candidate is created (information.service.ts)
+    * 6. Application is created (application.service.create())
+    * 7. ✅ Thank you email is sent automatically with real data
+    * 
+    * @deprecated Use the automatic flow instead - emails are sent after application creation
     */
-   private async sendApplicationThankYouEmail(
+   private async sendApplicationThankYouEmail_DEPRECATED(
       candidateEmail: string,
       jobId: number,
       candidateName?: string,

@@ -122,9 +122,11 @@ export class CandidateEntity extends BaseEntity {
    summary?: string;
 
    @Column({
-      type: 'int',
+      type: 'decimal',
+      precision: 5,
+      scale: 2,
       nullable: true,
-      comment: 'Years of total work experience'
+      comment: 'Years of total work experience (supports decimal values like 1.5 years)'
    })
    yearsOfExperience?: number;
 
