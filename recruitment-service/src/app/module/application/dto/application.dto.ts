@@ -685,3 +685,40 @@ export class GetApplicationsQueryDto {
    @IsIn(['ASC', 'DESC'])
    sortOrder?: 'ASC' | 'DESC' = 'DESC';
 }
+
+export class ApproveAfterInterviewDto {
+   @ApiProperty({
+      description: 'Salary offered (VND)',
+      example: 45000000,
+      minimum: 1,
+   })
+   @IsNumber({ maxDecimalPlaces: 2 })
+   @Min(1)
+   @Type(() => Number)
+   offeredSalary: number;
+
+   @ApiProperty({
+      description: 'Expected start date (YYYY-MM-DD)',
+      example: '2024-02-01',
+   })
+   @IsDateString()
+   expectedStartDate: string;
+
+   @ApiPropertyOptional({
+      description: 'Offer expiration date (YYYY-MM-DD)',
+      example: '2024-02-15',
+   })
+   @IsOptional()
+   @IsDateString()
+   offerExpiryDate?: string;
+}
+
+export class RejectAfterInterviewDto {
+   @ApiPropertyOptional({
+      description: 'Reason for rejection',
+      example: 'Not a good cultural fit after interview',
+   })
+   @IsOptional()
+   @IsString()
+   rejectionReason?: string;
+}

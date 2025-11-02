@@ -11,6 +11,8 @@ import {
    UpdateApplicationDto,
    ApplicationResponseDto,
    GetApplicationsQueryDto,
+   ApproveAfterInterviewDto,
+   RejectAfterInterviewDto,
 } from './dto/application.dto';
 import { CvScreeningService } from '../cv-screening/cv-screening.service';
 import { InformationService } from '../cv-screening/services/information.service';
@@ -419,7 +421,11 @@ export class ApplicationService {
 
    async makeOffer(
       id: number,
-      offerData: { offeredSalary: number; offerExpiryDate: string },
+      offerData: { 
+         offeredSalary: number; 
+         offerExpiryDate?: string;
+         expectedStartDate?: string;
+      },
    ): Promise<ApplicationResponseDto> {
       const application = await this.applicationRepository.findOne({
          where: { applicationId: id },
@@ -435,16 +441,26 @@ export class ApplicationService {
          );
       }
 
-      const expiryDate = new Date(offerData.offerExpiryDate);
-      if (expiryDate <= new Date()) {
-         throw new BadRequestException('Offer expiry date must be in the future');
+      if (offerData.offerExpiryDate) {
+         const expiryDate = new Date(offerData.offerExpiryDate);
+         if (expiryDate <= new Date()) {
+            throw new BadRequestException('Offer expiry date must be in the future');
+         }
+         application.offerExpiryDate = expiryDate;
       }
 
       application.status = 'offer';
       application.offerDate = new Date();
       application.offeredSalary = offerData.offeredSalary;
-      application.offerExpiryDate = expiryDate;
       application.offerStatus = 'pending';
+
+      if (offerData.expectedStartDate) {
+         const startDate = new Date(offerData.expectedStartDate);
+         if (startDate <= new Date()) {
+            throw new BadRequestException('Expected start date must be in the future');
+         }
+         application.expectedStartDate = startDate;
+      }
 
       const updatedApplication = await this.applicationRepository.save(application);
       return this.mapToResponseDto(updatedApplication);
@@ -480,6 +496,169 @@ export class ApplicationService {
       }
 
       const updatedApplication = await this.applicationRepository.save(application);
+      return this.mapToResponseDto(updatedApplication);
+   }
+
+   async approveAfterInterview(
+      id: number,
+      approveData: ApproveAfterInterviewDto,
+   ): Promise<ApplicationResponseDto> {
+      const application = await this.applicationRepository.findOne({
+         where: { applicationId: id },
+      });
+
+      if (!application) {
+         throw new NotFoundException(`Application with ID ${id} not found`);
+      }
+
+      if (application.status !== 'interviewing') {
+         throw new BadRequestException(
+            'Can only approve applications in interviewing status',
+         );
+      }
+
+      const interview = await this.interviewRepository.findOne({
+         where: {
+            candidate_id: application.candidateId,
+            job_id: application.jobPostingId,
+         },
+         order: { createdAt: 'DESC' },
+      });
+
+      if (!interview) {
+         throw new BadRequestException('Interview not found for this application');
+      }
+
+      if (interview.status !== 'completed') {
+         throw new BadRequestException(
+            'Can only approve applications with completed interviews',
+         );
+      }
+
+      const startDate = new Date(approveData.expectedStartDate);
+      if (startDate <= new Date()) {
+         throw new BadRequestException('Expected start date must be in the future');
+      }
+
+      const jobPosting = await this.jobPostingRepository.findOne({
+         where: { jobPostingId: application.jobPostingId },
+      });
+
+      if (!jobPosting) {
+         throw new NotFoundException('Job posting not found');
+      }
+
+      const offerData: {
+         offeredSalary: number;
+         offerExpiryDate?: string;
+         expectedStartDate: string;
+      } = {
+         offeredSalary: approveData.offeredSalary,
+         expectedStartDate: approveData.expectedStartDate,
+      };
+
+      if (approveData.offerExpiryDate) {
+         offerData.offerExpiryDate = approveData.offerExpiryDate;
+      }
+
+      const updatedApplication = await this.makeOffer(id, offerData);
+
+      const candidate = await this.candidateRepository.findOne({
+         where: { candidateId: application.candidateId },
+      });
+
+      if (!candidate) {
+         throw new NotFoundException('Candidate not found');
+      }
+
+      // Fetch the updated application entity for email service
+      const updatedApplicationEntity = await this.applicationRepository.findOne({
+         where: { applicationId: id },
+      });
+
+      if (!updatedApplicationEntity) {
+         throw new NotFoundException('Updated application not found');
+      }
+
+      await this.recruitmentEmailService.sendOfferEmail(
+         candidate,
+         jobPosting,
+         updatedApplicationEntity,
+         approveData.expectedStartDate,
+      );
+
+      this.logger.log(
+         `Approved application ${id} after interview and sent offer email`,
+      );
+
+      return updatedApplication;
+   }
+
+   async rejectAfterInterview(
+      id: number,
+      rejectData: RejectAfterInterviewDto,
+   ): Promise<ApplicationResponseDto> {
+      const application = await this.applicationRepository.findOne({
+         where: { applicationId: id },
+      });
+
+      if (!application) {
+         throw new NotFoundException(`Application with ID ${id} not found`);
+      }
+
+      if (application.status !== 'interviewing') {
+         throw new BadRequestException(
+            'Can only reject applications in interviewing status',
+         );
+      }
+
+      const interview = await this.interviewRepository.findOne({
+         where: {
+            candidate_id: application.candidateId,
+            job_id: application.jobPostingId,
+         },
+         order: { createdAt: 'DESC' },
+      });
+
+      if (!interview) {
+         throw new BadRequestException('Interview not found for this application');
+      }
+
+      if (interview.status !== 'completed') {
+         throw new BadRequestException(
+            'Can only reject applications with completed interviews',
+         );
+      }
+
+      application.status = 'rejected';
+      if (rejectData.rejectionReason) {
+         application.rejectionReason = rejectData.rejectionReason;
+      }
+
+      const updatedApplication = await this.applicationRepository.save(application);
+
+      const candidate = await this.candidateRepository.findOne({
+         where: { candidateId: application.candidateId },
+      });
+
+      const jobPosting = await this.jobPostingRepository.findOne({
+         where: { jobPostingId: application.jobPostingId },
+      });
+
+      if (!candidate || !jobPosting) {
+         this.logger.warn(
+            `Candidate or job posting not found for application ${id}. Cannot send rejection email.`,
+         );
+      } else {
+         await this.recruitmentEmailService.sendInterviewRejectionEmail(
+            candidate,
+            jobPosting,
+            updatedApplication,
+         );
+      }
+
+      this.logger.log(`Rejected application ${id} after interview`);
+
       return this.mapToResponseDto(updatedApplication);
    }
 

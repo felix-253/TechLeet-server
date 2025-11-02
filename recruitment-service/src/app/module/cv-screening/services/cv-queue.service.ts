@@ -170,8 +170,11 @@ export class CvQueueService implements OnModuleInit, OnModuleDestroy {
          
          // Log initial queue state
          this.logInitialQueueState();
+         
+         // Check for waiting jobs and log worker status
+         this.checkWorkerStatus();
       });
-
+      
       this.cvProcessingWorker.on('active', (job) => {
          this.logger.log(`🔄 CV Processing Worker: Job ${job.id} is now active for application ${job.data.applicationId}`);
       });
@@ -258,6 +261,30 @@ export class CvQueueService implements OnModuleInit, OnModuleDestroy {
    }
    
    /**
+    * Check worker status and verify it can process jobs
+    */
+   private async checkWorkerStatus() {
+      try {
+         // Verify queue connection
+         const queueWaiting = await this.cvProcessingQueue.getWaitingCount();
+         const queueActive = await this.cvProcessingQueue.getActiveCount();
+         this.logger.log(`🔍 Worker status check - Ready: ${this.workerReady}, ErrorCount: ${this.workerErrorCount}, Waiting: ${queueWaiting}, Active: ${queueActive}`);
+         
+         // If there are waiting jobs but worker is ready, log a warning
+         if (queueWaiting > 0 && this.workerReady && queueActive === 0) {
+            this.logger.warn(`⚠️ Worker is ready but ${queueWaiting} job(s) are waiting and none are active. This may indicate a connection issue or worker is not processing jobs.`);
+            
+            // Try to get worker info
+            if (this.cvProcessingWorker) {
+               this.logger.log(`🔍 Worker instance exists: ${!!this.cvProcessingWorker}`);
+            }
+         }
+      } catch (error) {
+         this.logger.error(`Error checking worker status: ${error.message}`, error.stack);
+      }
+   }
+   
+   /**
     * Reconnect worker if it fails
     */
    private async reconnectWorker() {
@@ -277,6 +304,36 @@ export class CvQueueService implements OnModuleInit, OnModuleDestroy {
       }
    }
    
+   /**
+    * Check for stuck jobs every 30 seconds
+    */
+   @Cron('*/30 * * * * *')
+   async checkStuckJobsQuick() {
+      try {
+         if (!this.workerReady) {
+            return;
+         }
+
+         const waitingJobs = await this.cvProcessingQueue.getWaiting();
+         
+         if (waitingJobs.length > 0) {
+            const now = Date.now();
+            for (const job of waitingJobs) {
+               const waitTime = now - job.timestamp;
+               const waitTimeSeconds = waitTime / 1000;
+               
+               if (waitTimeSeconds > 30) {
+                  this.logger.warn(`⚠️ Job ${job.id} has been waiting for ${waitTimeSeconds.toFixed(2)} seconds. Checking worker status...`);
+                  await this.checkWorkerStatus();
+                  break; // Only check once per cycle
+               }
+            }
+         }
+      } catch (error) {
+         this.logger.error(`Error in quick stuck jobs check: ${error.message}`, error.stack);
+      }
+   }
+
    /**
     * Check and retry stuck jobs periodically
     */
@@ -326,14 +383,14 @@ export class CvQueueService implements OnModuleInit, OnModuleDestroy {
             }
          }
          
-         // Check for jobs that have been waiting too long (more than 10 minutes)
+         // Check for jobs that have been waiting too long (more than 30 seconds)
          const now = Date.now();
          for (const job of waitingJobs) {
             const waitTime = now - job.timestamp;
-            const waitTimeMinutes = waitTime / 60000;
+            const waitTimeSeconds = waitTime / 1000;
             
-            if (waitTimeMinutes > 10) {
-               this.logger.warn(`⚠️ Job ${job.id} has been waiting for ${waitTimeMinutes.toFixed(2)} minutes. Worker may be stuck.`);
+            if (waitTimeSeconds > 30) {
+               this.logger.warn(`⚠️ Job ${job.id} has been waiting for ${waitTimeSeconds.toFixed(2)} seconds. Worker may be stuck.`);
                
                // Try to manually trigger processing
                try {
@@ -422,15 +479,30 @@ export class CvQueueService implements OnModuleInit, OnModuleDestroy {
          this.logger.log(`✅ Added CV processing job ${job.id} for application ${data.applicationId} (worker ready: ${this.workerReady}, job state: ${jobState}, queue: ${QueueNames.CV_PROCESSING})`);
          this.logger.log(`📊 Queue state - Waiting: ${waitingBefore} -> ${await this.cvProcessingQueue.getWaitingCount()}, Active: ${activeBefore} -> ${await this.cvProcessingQueue.getActiveCount()}`);
 
-         // Check if job is actually in the queue
+         // Check if job is actually in the queue and being processed
          setTimeout(async () => {
-            const currentState = await job.getState();
-            const isWaiting = await this.cvProcessingQueue.getWaiting();
-            const isActive = await this.cvProcessingQueue.getActive();
-            const isInQueue = isWaiting.some(j => j.id === job.id) || isActive.some(j => j.id === job.id);
-            
-            if (!isInQueue && currentState !== 'completed' && currentState !== 'failed') {
-               this.logger.warn(`⚠️ Job ${job.id} is not in waiting/active queue after 5 seconds. Current state: ${currentState}`);
+            try {
+               const currentState = await job.getState();
+               const [waiting, active] = await Promise.all([
+                  this.cvProcessingQueue.getWaiting(),
+                  this.cvProcessingQueue.getActive(),
+               ]);
+               const isInQueue = waiting.some(j => j.id === job.id) || active.some(j => j.id === job.id);
+               
+               this.logger.log(`🔍 Job ${job.id} status check after 5s - State: ${currentState}, InQueue: ${isInQueue}, Waiting: ${waiting.length}, Active: ${active.length}`);
+               
+               if (currentState === 'waiting' && !isInQueue) {
+                  this.logger.warn(`⚠️ Job ${job.id} state is 'waiting' but not found in queue. This may indicate a Redis sync issue.`);
+               } else if (currentState === 'waiting' && isInQueue) {
+                  this.logger.warn(`⚠️ Job ${job.id} is still waiting after 5 seconds. Worker may not be processing jobs.`);
+                  
+                  // Check worker status
+                  await this.checkWorkerStatus();
+               } else if (currentState === 'active') {
+                  this.logger.log(`✅ Job ${job.id} is now active and being processed`);
+               }
+            } catch (error) {
+               this.logger.error(`Error checking job status: ${error.message}`, error.stack);
             }
          }, 5000);
 

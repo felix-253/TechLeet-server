@@ -33,6 +33,9 @@ import * as Joi from 'joi';
             // API Gateway
             API_GATEWAY_URL: Joi.string().default('http://localhost:3030'),
 
+            // Frontend URL
+            FRONTEND_URL: Joi.string().default('http://localhost:3000'),
+
             // Google Gemini Configuration
             GEMINI_API_KEY: Joi.string().optional(),
             GEMINI_MODEL: Joi.string().default('gemini-1.5-flash-latest'),
