@@ -1,5 +1,6 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ScheduleModule } from '@nestjs/schedule';
 import {
    ScreeningController,
    InformationController,
@@ -45,6 +46,7 @@ import { QuestionModule } from '../question/question.module';
          InterviewEntity,
          ExaminationEntity,
       ]),
+      ScheduleModule.forRoot(),
       RecruitmentEmailModule,
       CandidateModule,
       forwardRef(() => ApplicationModule),

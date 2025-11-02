@@ -86,6 +86,21 @@ export class CvScreeningService {
             return this.mapToDto(existingScreening);
          }
 
+         // If screening exists but failed, try to retry the failed job first
+         if (existingScreening && existingScreening.status === ScreeningStatus.FAILED) {
+            this.logger.log(`Retrying failed screening for application ${applicationId}`);
+            const retrySuccess = await this.queueService.retryFailedJobForApplication(applicationId);
+            if (retrySuccess) {
+               this.logger.log(`Successfully retried failed job for application ${applicationId}`);
+               // Update status back to pending
+               existingScreening.status = ScreeningStatus.PENDING;
+               await this.screeningRepository.save(existingScreening);
+               return this.mapToDto(existingScreening);
+            }
+            // If retry failed, continue to create new job
+            this.logger.warn(`Could not retry failed job for application ${applicationId}, creating new job instead`);
+         }
+
          // Add to queue for processing
          const job = await this.queueService.addCvProcessingJob(
             {
