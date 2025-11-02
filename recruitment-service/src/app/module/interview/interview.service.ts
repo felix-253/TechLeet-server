@@ -1,7 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
-import * as brevo from '@getbrevo/brevo';
 import { InterviewEntity } from '../../../entities/recruitment/interview.entity';
 import { EntityManager, Repository, SelectQueryBuilder } from 'typeorm';
 import { CreateInterviewDto } from './dtos/createInterviewDto';
@@ -178,62 +177,18 @@ export class InterviewService {
          if (interviewerEmails && interviewerEmails.length > 0 && notesLink) {
             for (const interviewerEmail of interviewerEmails) {
                try {
-                  // Create a separate email for each interviewer with notes link
-                  const interviewerEmailInstance = new brevo.SendSmtpEmail();
-                  const isOnline = !!meetingLink;
-                  const templateId = isOnline ? 8 : 9;
-                  const interviewerNamesString = interviewerNames.join(', ');
-                  const dueDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
-
-                  interviewerEmailInstance.subject = `Xác nhận lịch phỏng vấn vị trí ${jobPosting.title} - TechLeet`;
-                  interviewerEmailInstance.templateId = templateId;
-                  interviewerEmailInstance.to = [{ email: interviewerEmail }];
-
-                  interviewerEmailInstance.replyTo = {
-                     email: 'hr@techleet.me',
-                     name: 'TechLeet Recruitment',
-                  };
-                  interviewerEmailInstance.sender = {
-                     email: 'ldmhieu205@gmail.com',
-                     name: 'TechLeet Recruitment',
-                  };
-
-                  const params: any = {
-                     candidateName: `${candidate.firstName} ${candidate.lastName}`,
-                     jobTitle: jobPosting.title,
-                     scheduledAt: scheduledAt.toLocaleString('vi-VN', {
-                        weekday: 'long',
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                     }),
-                     interviewer: interviewerNamesString,
-                     dueDate: dueDate.toLocaleString('vi-VN', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                     }),
-                     notesLink: notesLink,
-                  };
-
-                  if (isOnline && meetingLink) {
-                     params.meetingLink = meetingLink;
-                  }
-
-                  interviewerEmailInstance.params = params;
-
-                  // Use the email service's API instance
-                  const transactionalApi = new brevo.TransactionalEmailsApi();
-                  const apiKey = this.configService.get<string>('SENDINBLUE_API_KEY');
-                  if (apiKey) {
-                     transactionalApi.setApiKey(0, apiKey);
-                  }
-                  await transactionalApi.sendTransacEmail(interviewerEmailInstance);
-                  console.log(`✅ Interview confirmation email sent to interviewer ${interviewerEmail} with notes link`);
+                  await this.emailService.sendInterviewConfirmationEmailToInterviewer(
+                     interviewerEmail,
+                     candidate,
+                     jobPosting,
+                     {
+                        scheduledAt,
+                        meetingLink,
+                        location,
+                        interviewerNames,
+                        notesLink,
+                     },
+                  );
                } catch (error) {
                   console.error(`❌ Failed to send email to interviewer ${interviewerEmail}:`, error);
                }
@@ -415,14 +370,8 @@ export class InterviewService {
          if (interviewerEmails && interviewerEmails.length > 0 && notesLink) {
             for (const interviewerEmail of interviewerEmails) {
                try {
-                  const interviewerEmailInstance = new brevo.SendSmtpEmail();
-                  const isOnline = !!meetingLink;
-                  const templateId = isOnline ? 8 : 9;
-                  const interviewerNamesString = interviewerNames.join(', ');
-                  const dueDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
-
                   // Build change description
-                  let changeDescription = 'Lịch phỏng vấn đã được cập nhật với những thay đổi sau:';
+                  let changeDescription: string | undefined;
                   if (changedFields && changedFields.length > 0) {
                      const fieldNames: Record<string, string> = {
                         date: 'Ngày phỏng vấn',
@@ -436,10 +385,10 @@ export class InterviewService {
                         .map((field) => fieldNames[field] || field)
                         .join(', ');
                      
-                     changeDescription += `\n- ${changedFieldsText}`;
+                     changeDescription = `Lịch phỏng vấn đã được cập nhật với những thay đổi sau:\n- ${changedFieldsText}`;
                   }
 
-                  if (previousScheduledAt) {
+                  if (previousScheduledAt && changeDescription) {
                      changeDescription += `\n\nThời gian cũ: ${previousScheduledAt.toLocaleString('vi-VN', {
                         weekday: 'long',
                         year: 'numeric',
@@ -450,55 +399,21 @@ export class InterviewService {
                      })}`;
                   }
 
-                  interviewerEmailInstance.subject = `[CẬP NHẬT] Xác nhận lịch phỏng vấn vị trí ${jobPosting.title} - TechLeet`;
-                  interviewerEmailInstance.templateId = templateId;
-                  interviewerEmailInstance.to = [{ email: interviewerEmail }];
-
-                  interviewerEmailInstance.replyTo = {
-                     email: 'hr@techleet.me',
-                     name: 'TechLeet Recruitment',
-                  };
-                  interviewerEmailInstance.sender = {
-                     email: 'ldmhieu205@gmail.com',
-                     name: 'TechLeet Recruitment',
-                  };
-
-                  const params: any = {
-                     candidateName: `${candidate.firstName} ${candidate.lastName}`,
-                     jobTitle: jobPosting.title,
-                     scheduledAt: scheduledAt.toLocaleString('vi-VN', {
-                        weekday: 'long',
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                     }),
-                     interviewer: interviewerNamesString,
-                     dueDate: dueDate.toLocaleString('vi-VN', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                     }),
-                     notesLink: notesLink,
-                     changeDescription: changeDescription,
-                  };
-
-                  if (isOnline && meetingLink) {
-                     params.meetingLink = meetingLink;
-                  }
-
-                  interviewerEmailInstance.params = params;
-
-                  const transactionalApi = new brevo.TransactionalEmailsApi();
-                  const apiKey = this.configService.get<string>('SENDINBLUE_API_KEY');
-                  if (apiKey) {
-                     transactionalApi.setApiKey(0, apiKey);
-                  }
-                  await transactionalApi.sendTransacEmail(interviewerEmailInstance);
-                  console.log(`✅ Interview update email sent to interviewer ${interviewerEmail} with notes link`);
+                  await this.emailService.sendInterviewUpdateEmailToInterviewer(
+                     interviewerEmail,
+                     candidate,
+                     jobPosting,
+                     {
+                        scheduledAt,
+                        meetingLink,
+                        location,
+                        interviewerNames,
+                        changedFields,
+                        previousScheduledAt,
+                        changeDescription,
+                        notesLink,
+                     },
+                  );
                } catch (error) {
                   console.error(`❌ Failed to send email to interviewer ${interviewerEmail}:`, error);
                }
