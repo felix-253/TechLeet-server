@@ -672,19 +672,27 @@ export class CvScreeningWorkerService {
       let screeningStatus = 'pending';
 
       if (screeningResult.status === ScreeningStatus.PASSED) {
-         // Check if examination already failed before setting screening_passed
-         // If exam failed, keep failed_exam status instead of overriding
          const application = await this.applicationRepository.findOne({
             where: { applicationId },
          });
 
-         if (application && application.status === 'failed_exam') {
-            // Examination already failed, keep failed_exam status
-            applicationStatus = 'failed_exam';
-            screeningStatus = 'passed';
-            this.logger.log(
-               `Application ${applicationId} CV screening passed but exam failed. Keeping failed_exam status.`,
-            );
+         if (application) {
+            const jobPosting = await this.jobPostingRepository.findOne({
+               where: { jobPostingId: application.jobPostingId },
+            });
+
+            // Only check failed_exam status if job has exam
+            if (jobPosting && jobPosting.isTest && jobPosting.questionSetId && application.status === 'failed_exam') {
+               // Examination already failed, keep failed_exam status
+               applicationStatus = 'failed_exam';
+               screeningStatus = 'passed';
+               this.logger.log(
+                  `Application ${applicationId} CV screening passed but exam failed. Keeping failed_exam status.`,
+               );
+            } else {
+               applicationStatus = 'screening_passed';
+               screeningStatus = 'passed';
+            }
          } else {
             applicationStatus = 'screening_passed';
             screeningStatus = 'passed';
