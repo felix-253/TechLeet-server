@@ -517,7 +517,7 @@ export class ApplicationService {
       const qb = this.applicationRepository
          .createQueryBuilder('application')
          .leftJoin('candidate', 'candidate', 'application.candidateId = candidate.candidateId')
-         .select(['application.* as application', 'candidate.* as candidate'])
+         .select(['candidate.* as candidate', 'application.* as application'])
          .where('application.jobPostingId = :jobPostingId', { jobPostingId })
          .orderBy('application.appliedDate', 'DESC');
 
