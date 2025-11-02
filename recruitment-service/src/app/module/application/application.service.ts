@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, FindManyOptions, In } from 'typeorm';
+import { Repository, FindManyOptions, In, Brackets } from 'typeorm';
 import { ApplicationEntity } from '../../../entities/recruitment/application.entity';
 import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
 import { CandidateEntity } from '../../../entities/recruitment/candidate.entity';
@@ -564,14 +564,23 @@ export class ApplicationService {
          .andWhere(
             // If job has test: examination must exist and be completed with passing score
             // If job has no test: no examination required
-            `(
-               (jobPosting.isTest = false OR jobPosting.isTest IS NULL)
-               OR
-               (jobPosting.isTest = true AND examination.examinationId IS NOT NULL AND examination.status = :completedStatus AND (
-                  jobPosting.minScore IS NULL
-                  OR examination.totalScore >= jobPosting.minScore
-               ))
-            )`,
+            new Brackets((qb) => {
+               qb.where('jobPosting.isTest = false')
+                  .orWhere('jobPosting.isTest IS NULL')
+                  .orWhere(
+                     new Brackets((subQb) => {
+                        subQb.where('jobPosting.isTest = true')
+                           .andWhere('examination.examinationId IS NOT NULL')
+                           .andWhere('examination.status = :completedStatus')
+                           .andWhere(
+                              new Brackets((scoreQb) => {
+                                 scoreQb.where('jobPosting.minScore IS NULL')
+                                    .orWhere('examination.totalScore >= jobPosting.minScore');
+                              }),
+                           );
+                     }),
+                  );
+            }),
             { completedStatus: 'completed' },
          );
 
