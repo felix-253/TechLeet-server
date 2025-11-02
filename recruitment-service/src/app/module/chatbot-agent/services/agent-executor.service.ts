@@ -170,6 +170,7 @@ export class AgentExecutorService {
           functionDeclarations: [tool as any]
         })) as any : undefined,
         systemInstruction: {
+          role: 'system',
           parts: [{ text: systemPrompt }]
         }
       });

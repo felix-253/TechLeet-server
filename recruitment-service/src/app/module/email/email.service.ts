@@ -73,6 +73,52 @@ export class RecruitmentEmailService {
    }
 
    /**
+    * Send examination email to candidate after CV screening passes
+    */
+   async sendExaminationEmail(
+      candidate: CandidateEntity,
+      jobPosting: JobPostingEntity,
+      examinationId: number,
+   ): Promise<void> {
+      try {
+         const sendSmtpEmail: brevo.SendSmtpEmail = new brevo.SendSmtpEmail();
+         const candidatePortalUrl = this.configService.get<string>('FRONTEND_CANDIDATE_URL', 'http://localhost:8080');
+         const examinationLink = `${candidatePortalUrl}/exam/${examinationId}`;
+
+         sendSmtpEmail.subject = `Bài kiểm tra cho vị trí ${jobPosting.title} - TechLeet`;
+         sendSmtpEmail.templateId = 11;
+         sendSmtpEmail.to = [
+            {
+               email: candidate.email,
+               name: `${candidate.firstName} ${candidate.lastName}`,
+            },
+         ];
+         sendSmtpEmail.replyTo = {
+            email: 'hr@techleet.me',
+            name: 'TechLeet HR Team',
+         };
+         sendSmtpEmail.sender = {
+            email: 'ldmhieu205@gmail.com',
+            name: 'TechLeet Recruitment',
+         };
+
+         sendSmtpEmail.params = {
+            candidateName: `${candidate.firstName} ${candidate.lastName}`,
+            jobTitle: jobPosting.title,
+            examinationLink: examinationLink,
+         };
+
+         await this.apiInstance.sendTransacEmail(sendSmtpEmail);
+         console.log(
+            `✅ Examination email sent to ${candidate.email} for examination ${examinationId}`,
+         );
+      } catch (error) {
+         console.error(`❌ Failed to send examination email to ${candidate.email}:`, error);
+         // Don't throw error - email failure shouldn't break the process
+      }
+   }
+
+   /**
     * Send screening rejection email to candidate
     */
    async sendScreeningRejectionEmail(
@@ -358,6 +404,7 @@ export class RecruitmentEmailService {
          changeReason?: string;
          previousScheduledAt?: Date;
          changedFields?: string[]; // e.g., ['date', 'time', 'location', 'meetingLink']
+         notesLink?: string;
       },
    ): Promise<void> {
       try {

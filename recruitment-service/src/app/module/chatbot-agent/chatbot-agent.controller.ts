@@ -12,7 +12,7 @@ import {
   BadRequestException,
   NotFoundException,
   UnauthorizedException,
-  TooManyRequestsException,
+  HttpException,
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
@@ -90,9 +90,9 @@ export class ChatbotAgentController {
       return await this.agentExecutor.executeAgent(request, userId);
     } catch (error) {
       if (error.message && error.message.includes('Rate limit exceeded')) {
-        throw new TooManyRequestsException(error.message);
+        throw new HttpException(error.message, HttpStatus.TOO_MANY_REQUESTS);
       }
-      if (error instanceof BadRequestException || error instanceof UnauthorizedException || error instanceof TooManyRequestsException) {
+      if (error instanceof BadRequestException || error instanceof UnauthorizedException || error instanceof HttpException) {
         throw error;
       }
       this.logger.error('Chat request failed:', error);

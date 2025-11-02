@@ -20,6 +20,7 @@ import { CvEmbeddingService } from '../cv-screening/processors/cv-embedding.serv
 import { CvEmbeddingEntity } from '../../../entities/recruitment/cv-embedding.entity';
 import { FilterScoreEntity } from '../../../entities/recruitment/filter-score.entity';
 import { InterviewEntity } from '../../../entities/recruitment/interview.entity';
+import { ExaminationEntity } from '../../../entities/question/examination.entity';
 
 // Import new modular services
 import { OcrService } from './ocr/ocr.service';
@@ -48,6 +49,7 @@ import { CandidateModule } from '../candidate/candidate.module';
          CvEmbeddingEntity,
          FilterScoreEntity,
          InterviewEntity,
+         ExaminationEntity,
       ]),
       QuestionModule,
       CandidateModule,

@@ -8,6 +8,7 @@ import { ApplicationEntity } from '../../../../entities/recruitment/application.
 import { JobPostingEntity } from '../../../../entities/recruitment/job-posting.entity';
 import { CandidateEntity } from '../../../../entities/recruitment/candidate.entity';
 import { InterviewEntity } from '../../../../entities/recruitment/interview.entity';
+import { ExaminationEntity } from '../../../../entities/question/examination.entity';
 import { CvTextExtractionService } from '../processors/cv-text-extraction.service';
 import { CvNlpProcessingService, ProcessedCvData } from '../processors/cv-nlp-processing.service';
 import { CvEmbeddingService } from '../processors/cv-embedding.service';
@@ -18,6 +19,7 @@ import { EmbeddingType } from '../../../../entities/recruitment/cv-embedding.ent
 import { RetryUtil, CircuitBreakerUtil, FileValidationUtil, JobDescriptionUtil } from '../utils';
 import { CV_SCREENING_CONFIG } from '../config';
 import { RecruitmentEmailService } from '../../email/email.service';
+import { QuestionService } from '../../question/question.service';
 import {
    CvFileNotFoundException,
    CvFileTooLargeException,
@@ -57,6 +59,8 @@ export class CvScreeningWorkerService {
       private readonly candidateRepository: Repository<CandidateEntity>,
       @InjectRepository(InterviewEntity)
       private readonly interviewRepository: Repository<InterviewEntity>,
+      @InjectRepository(ExaminationEntity)
+      private readonly examinationRepository: Repository<ExaminationEntity>,
       private readonly textExtractionService: CvTextExtractionService,
       private readonly nlpProcessingService: CvNlpProcessingService,
       private readonly embeddingService: CvEmbeddingService,
@@ -64,6 +68,7 @@ export class CvScreeningWorkerService {
       private readonly scoringService: ScoringService,
       private readonly adaptiveThresholdService: AdaptiveThresholdService,
       private readonly emailService: RecruitmentEmailService,
+      private readonly questionService: QuestionService,
       private readonly dataSource: DataSource,
    ) {
       // Initialize circuit breaker for AI summary (expensive operation)
@@ -726,18 +731,122 @@ export class CvScreeningWorkerService {
          }
       }
 
-      // Auto-create interview request if screening passed
+      // Handle screening passed
       if (screeningResult.status === ScreeningStatus.PASSED) {
          try {
             const application = await this.applicationRepository.findOne({
                where: { applicationId },
+               relations: ['jobPosting'],
             });
 
             if (!application) {
-               this.logger.warn(`Application ${applicationId} not found for creating interview request`);
+               this.logger.warn(`Application ${applicationId} not found for post-screening processing`);
                return;
             }
 
+            const jobPosting = await this.jobPostingRepository.findOne({
+               where: { jobPostingId: application.jobPostingId },
+            });
+
+            if (!jobPosting) {
+               this.logger.warn(`Job posting ${application.jobPostingId} not found for application ${applicationId}`);
+               return;
+            }
+
+            // If job has test, check if examination already exists and passed
+            if (jobPosting.isTest && jobPosting.questionSetId) {
+               // Check if examination already exists and is completed
+               const existingExamination = await this.examinationRepository.findOne({
+                  where: { applicationId: application.applicationId },
+               });
+
+               if (existingExamination && existingExamination.status === 'completed') {
+                  // Check if examination passed
+                  const examinationPassed = jobPosting.minScore === null || jobPosting.minScore === undefined
+                     ? (existingExamination.totalScore !== null && existingExamination.totalScore !== undefined && existingExamination.totalScore > 0)
+                     : (existingExamination.totalScore !== null && existingExamination.totalScore !== undefined && existingExamination.totalScore >= jobPosting.minScore);
+
+                  if (examinationPassed) {
+                     // Both CV screening and examination passed, create interview request
+                     const existingInterview = await this.interviewRepository.findOne({
+                        where: {
+                           candidate_id: application.candidateId,
+                           job_id: application.jobPostingId,
+                        },
+                     });
+
+                     if (!existingInterview) {
+                        const placeholderDate = new Date();
+                        placeholderDate.setFullYear(placeholderDate.getFullYear() + 1);
+
+                        const interviewRequest = this.interviewRepository.create({
+                           candidate_id: application.candidateId,
+                           job_id: application.jobPostingId,
+                           interviewer_ids: [],
+                           scheduled_at: placeholderDate,
+                           duration_minutes: 60,
+                           meeting_link: '',
+                           location: '',
+                           status: 'pending',
+                        });
+
+                        const savedInterview = await this.interviewRepository.save(interviewRequest);
+                        this.logger.log(
+                           `Created interview request (interview_id: ${savedInterview.interview_id}) for application ${applicationId} after CV screening passed and examination already completed`,
+                        );
+                     }
+                     return;
+                  }
+               }
+
+               // Examination doesn't exist or not completed yet, create it
+               try {
+                  this.logger.log(
+                     `Creating examination for application ${applicationId} after CV screening passed`,
+                  );
+
+                  const examination = await this.questionService.createExamination({
+                     applicationId: application.applicationId,
+                     sourceSetId: jobPosting.questionSetId,
+                     quantityQuestion: jobPosting.quantityQuestion,
+                  });
+
+                  if (!examination) {
+                     throw new Error('Failed to create examination - returned null');
+                  }
+
+                  this.logger.log(
+                     `Examination created successfully for application ${applicationId} (examinationId: ${examination.examinationId})`,
+                  );
+
+                  // Send examination email
+                  const candidate = await this.candidateRepository.findOne({
+                     where: { candidateId: application.candidateId },
+                  });
+
+                  if (candidate) {
+                     await this.emailService.sendExaminationEmail(
+                        candidate,
+                        jobPosting,
+                        examination.examinationId,
+                     );
+                     this.logger.log(`Examination email sent to ${candidate.email} for application ${applicationId}`);
+                  } else {
+                     this.logger.warn(`Candidate ${application.candidateId} not found for sending examination email`);
+                  }
+
+                  // Don't create interview request yet - wait for examination completion
+                  return;
+               } catch (error) {
+                  this.logger.error(
+                     `Failed to create examination for application ${applicationId}: ${error.message}`,
+                     error.stack,
+                  );
+                  // Continue to create interview request if examination creation fails
+               }
+            }
+
+            // If job has no test, create interview request immediately
             // Check if interview request already exists
             const existingInterview = await this.interviewRepository.findOne({
                where: {
@@ -776,10 +885,10 @@ export class CvScreeningWorkerService {
             );
          } catch (error) {
             this.logger.error(
-               `Failed to create interview request for application ${applicationId}: ${error.message}`,
+               `Failed to process post-screening for application ${applicationId}: ${error.message}`,
                error.stack
             );
-            // Don't throw error - interview request creation failure shouldn't break the screening process
+            // Don't throw error - post-screening processing failure shouldn't break the screening process
          }
       }
    }

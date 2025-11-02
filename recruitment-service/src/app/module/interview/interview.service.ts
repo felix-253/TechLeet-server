@@ -320,6 +320,9 @@ export class InterviewService {
 
       // Send update email if significant changes occurred
       if (changedFields.length > 0) {
+         // Generate notes link for interviewers
+         const notesLink = this.generateNotesLink(updatedInterview.interview_id);
+         
          this.sendInterviewUpdateEmailAsync(
             updatedInterview.candidate_id,
             updatedInterview.job_id,
@@ -329,6 +332,7 @@ export class InterviewService {
             updatedInterview.location,
             changedFields,
             previousScheduledAt,
+            notesLink,
          ).catch(error => {
             console.error('Failed to send interview update email:', error);
          });
@@ -349,6 +353,7 @@ export class InterviewService {
       location?: string,
       changedFields?: string[],
       previousScheduledAt?: Date,
+      notesLink?: string,
    ): Promise<void> {
       try {
          // Fetch candidate information
@@ -389,7 +394,7 @@ export class InterviewService {
             interviewerEmails = interviewers.map((interviewer: any) => interviewer.email);
          }
 
-         // Send interview update email
+         // Send interview update email to candidate (without notes link)
          await this.emailService.sendInterviewUpdateEmail(
             candidate,
             jobPosting,
@@ -398,12 +403,107 @@ export class InterviewService {
                meetingLink,
                location,
                interviewerNames,
-               interviewerEmails,
+               interviewerEmails: [], // No CC for candidate email
                changedFields,
                previousScheduledAt,
                changeReason: 'Lịch phỏng vấn đã được điều chỉnh theo yêu cầu.',
+               notesLink: undefined, // No notes link for candidate
             },
          );
+
+         // Send separate emails to each interviewer (with notes link)
+         if (interviewerEmails && interviewerEmails.length > 0 && notesLink) {
+            for (const interviewerEmail of interviewerEmails) {
+               try {
+                  const interviewerEmailInstance = new brevo.SendSmtpEmail();
+                  const isOnline = !!meetingLink;
+                  const templateId = isOnline ? 8 : 9;
+                  const interviewerNamesString = interviewerNames.join(', ');
+                  const dueDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+
+                  // Build change description
+                  let changeDescription = 'Lịch phỏng vấn đã được cập nhật với những thay đổi sau:';
+                  if (changedFields && changedFields.length > 0) {
+                     const fieldNames: Record<string, string> = {
+                        date: 'Ngày phỏng vấn',
+                        time: 'Thời gian',
+                        location: 'Địa điểm',
+                        meetingLink: 'Link meeting',
+                        format: 'Hình thức phỏng vấn',
+                     };
+                     
+                     const changedFieldsText = changedFields
+                        .map((field) => fieldNames[field] || field)
+                        .join(', ');
+                     
+                     changeDescription += `\n- ${changedFieldsText}`;
+                  }
+
+                  if (previousScheduledAt) {
+                     changeDescription += `\n\nThời gian cũ: ${previousScheduledAt.toLocaleString('vi-VN', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                     })}`;
+                  }
+
+                  interviewerEmailInstance.subject = `[CẬP NHẬT] Xác nhận lịch phỏng vấn vị trí ${jobPosting.title} - TechLeet`;
+                  interviewerEmailInstance.templateId = templateId;
+                  interviewerEmailInstance.to = [{ email: interviewerEmail }];
+
+                  interviewerEmailInstance.replyTo = {
+                     email: 'hr@techleet.me',
+                     name: 'TechLeet Recruitment',
+                  };
+                  interviewerEmailInstance.sender = {
+                     email: 'ldmhieu205@gmail.com',
+                     name: 'TechLeet Recruitment',
+                  };
+
+                  const params: any = {
+                     candidateName: `${candidate.firstName} ${candidate.lastName}`,
+                     jobTitle: jobPosting.title,
+                     scheduledAt: scheduledAt.toLocaleString('vi-VN', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                     }),
+                     interviewer: interviewerNamesString,
+                     dueDate: dueDate.toLocaleString('vi-VN', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                     }),
+                     notesLink: notesLink,
+                     changeDescription: changeDescription,
+                  };
+
+                  if (isOnline && meetingLink) {
+                     params.meetingLink = meetingLink;
+                  }
+
+                  interviewerEmailInstance.params = params;
+
+                  const transactionalApi = new brevo.TransactionalEmailsApi();
+                  const apiKey = this.configService.get<string>('SENDINBLUE_API_KEY');
+                  if (apiKey) {
+                     transactionalApi.setApiKey(0, apiKey);
+                  }
+                  await transactionalApi.sendTransacEmail(interviewerEmailInstance);
+                  console.log(`✅ Interview update email sent to interviewer ${interviewerEmail} with notes link`);
+               } catch (error) {
+                  console.error(`❌ Failed to send email to interviewer ${interviewerEmail}:`, error);
+               }
+            }
+         }
       } catch (error) {
          console.error('Error in sendInterviewUpdateEmailAsync:', error);
          throw error;
