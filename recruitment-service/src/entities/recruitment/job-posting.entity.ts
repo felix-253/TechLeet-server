@@ -162,6 +162,14 @@ export class JobPostingEntity extends BaseEntity {
    })
    quantityQuestion?: number;
 
+   @Column({
+      type: 'int',
+      name: 'min_score',
+      nullable: true,
+      comment: 'Minimum score required for this job',
+   })
+   minScore?: number;
+
    // Foreign Keys (references to Company Service and User Service)
    @Column({
       type: 'int',

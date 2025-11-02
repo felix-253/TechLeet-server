@@ -217,6 +217,14 @@ export class CreateJobPostingDto {
    @Min(0)
    @Type(() => Number)
    quantityQuestion?: number;
+
+   @ApiPropertyOptional({})
+   @IsOptional()
+   @IsInt()
+   @Min(0)
+   @Max(10)
+   @Type(() => Number)
+   minScore?: number;
 }
 
 export class UpdateJobPostingDto {
@@ -432,6 +440,19 @@ export class UpdateJobPostingDto {
    @Min(0)
    @Type(() => Number)
    quantityQuestion?: number;
+
+   @ApiPropertyOptional({
+      description: 'Minimum score required for this job',
+      example: 70,
+      minimum: 0,
+      maximum: 100,
+   })
+   @IsOptional()
+   @IsInt()
+   @Min(0)
+   @Max(100)
+   @Type(() => Number)
+   minScore?: number;
 }
 
 export class JobPostingResponseDto {
@@ -572,6 +593,12 @@ export class JobPostingResponseDto {
       example: 10,
    })
    quantityQuestion?: number;
+
+   @ApiPropertyOptional({
+      description: 'Minimum score required for this job',
+      example: 7,
+   })
+   minScore?: number;
 
    @ApiPropertyOptional({
       description: 'Formatted salary range',
