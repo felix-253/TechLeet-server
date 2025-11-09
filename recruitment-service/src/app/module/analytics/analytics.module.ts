@@ -20,7 +20,7 @@ import { InterviewEntity } from '../../../entities/recruitment/interview.entity'
    ],
    controllers: [AnalyticsController],
    providers: [AnalyticsService, AnalyticsCacheService, CompanyServiceClient],
-   exports: [AnalyticsService],
+   exports: [AnalyticsService, CompanyServiceClient],
 })
 export class AnalyticsModule {}
 

@@ -71,5 +71,82 @@ export class CompanyServiceClient {
          return 0;
       }
    }
+
+   async getDepartments(): Promise<Array<{ departmentId: number; name: string }>> {
+      try {
+         const response = await this.httpClient.get('/departments', {
+            params: { limit: 100 }
+         });
+
+         if (response.data && response.data.data) {
+            return response.data.data.map((dept: any) => ({
+               departmentId: dept.departmentId || dept.id,
+               name: dept.name || dept.departmentName
+            }));
+         }
+
+         if (Array.isArray(response.data)) {
+            return response.data.map((dept: any) => ({
+               departmentId: dept.departmentId || dept.id,
+               name: dept.name || dept.departmentName
+            }));
+         }
+
+         return [];
+      } catch (error) {
+         this.logger.warn(`Failed to fetch departments from company-service: ${error.message}`);
+         return [];
+      }
+   }
+
+   async getPositions(departmentId?: number): Promise<Array<{ positionId: number; name: string; departmentId?: number }>> {
+      try {
+         const params: any = { limit: 100 };
+         if (departmentId) {
+            params.departmentId = departmentId;
+         }
+
+         const response = await this.httpClient.get('/positions', { params });
+
+         if (response.data && response.data.data) {
+            return response.data.data.map((pos: any) => ({
+               positionId: pos.positionId || pos.id,
+               name: pos.name || pos.positionName,
+               departmentId: pos.departmentId
+            }));
+         }
+
+         if (Array.isArray(response.data)) {
+            return response.data.map((pos: any) => ({
+               positionId: pos.positionId || pos.id,
+               name: pos.name || pos.positionName,
+               departmentId: pos.departmentId
+            }));
+         }
+
+         return [];
+      } catch (error) {
+         this.logger.warn(`Failed to fetch positions from company-service: ${error.message}`);
+         return [];
+      }
+   }
+
+   async getPositionsByDepartment(departmentId: number): Promise<Array<{ positionId: number; name: string }>> {
+      try {
+         const response = await this.httpClient.get(`/departments/${departmentId}/positions`);
+
+         if (Array.isArray(response.data)) {
+            return response.data.map((pos: any) => ({
+               positionId: pos.positionId || pos.id,
+               name: pos.name || pos.positionName
+            }));
+         }
+
+         return [];
+      } catch (error) {
+         this.logger.warn(`Failed to fetch positions by department from company-service: ${error.message}`);
+         return [];
+      }
+   }
 }
 

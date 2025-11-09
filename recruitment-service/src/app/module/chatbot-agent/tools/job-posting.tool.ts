@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { BaseTool, ToolContext, ToolResult, ToolParameters } from './base.tool';
 import { JobPostingEntity } from '../../../../entities/recruitment/job-posting.entity';
+import { CompanyServiceClient } from '../../analytics/company-service.client';
 
 @Injectable()
 export class JobPostingTool extends BaseTool {
@@ -33,9 +34,29 @@ export class JobPostingTool extends BaseTool {
         type: 'string',
         description: 'Job requirements (required for create)'
       },
-      department: {
+      departmentId: {
+        type: 'number',
+        description: 'Department ID (optional if departmentName is provided)'
+      },
+      departmentName: {
         type: 'string',
-        description: 'Department name'
+        description: 'Department name (required for create if departmentId is not provided)'
+      },
+      positionId: {
+        type: 'number',
+        description: 'Position ID (optional if positionName is provided)'
+      },
+      positionName: {
+        type: 'string',
+        description: 'Position name (required for create if positionId is not provided)'
+      },
+      applicationDeadline: {
+        type: 'string',
+        description: 'Application deadline in YYYY-MM-DD format (required for create)'
+      },
+      vacancies: {
+        type: 'number',
+        description: 'Number of open positions (default: 1)'
       },
       location: {
         type: 'string',
@@ -53,6 +74,56 @@ export class JobPostingTool extends BaseTool {
         type: 'string',
         enum: ['draft', 'published', 'closed'],
         description: 'Job posting status'
+      },
+      benefits: {
+        type: 'string',
+        description: 'Benefits and perks offered'
+      },
+      employmentType: {
+        type: 'string',
+        enum: ['full-time', 'part-time', 'contract', 'internship'],
+        description: 'Employment type'
+      },
+      experienceLevel: {
+        type: 'string',
+        enum: ['entry', 'junior', 'senior', 'lead', 'manager'],
+        description: 'Experience level required'
+      },
+      skills: {
+        type: 'string',
+        description: 'Required skills (comma-separated)'
+      },
+      minExperience: {
+        type: 'number',
+        description: 'Minimum years of experience required'
+      },
+      maxExperience: {
+        type: 'number',
+        description: 'Maximum years of experience preferred'
+      },
+      educationLevel: {
+        type: 'string',
+        description: 'Education level required'
+      },
+      isTest: {
+        type: 'boolean',
+        description: 'Whether this job posting requires a test'
+      },
+      questionSetId: {
+        type: 'number',
+        description: 'ID of the question set used for this job'
+      },
+      quantityQuestion: {
+        type: 'number',
+        description: 'Number of questions for this job'
+      },
+      minScore: {
+        type: 'number',
+        description: 'Minimum score required for this job'
+      },
+      hiringManagerId: {
+        type: 'number',
+        description: 'ID of the hiring manager'
       },
       filters: {
         type: 'object',
@@ -83,7 +154,8 @@ export class JobPostingTool extends BaseTool {
 
   constructor(
     @InjectRepository(JobPostingEntity)
-    private readonly jobPostingRepository: Repository<JobPostingEntity>
+    private readonly jobPostingRepository: Repository<JobPostingEntity>,
+    private readonly companyServiceClient: CompanyServiceClient
   ) {
     super();
   }
@@ -120,6 +192,79 @@ export class JobPostingTool extends BaseTool {
     }
   }
 
+  private normalizeString(str: string): string {
+    return str.toLowerCase().trim().replace(/\s+/g, ' ');
+  }
+
+  private calculateSimilarity(str1: string, str2: string): number {
+    const s1 = this.normalizeString(str1);
+    const s2 = this.normalizeString(str2);
+    
+    // Exact match
+    if (s1 === s2) return 1.0;
+    
+    // Contains match (one contains the other)
+    if (s1.includes(s2) || s2.includes(s1)) return 0.8;
+    
+    // Word-based similarity
+    const words1 = s1.split(/\s+/).filter(w => w.length > 0);
+    const words2 = s2.split(/\s+/).filter(w => w.length > 0);
+    
+    if (words1.length === 0 || words2.length === 0) return 0;
+    
+    // Count common words
+    const commonWords = words1.filter(w => words2.includes(w));
+    const totalWords = Math.max(words1.length, words2.length);
+    
+    // If all words match, return high score
+    if (commonWords.length === words1.length && commonWords.length === words2.length) {
+      return 0.9;
+    }
+    
+    // Calculate similarity based on common words
+    const wordSimilarity = commonWords.length / totalWords;
+    
+    // Check if any word contains another (for partial matches like "Software" vs "Software Engineering")
+    const hasPartialMatch = words1.some(w1 => 
+      words2.some(w2 => w1.includes(w2) || w2.includes(w1))
+    );
+    
+    // Boost score if there's a partial match
+    return hasPartialMatch ? Math.max(wordSimilarity, 0.5) : wordSimilarity;
+  }
+
+  private findBestMatch<T extends { name: string }>(
+    searchTerm: string,
+    items: T[],
+    threshold: number = 0.3
+  ): { match: T | null; suggestions: T[] } {
+    if (!searchTerm || items.length === 0) {
+      return { match: null, suggestions: items.slice(0, 5) };
+    }
+
+    // Calculate similarity scores
+    const scored = items.map(item => ({
+      item,
+      score: this.calculateSimilarity(searchTerm, item.name)
+    }));
+
+    // Sort by score descending
+    scored.sort((a, b) => b.score - a.score);
+
+    // Find match with lower threshold (0.4 instead of 0.6) for better matching
+    const bestMatch = scored.find(s => s.score >= 0.4);
+    
+    // Get suggestions (top 5 matches, even if score is low)
+    const suggestions = scored
+      .slice(0, 5)
+      .map(s => s.item);
+
+    return {
+      match: bestMatch ? bestMatch.item : null,
+      suggestions: suggestions.length > 0 ? suggestions : items.slice(0, 5)
+    };
+  }
+
   private async createJobPosting(params: any, context: ToolContext): Promise<ToolResult> {
     if (!params.title || !params.description || !params.requirements) {
       return this.createErrorResult(
@@ -128,17 +273,172 @@ export class JobPostingTool extends BaseTool {
       );
     }
 
-      const jobPosting = this.jobPostingRepository.create({
-         title: params.title,
-         description: params.description,
-         requirements: params.requirements,
-         departmentId: params.departmentId || 1, // Default department ID
-         location: params.location || 'Remote',
-         salaryMin: params.salaryMin,
-         salaryMax: params.salaryMax,
-         status: params.status || 'draft',
-         createdAt: new Date()
-      });
+    if (!params.applicationDeadline) {
+      return this.createErrorResult(
+        'Missing required fields',
+        'applicationDeadline is required for creating a job posting'
+      );
+    }
+
+    // Resolve department ID from name if needed
+    let departmentId = params.departmentId;
+    if (!departmentId && params.departmentName) {
+      const departments = await this.companyServiceClient.getDepartments();
+      
+      if (departments.length === 0) {
+        return this.createErrorResult(
+          'No departments available',
+          'No departments found in the system. Please contact administrator.'
+        );
+      }
+
+      // If only one department, use it automatically
+      if (departments.length === 1) {
+        departmentId = departments[0].departmentId;
+      } else {
+        const { match, suggestions } = this.findBestMatch(params.departmentName, departments);
+        
+        if (match) {
+          departmentId = match.departmentId;
+        } else {
+          // No good match found, suggest options
+          const deptList = suggestions.map(d => `- ${d.name} (ID: ${d.departmentId})`).join('\n');
+          return this.createErrorResult(
+            'Department not found',
+            `Could not find exact match for department "${params.departmentName}". Did you mean one of these?\n\n${deptList}\n\nPlease provide either departmentId or a valid departmentName from the list above.`
+          );
+        }
+      }
+    }
+
+    if (!departmentId) {
+      const departments = await this.companyServiceClient.getDepartments();
+      if (departments.length === 0) {
+        return this.createErrorResult(
+          'No departments available',
+          'No departments found in the system. Please contact administrator.'
+        );
+      }
+      
+      // If only one department, use it automatically
+      if (departments.length === 1) {
+        departmentId = departments[0].departmentId;
+      } else {
+        const deptList = departments.slice(0, 10).map(d => `- ${d.name} (ID: ${d.departmentId})`).join('\n');
+        return this.createErrorResult(
+          'Missing department',
+          `Please provide either departmentId or departmentName. Available departments:\n${deptList}`
+        );
+      }
+    }
+
+    // Resolve position ID from name if needed
+    let positionId = params.positionId;
+    if (!positionId && params.positionName) {
+      let positions = await this.companyServiceClient.getPositions(departmentId);
+      
+      // If no positions in department, try all positions
+      if (positions.length === 0) {
+        positions = await this.companyServiceClient.getPositions();
+      }
+
+      if (positions.length === 0) {
+        return this.createErrorResult(
+          'No positions available',
+          'No positions found in the system. Please contact administrator.'
+        );
+      }
+
+      // If only one position, use it automatically
+      if (positions.length === 1) {
+        positionId = positions[0].positionId;
+      } else {
+        const { match, suggestions } = this.findBestMatch(params.positionName, positions);
+        
+        if (match) {
+          positionId = match.positionId;
+        } else {
+          // No good match found, suggest options
+          const posList = suggestions.map(p => `- ${p.name} (ID: ${p.positionId})`).join('\n');
+          return this.createErrorResult(
+            'Position not found',
+            `Could not find exact match for position "${params.positionName}". Did you mean one of these?\n\n${posList}\n\nPlease provide either positionId or a valid positionName from the list above.`
+          );
+        }
+      }
+    }
+
+    if (!positionId) {
+      let positions = await this.companyServiceClient.getPositionsByDepartment(departmentId);
+      
+      // If no positions in department, try all positions
+      if (positions.length === 0) {
+        positions = await this.companyServiceClient.getPositions();
+      }
+
+      if (positions.length === 0) {
+        // If no positions available, use default positionId (1) as fallback
+        // This allows job posting creation even without positions in the system
+        positionId = 1;
+      } else if (positions.length === 1) {
+        // If only one position, use it automatically
+        positionId = positions[0].positionId;
+      } else {
+        // If multiple positions, use the first one as default
+        // This allows job posting creation without requiring user to specify position
+        positionId = positions[0].positionId;
+      }
+    }
+
+    // Validate application deadline is in the future
+    const deadline = new Date(params.applicationDeadline);
+    if (isNaN(deadline.getTime())) {
+      return this.createErrorResult(
+        'Invalid date',
+        'applicationDeadline must be a valid date in YYYY-MM-DD format'
+      );
+    }
+
+    if (deadline <= new Date()) {
+      return this.createErrorResult(
+        'Invalid deadline',
+        'Application deadline must be in the future'
+      );
+    }
+
+    // Validate salary range
+    if (params.salaryMin && params.salaryMax && params.salaryMin > params.salaryMax) {
+      return this.createErrorResult(
+        'Invalid salary range',
+        'Minimum salary cannot be greater than maximum salary'
+      );
+    }
+
+    const jobPosting = this.jobPostingRepository.create({
+      title: params.title,
+      description: params.description,
+      requirements: params.requirements,
+      departmentId: departmentId,
+      positionId: positionId,
+      applicationDeadline: deadline,
+      vacancies: params.vacancies || 1,
+      location: params.location || 'Remote',
+      salaryMin: params.salaryMin,
+      salaryMax: params.salaryMax,
+      status: params.status || 'draft',
+      benefits: params.benefits,
+      employmentType: params.employmentType,
+      experienceLevel: params.experienceLevel,
+      skills: params.skills,
+      minExperience: params.minExperience,
+      maxExperience: params.maxExperience,
+      educationLevel: params.educationLevel,
+      isTest: params.isTest || false,
+      questionSetId: params.questionSetId,
+      quantityQuestion: params.quantityQuestion,
+      minScore: params.minScore,
+      hiringManagerId: params.hiringManagerId
+    });
 
     const savedJob = await this.jobPostingRepository.save(jobPosting);
 
@@ -147,6 +447,9 @@ export class JobPostingTool extends BaseTool {
         jobPostingId: savedJob.jobPostingId,
         title: savedJob.title,
         status: savedJob.status,
+        departmentId: savedJob.departmentId,
+        positionId: savedJob.positionId,
+        applicationDeadline: savedJob.applicationDeadline,
         createdAt: savedJob.createdAt
       },
       `Job posting "${savedJob.title}" created successfully`
