@@ -73,6 +73,52 @@ export class RecruitmentEmailService {
    }
 
    /**
+    * Send examination email to candidate after CV screening passes
+    */
+   async sendExaminationEmail(
+      candidate: CandidateEntity,
+      jobPosting: JobPostingEntity,
+      examinationId: number,
+   ): Promise<void> {
+      try {
+         const sendSmtpEmail: brevo.SendSmtpEmail = new brevo.SendSmtpEmail();
+         const candidatePortalUrl = this.configService.get<string>('FRONTEND_CANDIDATE_URL', 'https://techleet.me');
+         const examinationLink = `${candidatePortalUrl}/exam/${examinationId}`;
+
+         sendSmtpEmail.subject = `Bài kiểm tra cho vị trí ${jobPosting.title} - TechLeet`;
+         sendSmtpEmail.templateId = 11;
+         sendSmtpEmail.to = [
+            {
+               email: candidate.email,
+               name: `${candidate.firstName} ${candidate.lastName}`,
+            },
+         ];
+         sendSmtpEmail.replyTo = {
+            email: 'hr@techleet.me',
+            name: 'TechLeet HR Team',
+         };
+         sendSmtpEmail.sender = {
+            email: 'ldmhieu205@gmail.com',
+            name: 'TechLeet Recruitment',
+         };
+
+         sendSmtpEmail.params = {
+            candidateName: `${candidate.firstName} ${candidate.lastName}`,
+            jobTitle: jobPosting.title,
+            examinationLink: examinationLink,
+         };
+
+         await this.apiInstance.sendTransacEmail(sendSmtpEmail);
+         console.log(
+            `✅ Examination email sent to ${candidate.email} for examination ${examinationId}`,
+         );
+      } catch (error) {
+         console.error(`❌ Failed to send examination email to ${candidate.email}:`, error);
+         // Don't throw error - email failure shouldn't break the process
+      }
+   }
+
+   /**
     * Send screening rejection email to candidate
     */
    async sendScreeningRejectionEmail(
@@ -125,6 +171,123 @@ export class RecruitmentEmailService {
       } catch (error) {
          console.error(`❌ Failed to send rejection email to ${candidate.email}:`, error);
          // Don't throw error - email failure shouldn't break the screening process
+      }
+   }
+
+   /**
+    * Send offer email to candidate after interview approval
+    */
+   async sendOfferEmail(
+      candidate: CandidateEntity,
+      jobPosting: JobPostingEntity,
+      application: ApplicationEntity,
+      startDate: string,
+   ): Promise<void> {
+      try {
+         const sendSmtpEmail: brevo.SendSmtpEmail = new brevo.SendSmtpEmail();
+
+         sendSmtpEmail.subject = `Thư mời làm việc - ${jobPosting.title} - TechLeet`;
+         sendSmtpEmail.templateId = 13;
+         sendSmtpEmail.to = [
+            {
+               email: candidate.email,
+               name: `${candidate.firstName} ${candidate.lastName}`,
+            },
+         ];
+         sendSmtpEmail.replyTo = {
+            email: 'hr@techleet.me',
+            name: 'TechLeet HR Team',
+         };
+         sendSmtpEmail.sender = {
+            email: 'ldmhieu205@gmail.com',
+            name: 'TechLeet Recruitment',
+         };
+         sendSmtpEmail.headers = {
+            'X-Application-Id': application.applicationId.toString(),
+            'X-Candidate-Id': candidate.candidateId.toString(),
+         };
+
+         const formattedSalary = application.offeredSalary
+            ? new Intl.NumberFormat('vi-VN').format(application.offeredSalary) + ' VND'
+            : 'N/A';
+
+         const formattedStartDate = new Date(startDate).toLocaleDateString('vi-VN', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+         });
+
+         sendSmtpEmail.params = {
+            candidateName: `${candidate.firstName} ${candidate.lastName}`,
+            position: jobPosting.title,
+            salary: formattedSalary,
+            startDate: formattedStartDate,
+            workLocation: jobPosting.location || 'Chưa xác định',
+         };
+
+         await this.apiInstance.sendTransacEmail(sendSmtpEmail);
+         console.log(
+            `✅ Offer email sent to ${candidate.email} for application ${application.applicationId}`,
+         );
+      } catch (error) {
+         console.error(`❌ Failed to send offer email to ${candidate.email}:`, error);
+         throw error;
+      }
+   }
+
+   /**
+    * Send interview rejection email to candidate
+    */
+   async sendInterviewRejectionEmail(
+      candidate: CandidateEntity,
+      jobPosting: JobPostingEntity,
+      application: ApplicationEntity,
+   ): Promise<void> {
+      try {
+         const sendSmtpEmail: brevo.SendSmtpEmail = new brevo.SendSmtpEmail();
+
+         sendSmtpEmail.subject = `Cập nhật về đơn ứng tuyển của bạn - TechLeet`;
+         sendSmtpEmail.templateId = 10;
+         sendSmtpEmail.to = [
+            {
+               email: candidate.email,
+               name: `${candidate.firstName} ${candidate.lastName}`,
+            },
+         ];
+         sendSmtpEmail.replyTo = {
+            email: 'hr@techleet.me',
+            name: 'TechLeet HR Team',
+         };
+         sendSmtpEmail.sender = {
+            email: 'ldmhieu205@gmail.com',
+            name: 'TechLeet Recruitment',
+         };
+         sendSmtpEmail.headers = {
+            'X-Application-Id': application.applicationId.toString(),
+            'X-Candidate-Id': candidate.candidateId.toString(),
+         };
+
+         sendSmtpEmail.params = {
+            candidateName: `${candidate.firstName} ${candidate.lastName}`,
+            jobTitle: jobPosting.title,
+            companyName: 'TechLeet',
+            applicationId: application.applicationId,
+            applicationDate: application.appliedDate
+               ? new Date(application.appliedDate).toLocaleDateString('vi-VN')
+               : new Date().toLocaleDateString('vi-VN'),
+            nextSteps:
+               'Rất tiếc, sau buổi phỏng vấn, chúng tôi đã quyết định không tiếp tục với đơn ứng tuyển của bạn. Chúng tôi cảm ơn sự quan tâm của bạn và khuyến khích bạn tiếp tục theo dõi các vị trí khác tại TechLeet.',
+            contactEmail: 'hr@techleet.me',
+            dashboardUrl: `${this.configService.get<string>('FRONTEND_URL')}/jobs`,
+         };
+
+         await this.apiInstance.sendTransacEmail(sendSmtpEmail);
+         console.log(
+            `✅ Interview rejection email sent to ${candidate.email} for application ${application.applicationId}`,
+         );
+      } catch (error) {
+         console.error(`❌ Failed to send interview rejection email to ${candidate.email}:`, error);
+         throw error;
       }
    }
 
@@ -254,6 +417,7 @@ export class RecruitmentEmailService {
          interviewerNames: string[]; // Array of interviewer names
          interviewerEmails: string[]; // Array of interviewer emails for CC
          dueDate?: Date; // Deadline to respond
+         notesLink?: string; // Optional notes page link for interviewers
       },
    ): Promise<void> {
       try {
@@ -317,15 +481,15 @@ export class RecruitmentEmailService {
          };
 
          // Add meeting link for online interviews (template #8)
+         // Add notes link if provided (for interviewers)
+         const params: any = { ...baseParams };
          if (isOnline && interviewDetails.meetingLink) {
-            sendSmtpEmail.params = {
-               ...baseParams,
-               meetingLink: interviewDetails.meetingLink,
-            };
-         } else {
-            // For onsite interviews (template #9), just use base params
-            sendSmtpEmail.params = baseParams;
+            params.meetingLink = interviewDetails.meetingLink;
          }
+         if (interviewDetails.notesLink) {
+            params.notesLink = interviewDetails.notesLink;
+         }
+         sendSmtpEmail.params = params;
 
          await this.apiInstance.sendTransacEmail(sendSmtpEmail);
          console.log(
@@ -338,6 +502,139 @@ export class RecruitmentEmailService {
             error,
          );
          // Don't throw error - email failure shouldn't break the interview creation process
+      }
+   }
+
+   /**
+    * Send interview confirmation email to a single interviewer (with notes link)
+    * Uses template #12 for interviewers
+    */
+   async sendInterviewConfirmationEmailToInterviewer(
+      recipientEmail: string,
+      interviewerName: string,
+      candidate: CandidateEntity,
+      jobPosting: JobPostingEntity,
+      interviewDetails: {
+         scheduledAt: Date;
+         meetingLink?: string;
+         location?: string;
+         notesLink: string;
+      },
+   ): Promise<void> {
+      try {
+         const sendSmtpEmail: brevo.SendSmtpEmail = new brevo.SendSmtpEmail();
+         
+         // Use template #12 for interviewers
+         const templateId = 12;
+
+         sendSmtpEmail.subject = `Xác nhận lịch phỏng vấn vị trí ${jobPosting.title} - TechLeet`;
+         sendSmtpEmail.templateId = templateId;
+         sendSmtpEmail.to = [{ email: recipientEmail }];
+         sendSmtpEmail.replyTo = {
+            email: 'hr@techleet.me',
+            name: 'TechLeet HR Team',
+         };
+         sendSmtpEmail.sender = {
+            email: 'ldmhieu205@gmail.com',
+            name: 'TechLeet Recruitment',
+         };
+
+         // Format scheduledAt
+         const scheduledAtFormatted = interviewDetails.scheduledAt.toLocaleString('vi-VN', {
+               weekday: 'long',
+               year: 'numeric',
+               month: 'long',
+               day: 'numeric',
+               hour: '2-digit',
+               minute: '2-digit',
+         });
+
+         const params: any = {
+            interviewerName: interviewerName,
+            candidateName: `${candidate.firstName} ${candidate.lastName}`,
+            scheduledAt: scheduledAtFormatted,
+            notesLink: interviewDetails.notesLink,
+         };
+
+         // Only include meetingLink if it's an online interview
+         if (interviewDetails.meetingLink) {
+            params.meetingLink = interviewDetails.meetingLink;
+         }
+
+         sendSmtpEmail.params = params;
+         await this.apiInstance.sendTransacEmail(sendSmtpEmail);
+         console.log(`✅ Interview confirmation email sent to interviewer ${recipientEmail} using template #${templateId}`);
+      } catch (error) {
+         console.error(`❌ Failed to send interview confirmation email to interviewer ${recipientEmail}:`, error);
+         throw error;
+      }
+   }
+
+   /**
+    * Send interview update email to a single interviewer (with notes link)
+    * Uses template #12 for interviewers
+    */
+   async sendInterviewUpdateEmailToInterviewer(
+      recipientEmail: string,
+      interviewerName: string,
+      candidate: CandidateEntity,
+      jobPosting: JobPostingEntity,
+      interviewDetails: {
+         scheduledAt: Date;
+         meetingLink?: string;
+         location?: string;
+         changedFields?: string[];
+         previousScheduledAt?: Date;
+         changeDescription?: string;
+         notesLink: string;
+      },
+   ): Promise<void> {
+      try {
+         const sendSmtpEmail: brevo.SendSmtpEmail = new brevo.SendSmtpEmail();
+         
+         // Use template #12 for interviewers
+         const templateId = 12;
+
+         sendSmtpEmail.subject = `[CẬP NHẬT] Xác nhận lịch phỏng vấn vị trí ${jobPosting.title} - TechLeet`;
+         sendSmtpEmail.templateId = templateId;
+         sendSmtpEmail.to = [{ email: recipientEmail }];
+         sendSmtpEmail.replyTo = {
+            email: 'hr@techleet.me',
+            name: 'TechLeet HR Team',
+         };
+         sendSmtpEmail.sender = {
+            email: 'ldmhieu205@gmail.com',
+            name: 'TechLeet Recruitment',
+         };
+
+         // Format scheduledAt
+         const scheduledAtFormatted = interviewDetails.scheduledAt.toLocaleString('vi-VN', {
+               weekday: 'long',
+               year: 'numeric',
+               month: 'long',
+               day: 'numeric',
+               hour: '2-digit',
+               minute: '2-digit',
+         });
+
+         const params: any = {
+            interviewerName: interviewerName,
+            candidateName: `${candidate.firstName} ${candidate.lastName}`,
+            scheduledAt: scheduledAtFormatted,
+            notesLink: interviewDetails.notesLink,
+         };
+
+         // Only include meetingLink if it's an online interview
+         if (interviewDetails.meetingLink) {
+            params.meetingLink = interviewDetails.meetingLink;
+         }
+
+         sendSmtpEmail.params = params;
+         await this.apiInstance.sendTransacEmail(sendSmtpEmail);
+         console.log(`✅ Interview update email sent to interviewer ${recipientEmail} using template #${templateId}`);
+      } catch (error) {
+         console.error(`❌ Failed to send interview update email to interviewer ${recipientEmail}:`, error);
+         throw error;
       }
    }
 
@@ -357,6 +654,7 @@ export class RecruitmentEmailService {
          changeReason?: string;
          previousScheduledAt?: Date;
          changedFields?: string[]; // e.g., ['date', 'time', 'location', 'meetingLink']
+         notesLink?: string;
       },
    ): Promise<void> {
       try {

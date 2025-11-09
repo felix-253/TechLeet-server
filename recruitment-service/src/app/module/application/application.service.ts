@@ -1,15 +1,18 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, FindManyOptions, In } from 'typeorm';
+import { Repository, FindManyOptions, In, Brackets } from 'typeorm';
 import { ApplicationEntity } from '../../../entities/recruitment/application.entity';
 import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
 import { CandidateEntity } from '../../../entities/recruitment/candidate.entity';
 import { InterviewEntity } from '../../../entities/recruitment/interview.entity';
+import { ExaminationEntity } from '../../../entities/question/examination.entity';
 import {
    CreateApplicationDto,
    UpdateApplicationDto,
    ApplicationResponseDto,
    GetApplicationsQueryDto,
+   ApproveAfterInterviewDto,
+   RejectAfterInterviewDto,
 } from './dto/application.dto';
 import { CvScreeningService } from '../cv-screening/cv-screening.service';
 import { InformationService } from '../cv-screening/services/information.service';
@@ -171,38 +174,7 @@ export class ApplicationService {
             appliedDate: new Date(),
          });
 
-         if (jobPosting.isTest) {
-            application.status = 'test';
-         }
-
          const savedApplication = await this.applicationRepository.save(application);
-
-         // Create examination if job requires test
-         if (jobPosting.isTest && jobPosting.questionSetId) {
-            try {
-               this.logger.log(
-                  `Creating examination for application ${savedApplication.applicationId}`,
-               );
-               /**
-                * thêm giúp t gửi email có link bài test format: /exam/3 (examinationId)
-                * điều kiện: nếu mà jobPostingId có isTest = true và pass screening
-                *  */
-               await this.questionService.createExamination({
-                  applicationId: savedApplication.applicationId,
-                  sourceSetId: jobPosting.questionSetId,
-                  quantityQuestion: jobPosting.quantityQuestion,
-               });
-               this.logger.log(
-                  `Examination created successfully for application ${savedApplication.applicationId}`,
-               );
-            } catch (error) {
-               this.logger.error(
-                  `Failed to create examination for application ${savedApplication.applicationId}: ${error.message}`,
-                  error.stack,
-               );
-               // Don't fail the application creation if examination creation fails
-            }
-         }
 
          // Trigger CV screening if resume is provided
          if (savedApplication.resumeUrl) {
@@ -449,7 +421,11 @@ export class ApplicationService {
 
    async makeOffer(
       id: number,
-      offerData: { offeredSalary: number; offerExpiryDate: string },
+      offerData: { 
+         offeredSalary: number; 
+         offerExpiryDate?: string;
+         expectedStartDate?: string;
+      },
    ): Promise<ApplicationResponseDto> {
       const application = await this.applicationRepository.findOne({
          where: { applicationId: id },
@@ -465,16 +441,26 @@ export class ApplicationService {
          );
       }
 
+      if (offerData.offerExpiryDate) {
       const expiryDate = new Date(offerData.offerExpiryDate);
       if (expiryDate <= new Date()) {
          throw new BadRequestException('Offer expiry date must be in the future');
+         }
+         application.offerExpiryDate = expiryDate;
       }
 
       application.status = 'offer';
       application.offerDate = new Date();
       application.offeredSalary = offerData.offeredSalary;
-      application.offerExpiryDate = expiryDate;
       application.offerStatus = 'pending';
+
+      if (offerData.expectedStartDate) {
+         const startDate = new Date(offerData.expectedStartDate);
+         if (startDate <= new Date()) {
+            throw new BadRequestException('Expected start date must be in the future');
+         }
+         application.expectedStartDate = startDate;
+      }
 
       const updatedApplication = await this.applicationRepository.save(application);
       return this.mapToResponseDto(updatedApplication);
@@ -513,11 +499,174 @@ export class ApplicationService {
       return this.mapToResponseDto(updatedApplication);
    }
 
+   async approveAfterInterview(
+      id: number,
+      approveData: ApproveAfterInterviewDto,
+   ): Promise<ApplicationResponseDto> {
+      const application = await this.applicationRepository.findOne({
+         where: { applicationId: id },
+      });
+
+      if (!application) {
+         throw new NotFoundException(`Application with ID ${id} not found`);
+      }
+
+      if (application.status !== 'interviewing') {
+         throw new BadRequestException(
+            'Can only approve applications in interviewing status',
+         );
+      }
+
+      const interview = await this.interviewRepository.findOne({
+         where: {
+            candidate_id: application.candidateId,
+            job_id: application.jobPostingId,
+         },
+         order: { createdAt: 'DESC' },
+      });
+
+      if (!interview) {
+         throw new BadRequestException('Interview not found for this application');
+      }
+
+      if (interview.status !== 'completed') {
+         throw new BadRequestException(
+            'Can only approve applications with completed interviews',
+         );
+      }
+
+      const startDate = new Date(approveData.expectedStartDate);
+      if (startDate <= new Date()) {
+         throw new BadRequestException('Expected start date must be in the future');
+      }
+
+      const jobPosting = await this.jobPostingRepository.findOne({
+         where: { jobPostingId: application.jobPostingId },
+      });
+
+      if (!jobPosting) {
+         throw new NotFoundException('Job posting not found');
+      }
+
+      const offerData: {
+         offeredSalary: number;
+         offerExpiryDate?: string;
+         expectedStartDate: string;
+      } = {
+         offeredSalary: approveData.offeredSalary,
+         expectedStartDate: approveData.expectedStartDate,
+      };
+
+      if (approveData.offerExpiryDate) {
+         offerData.offerExpiryDate = approveData.offerExpiryDate;
+      }
+
+      const updatedApplication = await this.makeOffer(id, offerData);
+
+      const candidate = await this.candidateRepository.findOne({
+         where: { candidateId: application.candidateId },
+      });
+
+      if (!candidate) {
+         throw new NotFoundException('Candidate not found');
+      }
+
+      // Fetch the updated application entity for email service
+      const updatedApplicationEntity = await this.applicationRepository.findOne({
+         where: { applicationId: id },
+      });
+
+      if (!updatedApplicationEntity) {
+         throw new NotFoundException('Updated application not found');
+      }
+
+      await this.recruitmentEmailService.sendOfferEmail(
+         candidate,
+         jobPosting,
+         updatedApplicationEntity,
+         approveData.expectedStartDate,
+      );
+
+      this.logger.log(
+         `Approved application ${id} after interview and sent offer email`,
+      );
+
+      return updatedApplication;
+   }
+
+   async rejectAfterInterview(
+      id: number,
+      rejectData: RejectAfterInterviewDto,
+   ): Promise<ApplicationResponseDto> {
+      const application = await this.applicationRepository.findOne({
+         where: { applicationId: id },
+      });
+
+      if (!application) {
+         throw new NotFoundException(`Application with ID ${id} not found`);
+      }
+
+      if (application.status !== 'interviewing') {
+         throw new BadRequestException(
+            'Can only reject applications in interviewing status',
+         );
+      }
+
+      const interview = await this.interviewRepository.findOne({
+         where: {
+            candidate_id: application.candidateId,
+            job_id: application.jobPostingId,
+         },
+         order: { createdAt: 'DESC' },
+      });
+
+      if (!interview) {
+         throw new BadRequestException('Interview not found for this application');
+      }
+
+      if (interview.status !== 'completed') {
+         throw new BadRequestException(
+            'Can only reject applications with completed interviews',
+         );
+      }
+
+      application.status = 'rejected';
+      if (rejectData.rejectionReason) {
+         application.rejectionReason = rejectData.rejectionReason;
+      }
+
+      const updatedApplication = await this.applicationRepository.save(application);
+
+      const candidate = await this.candidateRepository.findOne({
+         where: { candidateId: application.candidateId },
+      });
+
+      const jobPosting = await this.jobPostingRepository.findOne({
+         where: { jobPostingId: application.jobPostingId },
+      });
+
+      if (!candidate || !jobPosting) {
+         this.logger.warn(
+            `Candidate or job posting not found for application ${id}. Cannot send rejection email.`,
+         );
+      } else {
+         await this.recruitmentEmailService.sendInterviewRejectionEmail(
+            candidate,
+            jobPosting,
+            updatedApplication,
+         );
+      }
+
+      this.logger.log(`Rejected application ${id} after interview`);
+
+      return this.mapToResponseDto(updatedApplication);
+   }
+
    async findByJobPosting(jobPostingId: number, page: number = 0, limit: number = 10) {
       const qb = this.applicationRepository
          .createQueryBuilder('application')
          .leftJoin('candidate', 'candidate', 'application.candidateId = candidate.candidateId')
-         .select(['application.* as application', 'candidate.* as candidate'])
+         .select(['candidate.* as candidate', 'application.* as application'])
          .where('application.jobPostingId = :jobPostingId', { jobPostingId })
          .orderBy('application.appliedDate', 'DESC');
 
@@ -569,6 +718,7 @@ export class ApplicationService {
 
       // Use query builder to find applications with status='screening_passed'
       // that don't have a scheduled interview (no interview OR interview.status='pending')
+      // AND if job has test, examination must be completed and passed
       const qb = this.applicationRepository
          .createQueryBuilder('application')
          .leftJoin(
@@ -576,10 +726,42 @@ export class ApplicationService {
             'interview',
             'interview.candidate_id = application.candidateId AND interview.job_id = application.jobPostingId',
          )
+         .leftJoin(
+            JobPostingEntity,
+            'jobPosting',
+            'jobPosting.jobPostingId = application.jobPostingId',
+         )
+         .leftJoin(
+            ExaminationEntity,
+            'examination',
+            'examination.applicationId = application.applicationId',
+         )
          .where('application.status = :status', { status: 'screening_passed' })
          .andWhere('(interview.interview_id IS NULL OR interview.status = :pendingStatus)', {
             pendingStatus: 'pending',
-         });
+         })
+         .andWhere(
+            // If job has test: examination must exist and be completed with passing score
+            // If job has no test: no examination required
+            new Brackets((qb) => {
+               qb.where('jobPosting.isTest = false')
+                  .orWhere('jobPosting.isTest IS NULL')
+                  .orWhere(
+                     new Brackets((subQb) => {
+                        subQb.where('jobPosting.isTest = true')
+                           .andWhere('examination.examinationId IS NOT NULL')
+                           .andWhere('examination.status = :completedStatus')
+                           .andWhere(
+                              new Brackets((scoreQb) => {
+                                 scoreQb.where('jobPosting.minScore IS NULL')
+                                    .orWhere('examination.totalScore >= jobPosting.minScore');
+                              }),
+                           );
+                     }),
+                  );
+            }),
+            { completedStatus: 'completed' },
+         );
 
       if (query?.jobPostingId) {
          qb.andWhere('application.jobPostingId = :jobPostingId', {

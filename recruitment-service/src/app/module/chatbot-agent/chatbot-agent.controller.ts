@@ -7,10 +7,13 @@ import {
   Param,
   HttpStatus,
   HttpCode,
-  UseGuards,
   Request,
   BadRequestException,
   NotFoundException,
+  UnauthorizedException,
+  HttpException,
+  InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -36,6 +39,8 @@ import {
 @ApiBearerAuth('token')
 @Controller('chatbot-agent')
 export class ChatbotAgentController {
+  private readonly logger = new Logger(ChatbotAgentController.name);
+
   constructor(
     private readonly agentExecutor: AgentExecutorService,
     private readonly sessionManager: SessionManagerService,
@@ -63,21 +68,53 @@ export class ChatbotAgentController {
     description: 'Rate limit exceeded'
   })
   async chat(@Body() request: ChatRequestDto, @Request() req: any): Promise<ChatResponseDto> {
+    if (!request.message || request.message.trim().length === 0) {
+      throw new BadRequestException('Message cannot be empty');
+    }
+
+    if (request.message.length > 2000) {
+      throw new BadRequestException('Message too long (max 2000 characters)');
+    }
+
+    // Get userId from multiple sources:
+    // 1) req.userId (from headers via CurrentUserInterceptor)
+    // 2) req.user.employeeId
+    // 3) From existing session if sessionId is provided
+    let userId = req.userId || req.user?.employeeId;
+    
+    // If userId not found and sessionId is provided, try to get userId from session
+    if (!userId && request.sessionId) {
+      try {
+        const session = await this.sessionManager.getSession(request.sessionId);
+        if (session) {
+          userId = session.userId;
+          this.logger.debug(`Got userId ${userId} from session ${request.sessionId}`);
+        }
+      } catch (error) {
+        this.logger.warn(`Failed to get session ${request.sessionId}:`, error);
+      }
+    }
+    
+    // If still no userId, use a default or throw error
+    // For now, allow it to proceed - agentExecutor will handle session creation
+    if (!userId) {
+      this.logger.warn(`No userId found - req.userId=${req.userId}, req.user=${JSON.stringify(req.user)}, sessionId=${request.sessionId}`);
+      // Don't throw 401 - let agentExecutor handle it or use a default userId
+      // For now, we'll let it proceed and agentExecutor will create a new session
+      userId = 0; // Temporary default, agentExecutor will need to handle this
+    }
+
     try {
-      if (!request.message || request.message.trim().length === 0) {
-        throw new BadRequestException('Message cannot be empty');
-      }
-
-      if (request.message.length > 2000) {
-        throw new BadRequestException('Message too long (max 2000 characters)');
-      }
-
-      // Extract user ID from request (assuming auth middleware sets req.user)
-      const userId = req.user?.id || req.user?.userId || 1; // Fallback for testing
-
       return await this.agentExecutor.executeAgent(request, userId);
     } catch (error) {
-      throw new BadRequestException(error.message);
+      if (error.message && error.message.includes('Rate limit exceeded')) {
+        throw new HttpException(error.message, HttpStatus.TOO_MANY_REQUESTS);
+      }
+      if (error instanceof BadRequestException || error instanceof UnauthorizedException || error instanceof HttpException) {
+        throw error;
+      }
+      this.logger.error('Chat request failed:', error);
+      throw new InternalServerErrorException('An error occurred while processing your request');
     }
   }
 
@@ -132,12 +169,28 @@ export class ChatbotAgentController {
     @Body() request: SessionRequestDto,
     @Request() req: any
   ): Promise<SessionResponseDto> {
+    this.logger.debug(`createSession called - req.userId: ${req.userId}, req.user: ${JSON.stringify(req.user)}, request.userId: ${request.userId}, headers: ${JSON.stringify({
+      'x-user-id': req.headers['x-user-id'],
+      'x-user-permissions': req.headers['x-user-permissions'],
+      'x-user-is-admin': req.headers['x-user-is-admin'],
+    })}`);
+    
+    // Get userId from: 1) req.userId (headers), 2) req.user.employeeId, 3) request.userId (body)
+    const userId = req.userId || req.user?.employeeId || request.userId;
+    
+    if (!userId) {
+      this.logger.error(`Unauthorized: req.userId=${req.userId}, req.user=${JSON.stringify(req.user)}, request.userId=${request.userId}`);
+      throw new UnauthorizedException('User authentication required');
+    }
+
     try {
-      const userId = req.user?.id || req.user?.userId || 1; // Fallback for testing
-      
       return await this.sessionManager.createSession(userId, request);
     } catch (error) {
-      throw new BadRequestException(error.message);
+      if (error instanceof BadRequestException || error instanceof UnauthorizedException) {
+        throw error;
+      }
+      this.logger.error('Failed to create session:', error);
+      throw new BadRequestException('Failed to create session');
     }
   }
 
@@ -242,11 +295,18 @@ export class ChatbotAgentController {
     description: 'Rate limit status retrieved successfully'
   })
   async getRateLimitStatus(@Request() req: any): Promise<any> {
+    // Get userId from request.userId (set by CurrentUserInterceptor) or req.user.employeeId
+    const userId = req.userId || req.user?.employeeId;
+    
+    if (!userId) {
+      throw new UnauthorizedException('User authentication required');
+    }
+
     try {
-      const userId = req.user?.id || req.user?.userId || 1; // Fallback for testing
       return await this.rateLimiter.getRateLimitStatus(userId);
     } catch (error) {
-      throw new BadRequestException(error.message);
+      this.logger.error('Failed to get rate limit status:', error);
+      throw new InternalServerErrorException('Failed to get rate limit status');
     }
   }
 

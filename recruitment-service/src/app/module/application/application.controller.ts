@@ -26,6 +26,8 @@ import {
    UpdateApplicationDto,
    ApplicationResponseDto,
    GetApplicationsQueryDto,
+   ApproveAfterInterviewDto,
+   RejectAfterInterviewDto,
 } from './dto/application.dto';
 
 @ApiTags('Applications')
@@ -337,5 +339,65 @@ export class ApplicationController {
       }
 
       return this.applicationService.extractApplicationFromPdfs(pdfFilePath, jobPostingId);
+   }
+
+   @Post(':id/approve')
+   @ApiOperation({
+      summary: 'Approve application after interview',
+      description: 'Approve application after completed interview, create offer and send offer email',
+   })
+   @ApiParam({
+      name: 'id',
+      description: 'Application ID',
+      example: 1,
+   })
+   @ApiResponse({
+      status: HttpStatus.OK,
+      description: 'Application approved and offer email sent successfully',
+      type: ApplicationResponseDto,
+   })
+   @ApiResponse({
+      status: HttpStatus.BAD_REQUEST,
+      description: 'Invalid application status or interview not completed',
+   })
+   @ApiResponse({
+      status: HttpStatus.NOT_FOUND,
+      description: 'Application not found',
+   })
+   async approveAfterInterview(
+      @Param('id', ParseIntPipe) id: number,
+      @Body() approveData: ApproveAfterInterviewDto,
+   ): Promise<ApplicationResponseDto> {
+      return this.applicationService.approveAfterInterview(id, approveData);
+   }
+
+   @Post(':id/reject')
+   @ApiOperation({
+      summary: 'Reject application after interview',
+      description: 'Reject application after completed interview and send rejection email',
+   })
+   @ApiParam({
+      name: 'id',
+      description: 'Application ID',
+      example: 1,
+   })
+   @ApiResponse({
+      status: HttpStatus.OK,
+      description: 'Application rejected and rejection email sent successfully',
+      type: ApplicationResponseDto,
+   })
+   @ApiResponse({
+      status: HttpStatus.BAD_REQUEST,
+      description: 'Invalid application status or interview not completed',
+   })
+   @ApiResponse({
+      status: HttpStatus.NOT_FOUND,
+      description: 'Application not found',
+   })
+   async rejectAfterInterview(
+      @Param('id', ParseIntPipe) id: number,
+      @Body() rejectData: RejectAfterInterviewDto,
+   ): Promise<ApplicationResponseDto> {
+      return this.applicationService.rejectAfterInterview(id, rejectData);
    }
 }

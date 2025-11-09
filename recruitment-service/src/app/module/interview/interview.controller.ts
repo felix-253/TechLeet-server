@@ -2,6 +2,7 @@ import {
    Controller,
    Post,
    Put,
+   Patch,
    Delete,
    Get,
    Body,
@@ -92,5 +93,31 @@ export class InterviewController {
    @ApiOperation({ summary: 'Filter interviews with pagination' })
    async filterInterviews(@Query() filterDto: FilterInterviewDto) {
       return this.interviewService.filterInterviews(filterDto);
+   }
+
+   @Patch(':id/notes')
+   @ApiOperation({ summary: 'Update interview notes (public endpoint)' })
+   @ApiParam({ name: 'id', description: 'Interview ID' })
+   @ApiBody({
+      schema: {
+         type: 'object',
+         properties: {
+            notes: { type: 'string', description: 'Rich text notes content' },
+         },
+         required: ['notes'],
+      },
+   })
+   async updateInterviewNotes(
+      @Param('id', ParseIntPipe) id: number,
+      @Body('notes') notes: string,
+   ) {
+      return this.interviewService.updateInterviewNotes(id, notes);
+   }
+
+   @Get(':id/notes-data')
+   @ApiOperation({ summary: 'Get interview notes data (public endpoint)' })
+   @ApiParam({ name: 'id', description: 'Interview ID' })
+   async getInterviewNotesData(@Param('id', ParseIntPipe) id: number) {
+      return this.interviewService.getInterviewNotesData(id);
    }
 }

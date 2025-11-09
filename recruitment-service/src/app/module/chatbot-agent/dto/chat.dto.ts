@@ -97,6 +97,13 @@ export class ToolCallResult {
 
 export class SessionRequestDto {
   @ApiPropertyOptional({
+    description: 'User ID (optional, will be extracted from headers if not provided)',
+    example: 16
+  })
+  @IsOptional()
+  userId?: number;
+
+  @ApiPropertyOptional({
     description: 'Focus area for the session',
     enum: SessionFocus,
     example: SessionFocus.JOB_POSTINGS

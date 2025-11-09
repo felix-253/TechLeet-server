@@ -1,5 +1,6 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ScheduleModule } from '@nestjs/schedule';
 import {
    ScreeningController,
    InformationController,
@@ -27,9 +28,11 @@ import { JobPostingEntity } from '../../../entities/recruitment/job-posting.enti
 import { FilterScoreEntity } from '../../../entities/recruitment/filter-score.entity';
 import { CandidateEntity } from '../../../entities/recruitment/candidate.entity';
 import { InterviewEntity } from '../../../entities/recruitment/interview.entity';
+import { ExaminationEntity } from '../../../entities/question/examination.entity';
 import { RecruitmentEmailModule } from '../email/email.module';
 import { CandidateModule } from '../candidate/candidate.module';
 import { ApplicationModule } from '../application/application.module';
+import { QuestionModule } from '../question/question.module';
 
 @Module({
    imports: [
@@ -41,10 +44,13 @@ import { ApplicationModule } from '../application/application.module';
          CandidateEntity,
          FilterScoreEntity,
          InterviewEntity,
+         ExaminationEntity,
       ]),
+      ScheduleModule.forRoot(),
       RecruitmentEmailModule,
       CandidateModule,
       forwardRef(() => ApplicationModule),
+      forwardRef(() => QuestionModule),
    ],
    controllers: [
       ScreeningController,

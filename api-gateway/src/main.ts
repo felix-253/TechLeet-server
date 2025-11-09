@@ -30,7 +30,8 @@ async function bootstrap() {
          `${configService.get<string>('FRONTEND_URL', 'http://localhost:3000')}`,
          `${configService.get<string>('FRONTEND_CANDIDATE_URL', 'http://localhost:8080')}`,
          `${configService.get<string>('DOMAIN', 'http://localhost:3030')}`,
-         "http://localhost:8080"
+         "http://localhost:8080",
+         "https://techleet-candidate-client.vercel.app"
       ],
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -125,6 +126,35 @@ async function bootstrap() {
                console.debug(chalk.cyan(`[${serviceName.toUpperCase()}]`), ...args),
          },
          on: {
+            proxyReq: (proxyReq, req, res) => {
+               // Explicitly forward custom headers to downstream services
+               // Note: Express may lowercase headers, so check both cases
+               const xUserId = req.headers['x-user-id'] || req.headers['X-User-Id'];
+               const xUserPermissions = req.headers['x-user-permissions'] || req.headers['X-User-Permissions'];
+               const xUserIsAdmin = req.headers['x-user-is-admin'] || req.headers['X-User-Is-Admin'];
+               
+               console.log(`[${serviceName}] [PROXY] Forwarding headers - x-user-id: ${xUserId}, x-user-permissions: ${xUserPermissions}, x-user-is-admin: ${xUserIsAdmin}`);
+               console.log(`[${serviceName}] [PROXY] All req.headers keys: ${Object.keys(req.headers).join(', ')}`);
+               
+               // Forward all custom headers
+               if (xUserId) {
+                  proxyReq.setHeader('x-user-id', xUserId as string);
+                  console.log(`[${serviceName}] [PROXY] Set x-user-id header: ${xUserId}`);
+               } else {
+                  console.warn(`[${serviceName}] [PROXY] WARNING: x-user-id header not found in req.headers!`);
+               }
+               if (xUserPermissions) {
+                  proxyReq.setHeader('x-user-permissions', xUserPermissions as string);
+               }
+               if (xUserIsAdmin) {
+                  proxyReq.setHeader('x-user-is-admin', xUserIsAdmin as string);
+               }
+               
+               // Also forward Authorization header if present
+               if (req.headers['authorization']) {
+                  proxyReq.setHeader('authorization', req.headers['authorization'] as string);
+               }
+            },
             error: (err: Error, _req: Request, res: Response) => {
                logger.error(`Proxy error for ${serviceName}:`, err.message);
                if (!res.headersSent) {

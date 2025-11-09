@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { ConfigService } from '@nestjs/config';
 import { InterviewEntity } from '../../../entities/recruitment/interview.entity';
 import { EntityManager, Repository, SelectQueryBuilder } from 'typeorm';
 import { CreateInterviewDto } from './dtos/createInterviewDto';
@@ -23,6 +24,7 @@ export class InterviewService {
       private readonly applicationRepository: Repository<ApplicationEntity>,
       private readonly entityManager: EntityManager,
       private readonly emailService: RecruitmentEmailService,
+      private readonly configService: ConfigService,
    ) {}
 
    async createInterview(createInterviewDto: CreateInterviewDto): Promise<InterviewEntity> {
@@ -42,6 +44,9 @@ export class InterviewService {
          );
       }
 
+      // Generate notes link
+      const notesLink = this.generateNotesLink(savedInterview.interview_id);
+
       // Send confirmation email (async, don't wait for it)
       this.sendInterviewConfirmationEmailAsync(
          createInterviewDto.candidate_id,
@@ -50,11 +55,20 @@ export class InterviewService {
          new Date(createInterviewDto.scheduled_at),
          createInterviewDto.meeting_link,
          createInterviewDto.location,
+         notesLink,
       ).catch(error => {
          console.error('Failed to send interview confirmation email:', error);
       });
 
       return savedInterview;
+   }
+
+   /**
+    * Generate notes page link for interview
+    */
+   private generateNotesLink(interviewId: number): string {
+      const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
+      return `${frontendUrl}/recruitment/interviews/${interviewId}/notes`;
    }
 
    /**
@@ -104,6 +118,7 @@ export class InterviewService {
       scheduledAt: Date,
       meetingLink?: string,
       location?: string,
+      notesLink?: string,
    ): Promise<void> {
       try {
          // Fetch candidate information
@@ -144,7 +159,7 @@ export class InterviewService {
             interviewerEmails = interviewers.map((interviewer: any) => interviewer.email);
          }
 
-         // Send interview confirmation email
+         // Send email to candidate (without notes link)
          await this.emailService.sendInterviewConfirmationEmail(
             candidate,
             jobPosting,
@@ -153,9 +168,35 @@ export class InterviewService {
                meetingLink,
                location,
                interviewerNames,
-               interviewerEmails,
+               interviewerEmails: [], // No CC for candidate email
+               notesLink: undefined, // No notes link for candidate
             },
          );
+
+         // Send separate emails to each interviewer (with notes link)
+         if (interviewerEmails && interviewerEmails.length > 0 && notesLink) {
+            for (let i = 0; i < interviewerEmails.length; i++) {
+               try {
+                  const interviewerEmail = interviewerEmails[i];
+                  const interviewerName = interviewerNames[i] || 'Interviewer';
+                  
+                  await this.emailService.sendInterviewConfirmationEmailToInterviewer(
+                     interviewerEmail,
+                     interviewerName,
+                     candidate,
+                     jobPosting,
+                     {
+                        scheduledAt,
+                        meetingLink,
+                        location,
+                        notesLink,
+                     },
+                  );
+               } catch (error) {
+                  console.error(`❌ Failed to send email to interviewer ${interviewerEmails[i]}:`, error);
+               }
+            }
+         }
       } catch (error) {
          console.error('Error in sendInterviewConfirmationEmailAsync:', error);
          throw error;
@@ -237,6 +278,9 @@ export class InterviewService {
 
       // Send update email if significant changes occurred
       if (changedFields.length > 0) {
+         // Generate notes link for interviewers
+         const notesLink = this.generateNotesLink(updatedInterview.interview_id);
+         
          this.sendInterviewUpdateEmailAsync(
             updatedInterview.candidate_id,
             updatedInterview.job_id,
@@ -246,6 +290,7 @@ export class InterviewService {
             updatedInterview.location,
             changedFields,
             previousScheduledAt,
+            notesLink,
          ).catch(error => {
             console.error('Failed to send interview update email:', error);
          });
@@ -266,6 +311,7 @@ export class InterviewService {
       location?: string,
       changedFields?: string[],
       previousScheduledAt?: Date,
+      notesLink?: string,
    ): Promise<void> {
       try {
          // Fetch candidate information
@@ -306,7 +352,7 @@ export class InterviewService {
             interviewerEmails = interviewers.map((interviewer: any) => interviewer.email);
          }
 
-         // Send interview update email
+         // Send interview update email to candidate (without notes link)
          await this.emailService.sendInterviewUpdateEmail(
             candidate,
             jobPosting,
@@ -315,12 +361,70 @@ export class InterviewService {
                meetingLink,
                location,
                interviewerNames,
-               interviewerEmails,
+               interviewerEmails: [], // No CC for candidate email
                changedFields,
                previousScheduledAt,
                changeReason: 'Lịch phỏng vấn đã được điều chỉnh theo yêu cầu.',
+               notesLink: undefined, // No notes link for candidate
             },
          );
+
+         // Send separate emails to each interviewer (with notes link)
+         if (interviewerEmails && interviewerEmails.length > 0 && notesLink) {
+            for (let i = 0; i < interviewerEmails.length; i++) {
+               try {
+                  const interviewerEmail = interviewerEmails[i];
+                  const interviewerName = interviewerNames[i] || 'Interviewer';
+                  
+                  // Build change description
+                  let changeDescription: string | undefined;
+                  if (changedFields && changedFields.length > 0) {
+                     const fieldNames: Record<string, string> = {
+                        date: 'Ngày phỏng vấn',
+                        time: 'Thời gian',
+                        location: 'Địa điểm',
+                        meetingLink: 'Link meeting',
+                        format: 'Hình thức phỏng vấn',
+                     };
+                     
+                     const changedFieldsText = changedFields
+                        .map((field) => fieldNames[field] || field)
+                        .join(', ');
+                     
+                     changeDescription = `Lịch phỏng vấn đã được cập nhật với những thay đổi sau:\n- ${changedFieldsText}`;
+                  }
+
+                  if (previousScheduledAt && changeDescription) {
+                     changeDescription += `\n\nThời gian cũ: ${previousScheduledAt.toLocaleString('vi-VN', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                     })}`;
+                  }
+
+                  await this.emailService.sendInterviewUpdateEmailToInterviewer(
+                     interviewerEmail,
+                     interviewerName,
+                     candidate,
+                     jobPosting,
+                     {
+                        scheduledAt,
+                        meetingLink,
+                        location,
+                        changedFields,
+                        previousScheduledAt,
+                        changeDescription,
+                        notesLink,
+                     },
+                  );
+               } catch (error) {
+                  console.error(`❌ Failed to send email to interviewer ${interviewerEmails[i]}:`, error);
+               }
+            }
+         }
       } catch (error) {
          console.error('Error in sendInterviewUpdateEmailAsync:', error);
          throw error;
@@ -478,5 +582,101 @@ export class InterviewService {
       const [data, total] = await queryBuilder.getManyAndCount();
 
       return { data, total };
+   }
+
+   async updateInterviewNotes(id: number, notes: string): Promise<InterviewEntity> {
+      const interview = await this.interviewRepository.findOne({ where: { interview_id: id } });
+      if (!interview) {
+         throw new NotFoundException(`Interview with ID ${id} not found`);
+      }
+
+      interview.notes = notes;
+      return await this.interviewRepository.save(interview);
+   }
+
+   async getInterviewNotesData(id: number): Promise<any> {
+      const interview = await this.interviewRepository.findOne({
+         where: { interview_id: id },
+      });
+
+      if (!interview) {
+         throw new NotFoundException(`Interview with ID ${id} not found`);
+      }
+
+      // Fetch application data
+      const application = await this.applicationRepository.findOne({
+         where: {
+            candidateId: interview.candidate_id,
+            jobPostingId: interview.job_id,
+         },
+      });
+
+      if (!application) {
+         throw new NotFoundException(
+            `Application not found for candidate ${interview.candidate_id}, job ${interview.job_id}`,
+         );
+      }
+
+      // Fetch candidate data
+      const candidate = await this.candidateRepository.findOne({
+         where: { candidateId: interview.candidate_id },
+      });
+
+      if (!candidate) {
+         throw new NotFoundException(`Candidate with ID ${interview.candidate_id} not found`);
+      }
+
+      // Fetch job posting data
+      const jobPosting = await this.jobPostingRepository.findOne({
+         where: { jobPostingId: interview.job_id },
+      });
+
+      if (!jobPosting) {
+         throw new NotFoundException(`Job posting with ID ${interview.job_id} not found`);
+      }
+
+      // Fetch interviewer data
+      let interviewers = [];
+      if (interview.interviewer_ids && interview.interviewer_ids.length > 0) {
+         interviewers = await this.entityManager.query(
+            `SELECT "employeeId", "firstName", "lastName", "email"
+             FROM employee e
+             WHERE e."employeeId" = ANY($1)`,
+            [interview.interviewer_ids],
+         );
+      }
+
+      return {
+         interview: {
+            interview_id: interview.interview_id,
+            scheduled_at: interview.scheduled_at,
+            duration_minutes: interview.duration_minutes,
+            meeting_link: interview.meeting_link,
+            location: interview.location,
+            status: interview.status,
+            notes: interview.notes,
+         },
+         application: {
+            application_id: application.applicationId,
+            resume_url: application.resumeUrl,
+            screening_score: application.screeningScore,
+            screening_status: application.screeningStatus,
+         },
+         candidate: {
+            candidate_id: candidate.candidateId,
+            first_name: candidate.firstName,
+            last_name: candidate.lastName,
+            email: candidate.email,
+            phone_number: candidate.phoneNumber,
+            years_of_experience: candidate.yearsOfExperience,
+            skills: candidate.skills,
+            summary: candidate.summary,
+         },
+         job: {
+            job_id: jobPosting.jobPostingId,
+            title: jobPosting.title,
+         },
+         interviewers,
+      };
    }
 }
