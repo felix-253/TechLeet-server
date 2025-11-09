@@ -68,11 +68,11 @@ export class ChatbotAgentController {
     description: 'Rate limit exceeded'
   })
   async chat(@Body() request: ChatRequestDto, @Request() req: any): Promise<ChatResponseDto> {
-    if (!request.message || request.message.trim().length === 0) {
+    if (!request.confirmation && (!request.message || request.message.trim().length === 0)) {
       throw new BadRequestException('Message cannot be empty');
     }
 
-    if (request.message.length > 2000) {
+    if (request.message && request.message.length > 2000) {
       throw new BadRequestException('Message too long (max 2000 characters)');
     }
 

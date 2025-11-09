@@ -95,6 +95,10 @@ export class JobPostingTool extends BaseTool {
     }
 
     try {
+      if (this.requiresConfirmation(params.action, params) && !params.confirmed) {
+        return this.createConfirmationRequest(params.action, params);
+      }
+
       switch (params.action) {
         case 'create':
           return await this.createJobPosting(params, context);

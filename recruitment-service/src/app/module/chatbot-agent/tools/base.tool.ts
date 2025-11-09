@@ -101,4 +101,48 @@ export abstract class BaseTool {
       message: message || `${this.name} executed successfully`
     };
   }
+
+  /**
+   * Check if an action requires confirmation
+   */
+  protected requiresConfirmation(action: string, params: any): boolean {
+    const destructiveActions = ['delete', 'cancel', 'reject', 'remove'];
+    return destructiveActions.includes(action?.toLowerCase());
+  }
+
+  /**
+   * Get confirmation message for an action
+   */
+  protected getConfirmationMessage(action: string, params: any): string {
+    const actionMessages: { [key: string]: string } = {
+      delete: `Are you sure you want to delete this ${this.name.replace('_tool', '')}?`,
+      cancel: `Are you sure you want to cancel this ${this.name.replace('_tool', '')}?`,
+      reject: `Are you sure you want to reject this ${this.name.replace('_tool', '')}?`,
+      remove: `Are you sure you want to remove this ${this.name.replace('_tool', '')}?`
+    };
+
+    const baseMessage = actionMessages[action?.toLowerCase()] || `Are you sure you want to ${action}?`;
+    
+    if (params.id) {
+      return `${baseMessage} (ID: ${params.id})`;
+    }
+    
+    return baseMessage;
+  }
+
+  /**
+   * Create confirmation request result
+   */
+  protected createConfirmationRequest(action: string, params: any, message?: string): ToolResult {
+    return {
+      success: false,
+      error: 'confirmation_required',
+      message: message || this.getConfirmationMessage(action, params),
+      data: {
+        requiresConfirmation: true,
+        action,
+        parameters: params
+      }
+    };
+  }
 }

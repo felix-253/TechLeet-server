@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { BaseTool, ToolContext, ToolResult, ToolParameters } from './base.tool';
 import { ApplicationEntity } from '../../../../entities/recruitment/application.entity';
 import { JobPostingEntity } from '../../../../entities/recruitment/job-posting.entity';
@@ -16,7 +16,7 @@ export class ApplicationTool extends BaseTool {
     properties: {
       action: {
         type: 'string',
-        enum: ['get', 'update_status', 'add_note', 'get_stats', 'get_by_job', 'get_by_candidate'],
+        enum: ['create', 'get', 'update_status', 'add_note', 'get_stats', 'get_by_job', 'get_by_candidate'],
         description: 'Action to perform on applications'
       },
       id: {
@@ -29,7 +29,32 @@ export class ApplicationTool extends BaseTool {
       },
       candidateId: {
         type: 'number',
-        description: 'Candidate ID (for get_by_candidate)'
+        description: 'Candidate ID (required for create, for get_by_candidate)'
+      },
+      coverLetter: {
+        type: 'string',
+        description: 'Cover letter submitted by candidate (optional for create)'
+      },
+      resumeUrl: {
+        type: 'string',
+        description: 'URL to resume file (optional for create)'
+      },
+      expectedStartDate: {
+        type: 'string',
+        description: 'Expected start date if hired (YYYY-MM-DD, optional for create)'
+      },
+      priority: {
+        type: 'string',
+        enum: ['low', 'medium', 'high', 'urgent'],
+        description: 'Priority level (optional for create)'
+      },
+      applicationNotes: {
+        type: 'string',
+        description: 'Additional notes about the application (optional for create)'
+      },
+      tags: {
+        type: 'string',
+        description: 'Tags for categorization (JSON array, optional for create)'
       },
       status: {
         type: 'string',
@@ -73,7 +98,13 @@ export class ApplicationTool extends BaseTool {
     }
 
     try {
+      if (params.action === 'update_status' && params.status === 'rejected' && !params.confirmed) {
+        return this.createConfirmationRequest('reject', params, `Are you sure you want to reject application ${params.id}?`);
+      }
+
       switch (params.action) {
+        case 'create':
+          return await this.createApplication(params, context);
         case 'get':
           return await this.getApplication(params, context);
         case 'update_status':
@@ -91,6 +122,87 @@ export class ApplicationTool extends BaseTool {
       }
     } catch (error) {
       return this.createErrorResult('Execution error', error.message);
+    }
+  }
+
+  private async createApplication(params: any, context: ToolContext): Promise<ToolResult> {
+    if (!params.jobPostingId || !params.candidateId) {
+      return this.createErrorResult('Missing required fields', 'jobPostingId and candidateId are required for create action');
+    }
+
+    try {
+      // Verify job posting exists and is active
+      const jobPosting = await this.jobPostingRepository.findOne({
+        where: { jobPostingId: params.jobPostingId }
+      });
+
+      if (!jobPosting) {
+        return this.createErrorResult('Job posting not found', `Job posting with ID ${params.jobPostingId} not found`);
+      }
+
+      if (jobPosting.status !== 'published') {
+        return this.createErrorResult('Job posting not published', 'Job posting is not published');
+      }
+
+      if (new Date(jobPosting.applicationDeadline) <= new Date()) {
+        return this.createErrorResult('Application deadline passed', 'Application deadline has passed');
+      }
+
+      // Verify candidate exists
+      const candidate = await this.candidateRepository.findOne({
+        where: { candidateId: params.candidateId }
+      });
+
+      if (!candidate) {
+        return this.createErrorResult('Candidate not found', `Candidate with ID ${params.candidateId} not found`);
+      }
+
+      // Check if application already exists
+      const existingApplication = await this.applicationRepository.findOne({
+        where: {
+          jobPostingId: params.jobPostingId,
+          candidateId: params.candidateId
+        }
+      });
+
+      if (existingApplication) {
+        return this.createErrorResult('Application already exists', 'Candidate has already applied for this job posting');
+      }
+
+      // Create application
+      const application = this.applicationRepository.create({
+        jobPostingId: params.jobPostingId,
+        candidateId: params.candidateId,
+        coverLetter: params.coverLetter,
+        resumeUrl: params.resumeUrl,
+        expectedStartDate: params.expectedStartDate ? new Date(params.expectedStartDate) : undefined,
+        priority: params.priority,
+        applicationNotes: params.applicationNotes,
+        tags: params.tags,
+        status: 'submitted',
+        appliedDate: new Date(),
+        createdAt: new Date()
+      });
+
+      const savedApplication = await this.applicationRepository.save(application);
+
+      return this.createSuccessResult(
+        {
+          applicationId: savedApplication.applicationId,
+          jobPostingId: savedApplication.jobPostingId,
+          candidateId: savedApplication.candidateId,
+          status: savedApplication.status,
+          appliedDate: savedApplication.appliedDate,
+          jobTitle: jobPosting.title,
+          candidateName: `${candidate.firstName} ${candidate.lastName}`
+        },
+        `Application created successfully for candidate "${candidate.firstName} ${candidate.lastName}" to job "${jobPosting.title}"`
+      );
+    } catch (error) {
+      if (error.code === '23505') {
+        return this.createErrorResult('Duplicate application', 'Candidate has already applied for this job posting');
+      }
+      return this.createErrorResult('Create failed', error.message);
     }
   }
 
@@ -232,8 +344,12 @@ export class ApplicationTool extends BaseTool {
     const jobPostingIds = [...new Set(applications.map(app => app.jobPostingId))];
     const candidateIds = [...new Set(applications.map(app => app.candidateId))];
     
-    const jobPostings = await this.jobPostingRepository.findByIds(jobPostingIds);
-    const candidates = await this.candidateRepository.findByIds(candidateIds);
+    const jobPostings = jobPostingIds.length > 0
+      ? await this.jobPostingRepository.find({ where: { jobPostingId: In(jobPostingIds) } })
+      : [];
+    const candidates = candidateIds.length > 0
+      ? await this.candidateRepository.find({ where: { candidateId: In(candidateIds) } })
+      : [];
     
     const jobPostingMap = new Map(jobPostings.map(job => [job.jobPostingId, job]));
     const candidateMap = new Map(candidates.map(candidate => [candidate.candidateId, candidate]));

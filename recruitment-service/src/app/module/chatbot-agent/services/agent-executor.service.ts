@@ -9,6 +9,12 @@ import { JobPostingTool } from '../tools/job-posting.tool';
 import { ApplicationTool } from '../tools/application.tool';
 import { CandidateTool } from '../tools/candidate.tool';
 import { AnalyticsTool } from '../tools/analytics.tool';
+import { InterviewTool } from '../tools/interview.tool';
+import { NotificationTool } from '../tools/notification.tool';
+import { EmailTool } from '../tools/email.tool';
+import { CalendarTool } from '../tools/calendar.tool';
+import { QuestionSetTool } from '../tools/question-set.tool';
+import { ReportTool } from '../tools/report.tool';
 import { ChatRequestDto, ChatResponseDto, ChatSource, ToolCallResult } from '../dto/chat.dto';
 import { DocumentEntityType } from '../../../../entities/recruitment/rag-document.entity';
 import { ChatMessage } from '../../../../entities/recruitment/chat-session.entity';
@@ -36,7 +42,13 @@ export class AgentExecutorService {
     private readonly jobPostingTool: JobPostingTool,
     private readonly applicationTool: ApplicationTool,
     private readonly candidateTool: CandidateTool,
-    private readonly analyticsTool: AnalyticsTool
+    private readonly analyticsTool: AnalyticsTool,
+    private readonly interviewTool: InterviewTool,
+    private readonly notificationTool: NotificationTool,
+    private readonly emailTool: EmailTool,
+    private readonly calendarTool: CalendarTool,
+    private readonly questionSetTool: QuestionSetTool,
+    private readonly reportTool: ReportTool
   ) {
     const apiKey = this.configService.get<string>('GEMINI_API_KEY');
     if (!apiKey) {
@@ -68,6 +80,11 @@ export class AgentExecutorService {
       
       if (!session) {
         session = await this.sessionManager.createSession(userId);
+      }
+
+      // Handle confirmation if provided
+      if (request.confirmation) {
+        return await this.handleConfirmation(request.confirmation, session, userId);
       }
 
       // Add user message to session
@@ -144,12 +161,7 @@ export class AgentExecutorService {
   /**
    * Execute agent with tool calling
    */
-  private async executeWithTools(query: string, context: AgentContext): Promise<{
-    reply: string;
-    sources: ChatSource[];
-    toolCalls: ToolCallResult[];
-    contextUpdates?: any;
-  }> {
+  private async executeWithTools(query: string, context: AgentContext): Promise<ChatResponseDto> {
     try {
       // Build system prompt
       const systemPrompt = this.buildSystemPrompt(context);
@@ -209,11 +221,18 @@ export class AgentExecutorService {
               sessionContext: context.sessionContext
             });
 
-            toolResults.push({
+            const toolCallResult: ToolCallResult = {
               toolName: functionCall.name,
               parameters: functionCall.args,
               result: toolResult
-            });
+            };
+
+            if (toolResult.error === 'confirmation_required' && toolResult.data?.requiresConfirmation) {
+              toolCallResult.requiresConfirmation = true;
+              toolCallResult.confirmationMessage = toolResult.message;
+            }
+
+            toolResults.push(toolCallResult);
 
             // Add tool result to recent entities if applicable
             if (toolResult.success && toolResult.data) {
@@ -251,11 +270,15 @@ export class AgentExecutorService {
         relevance: doc.similarity
       }));
 
+      const requiresConfirmation = toolResults.some(tr => tr.requiresConfirmation);
+
       return {
         reply: finalReply,
+        sessionId: context.sessionId,
         sources,
         toolCalls: toolResults,
-        contextUpdates: this.extractContextUpdates(toolResults)
+        contextUpdates: this.extractContextUpdates(toolResults),
+        requiresConfirmation
       };
 
     } catch (error) {
@@ -353,7 +376,13 @@ Available tools: ${context.availableTools.map(t => t.name).join(', ')}
       this.jobPostingTool,
       this.applicationTool,
       this.candidateTool,
-      this.analyticsTool
+      this.analyticsTool,
+      this.interviewTool,
+      this.notificationTool,
+      this.emailTool,
+      this.calendarTool,
+      this.questionSetTool,
+      this.reportTool
     ];
   }
 
@@ -396,6 +425,66 @@ Available tools: ${context.availableTools.map(t => t.name).join(', ')}
   }
 
   /**
+   * Handle confirmation request
+   */
+  private async handleConfirmation(
+    confirmation: { toolName: string; parameters: any; confirmed: boolean },
+    session: any,
+    userId: number
+  ): Promise<ChatResponseDto> {
+    if (!confirmation.confirmed) {
+      await this.sessionManager.addMessage(session.sessionId, {
+        role: 'assistant',
+        content: 'Action cancelled by user.',
+        timestamp: new Date()
+      });
+
+      return {
+        reply: 'Action cancelled. How can I help you?',
+        sessionId: session.sessionId,
+        sources: [],
+        toolCalls: []
+      };
+    }
+
+    const tool = this.getAvailableTools().find(t => t.name === confirmation.toolName);
+    if (!tool) {
+      throw new Error(`Unknown tool: ${confirmation.toolName}`);
+    }
+
+    const toolResult = await tool.execute(confirmation.parameters, {
+      userId,
+      sessionId: session.sessionId,
+      sessionContext: session.context
+    });
+
+    const toolCallResult: ToolCallResult = {
+      toolName: confirmation.toolName,
+      parameters: confirmation.parameters,
+      result: toolResult
+    };
+
+    const reply = toolResult.success
+      ? toolResult.message || `${confirmation.toolName} executed successfully`
+      : `Error: ${toolResult.message || toolResult.error}`;
+
+    await this.sessionManager.addMessage(session.sessionId, {
+      role: 'assistant',
+      content: reply,
+      timestamp: new Date(),
+      toolCalls: [toolCallResult]
+    });
+
+    return {
+      reply,
+      sessionId: session.sessionId,
+      sources: [],
+      toolCalls: [toolCallResult],
+      contextUpdates: this.extractContextUpdates([toolCallResult])
+    };
+  }
+
+  /**
    * Extract context updates from tool results
    */
   private extractContextUpdates(toolResults: ToolCallResult[]): any {
@@ -409,6 +498,18 @@ Available tools: ${context.availableTools.map(t => t.name).join(', ')}
       updates.currentFocus = 'applications';
     } else if (toolNames.includes('candidate_tool')) {
       updates.currentFocus = 'candidates';
+    } else if (toolNames.includes('interview_tool')) {
+      updates.currentFocus = 'interviews';
+    } else if (toolNames.includes('question_set_tool')) {
+      updates.currentFocus = 'question_sets';
+    } else if (toolNames.includes('report_tool')) {
+      updates.currentFocus = 'reports';
+    } else if (toolNames.includes('email_tool')) {
+      updates.currentFocus = 'communications';
+    } else if (toolNames.includes('calendar_tool')) {
+      updates.currentFocus = 'calendar';
+    } else if (toolNames.includes('notification_tool')) {
+      updates.currentFocus = 'notifications';
     }
     
     return Object.keys(updates).length > 0 ? updates : undefined;

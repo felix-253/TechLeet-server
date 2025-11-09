@@ -25,6 +25,22 @@ export class ChatRequestDto {
   @IsOptional()
   @IsUUID()
   sessionId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Confirmation for a previous tool call that required confirmation',
+    example: {
+      toolName: 'job_posting_tool',
+      parameters: { action: 'delete', id: 123 },
+      confirmed: true
+    }
+  })
+  @IsOptional()
+  @IsObject()
+  confirmation?: {
+    toolName: string;
+    parameters: any;
+    confirmed: boolean;
+  };
 }
 
 export class ChatResponseDto {
@@ -68,6 +84,24 @@ export class ChatResponseDto {
   @IsOptional()
   @IsArray()
   toolCalls?: ToolCallResult[];
+
+  @ApiPropertyOptional({
+    description: 'Whether the response requires user confirmation',
+    example: false
+  })
+  @IsOptional()
+  requiresConfirmation?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Context updates from tool execution',
+    example: {
+      currentFocus: 'job_postings',
+      recentEntityIds: [123, 456]
+    }
+  })
+  @IsOptional()
+  @IsObject()
+  contextUpdates?: any;
 }
 
 export class ChatSource {
@@ -93,6 +127,20 @@ export class ToolCallResult {
 
   @ApiProperty()
   result: any;
+
+  @ApiPropertyOptional({
+    description: 'Whether this tool call requires confirmation',
+    example: false
+  })
+  @IsOptional()
+  requiresConfirmation?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Confirmation message if requiresConfirmation is true',
+    example: 'Are you sure you want to delete this job posting?'
+  })
+  @IsOptional()
+  confirmationMessage?: string;
 }
 
 export class SessionRequestDto {
