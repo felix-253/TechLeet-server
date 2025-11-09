@@ -442,9 +442,9 @@ export class ApplicationService {
       }
 
       if (offerData.offerExpiryDate) {
-         const expiryDate = new Date(offerData.offerExpiryDate);
-         if (expiryDate <= new Date()) {
-            throw new BadRequestException('Offer expiry date must be in the future');
+      const expiryDate = new Date(offerData.offerExpiryDate);
+      if (expiryDate <= new Date()) {
+         throw new BadRequestException('Offer expiry date must be in the future');
          }
          application.offerExpiryDate = expiryDate;
       }

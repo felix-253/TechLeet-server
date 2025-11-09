@@ -174,7 +174,7 @@ export class CvQueueService implements OnModuleInit, OnModuleDestroy {
          // Check for waiting jobs and log worker status
          this.checkWorkerStatus();
       });
-      
+
       this.cvProcessingWorker.on('active', (job) => {
          this.logger.log(`🔄 CV Processing Worker: Job ${job.id} is now active for application ${job.data.applicationId}`);
       });
@@ -451,13 +451,13 @@ export class CvQueueService implements OnModuleInit, OnModuleDestroy {
             this.cvProcessingQueue.getActiveCount(),
          ]);
 
-         const job = await this.cvProcessingQueue.add(
-            JobTypes.EXTRACT_TEXT,
-            data,
-            {
-               priority: options?.priority || 0,
-               delay: options?.delay || 0,
-               attempts: options?.attempts || 3,
+      const job = await this.cvProcessingQueue.add(
+         JobTypes.EXTRACT_TEXT,
+         data,
+         {
+            priority: options?.priority || 0,
+            delay: options?.delay || 0,
+            attempts: options?.attempts || 3,
                backoff: {
                   type: 'exponential',
                   delay: 2000, // Start with 2 second delay
@@ -506,7 +506,7 @@ export class CvQueueService implements OnModuleInit, OnModuleDestroy {
             }
          }, 5000);
 
-         return job;
+      return job;
       } catch (error) {
          this.logger.error(`❌ Failed to add CV processing job for application ${data.applicationId}: ${error.message}`, error.stack);
          throw error;

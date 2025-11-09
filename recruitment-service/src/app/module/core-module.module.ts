@@ -7,6 +7,7 @@ import { CvScreeningModule } from './cv-screening/cv-screening.module';
 import { InterviewModule } from './interview/interview.module';
 import { ChatbotAgentModule } from './chatbot-agent/chatbot-agent.module';
 import { QuestionModule } from './question/question.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 
 @Module({
    imports: [
@@ -18,6 +19,7 @@ import { QuestionModule } from './question/question.module';
       CvScreeningModule,
       ChatbotAgentModule,
       QuestionModule,
+      AnalyticsModule,
    ],
 })
 export class CoreModuleModule {}
