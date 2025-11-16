@@ -201,7 +201,6 @@ export class AnalyticsTool extends BaseTool {
           acc[app.status] = (acc[app.status] || 0) + 1;
           return acc;
         }, {}),
-        averageScore: applications.reduce((sum, app) => sum + (app.score || 0), 0) / applications.length || 0,
         withResume: applications.filter(app => app.resumeUrl).length,
         withCoverLetter: applications.filter(app => app.coverLetter).length
       },
@@ -365,7 +364,7 @@ export class AnalyticsTool extends BaseTool {
     const hiredApplications = applications.filter(app => app.status === 'hired');
     const timeToHire = hiredApplications.length > 0 
       ? hiredApplications.reduce((sum, app) => {
-          const timeDiff = app.reviewedDate ? app.reviewedDate.getTime() - app.appliedDate.getTime() : 0;
+          const timeDiff = app.updatedAt ? app.updatedAt.getTime() - app.appliedDate.getTime() : 0;
           return sum + timeDiff;
         }, 0) / hiredApplications.length / (1000 * 60 * 60 * 24) // Convert to days
       : 0;

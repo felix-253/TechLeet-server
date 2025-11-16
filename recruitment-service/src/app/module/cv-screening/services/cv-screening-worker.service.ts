@@ -34,8 +34,6 @@ export interface ScreeningPipelineResult {
    skillsScore: number;
    experienceScore: number;
    educationScore: number;
-   vectorSimilarity: number;
-   chunkSimilarity: number;
    aiSummary: string;
    keyHighlights: string[];
    concerns: string[];
@@ -240,8 +238,6 @@ export class CvScreeningWorkerService {
             skillsScore: finalResult.skillsScore || 0,
             experienceScore: finalResult.experienceScore || 0,
             educationScore: finalResult.educationScore || 0,
-            vectorSimilarity: finalResult.vectorSimilarity || 0,
-            chunkSimilarity: finalResult.chunkSimilarity || 0,
             aiSummary: finalResult.aiSummary || '',
             keyHighlights: finalResult.keyHighlights || [],
             concerns: finalResult.concerns || [],
@@ -268,8 +264,6 @@ export class CvScreeningWorkerService {
             skillsScore: 0,
             experienceScore: 0,
             educationScore: 0,
-            vectorSimilarity: 0,
-            chunkSimilarity: 0,
             aiSummary: '',
             keyHighlights: [],
             concerns: [],
@@ -546,8 +540,7 @@ export class CvScreeningWorkerService {
          vectorSimilarity,
          skillsScore,
          experienceScore,
-         educationScore,
-         0 // chunk similarity (calculated elsewhere if needed)
+         educationScore
       );
 
       // Log if overall score was capped due to experience

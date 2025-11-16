@@ -188,7 +188,6 @@ export class EmbeddingIndexerService {
           metadata: {
             status: app.status,
             appliedDate: app.appliedDate,
-            score: app.score,
             jobPostingId: app.jobPostingId,
             candidateId: app.candidateId,
             createdAt: app.createdAt,
@@ -404,7 +403,6 @@ Applied Date: ${app.appliedDate}
 Job Posting ID: ${app.jobPostingId}
 Candidate ID: ${app.candidateId}
 Cover Letter: ${app.coverLetter || 'None'}
-Score: ${app.score || 'Not scored'}
 Review Notes: ${app.reviewNotes || 'None'}
     `.trim();
   }

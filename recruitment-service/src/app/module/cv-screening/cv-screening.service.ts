@@ -547,8 +547,7 @@ export class CvScreeningService {
          mockVectorSimilarity,
          skillsScore,
          experienceScore,
-         educationScore,
-         0 // chunk similarity
+         educationScore
       );
       
       // Apply model-specific score adjustments to simulate different models (only to overall)
@@ -668,8 +667,7 @@ export class CvScreeningService {
          mockVectorSimilarity,
          skillsScore,
          experienceScore,
-         educationScore,
-         0
+         educationScore
       );
       
       return Math.round(scores.overallScore);

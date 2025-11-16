@@ -5,8 +5,6 @@ export interface ScoringResult {
    skillsScore: number;
    experienceScore: number;
    educationScore: number;
-   vectorSimilarity: number;
-   chunkSimilarity: number;
    autoFail: boolean; // True if candidate should be automatically rejected (e.g., severe experience gap)
 }
 
@@ -21,8 +19,7 @@ export class ScoringService {
       vectorSimilarity: number,
       skillsScore: number,
       experienceScore: number,
-      educationScore: number,
-      chunkSimilarity: number
+      educationScore: number
    ): ScoringResult {
       // Auto-fail if experience score is 0 (severe under-qualification: gap > 3 years)
       const autoFail = experienceScore === 0;
@@ -59,8 +56,6 @@ export class ScoringService {
          skillsScore: Math.round(skillsScore * 100 * 100) / 100,
          experienceScore: Math.round(experienceScore * 100 * 100) / 100,
          educationScore: Math.round(educationScore * 100 * 100) / 100,
-         vectorSimilarity,
-         chunkSimilarity,
          autoFail,
       };
    }

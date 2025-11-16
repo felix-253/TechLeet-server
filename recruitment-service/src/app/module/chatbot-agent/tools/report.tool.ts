@@ -413,8 +413,7 @@ export class ReportTool extends BaseTool {
               title: jobPosting.title
             } : null,
             status: app.status,
-            appliedDate: app.appliedDate,
-            score: app.score
+            appliedDate: app.appliedDate
           };
         }).filter(app => app.candidate !== null || app.jobPosting !== null)
       };

@@ -88,10 +88,6 @@ export class ApplicationService {
             candidateId: candidateInfo.candidateId,
             resumeUrl: pdfFilePath,
             coverLetter: candidateInfo.extractedData.aiAnalysis?.summary || '',
-            applicationNotes: `Application created from PDF extraction. AI Analysis: ${JSON.stringify(
-               candidateInfo.extractedData.aiAnalysis,
-            )}`,
-            priority: 'medium',
          };
 
          // Gọi hàm create để tạo application
@@ -161,9 +157,6 @@ export class ApplicationService {
             coverLetter: createApplicationDto.coverLetter,
             resumeUrl: createApplicationDto.resumeUrl,
             expectedStartDate: createApplicationDto.expectedStartDate,
-            priority: createApplicationDto.priority,
-            applicationNotes: createApplicationDto.applicationNotes,
-            tags: createApplicationDto.tags,
          };
          const application = this.applicationRepository.create({
             ...applicationData,
@@ -238,10 +231,7 @@ export class ApplicationService {
          jobPostingId,
          candidateId,
          status,
-         priority,
          offerStatus,
-         reviewedBy,
-         hiringManagerId,
          sortBy = 'appliedDate',
          sortOrder = 'DESC',
       } = query;
@@ -267,20 +257,8 @@ export class ApplicationService {
          whereConditions.status = status;
       }
 
-      if (priority) {
-         whereConditions.priority = priority;
-      }
-
       if (offerStatus) {
          whereConditions.offerStatus = offerStatus;
-      }
-
-      if (reviewedBy) {
-         whereConditions.reviewedBy = reviewedBy;
-      }
-
-      if (hiringManagerId) {
-         whereConditions.hiringManagerId = hiringManagerId;
       }
 
       if (Object.keys(whereConditions).length > 0) {
@@ -335,9 +313,6 @@ export class ApplicationService {
       // Convert date strings to Date objects
       const updateData = {
          ...updateApplicationDto,
-         reviewedDate: updateApplicationDto.reviewedDate
-            ? new Date(updateApplicationDto.reviewedDate)
-            : undefined,
          offerDate: updateApplicationDto.offerDate
             ? new Date(updateApplicationDto.offerDate)
             : undefined,
@@ -899,10 +874,7 @@ export class ApplicationService {
          resumeUrl: application.resumeUrl,
          status: application.status,
          appliedDate: formatDate(application.appliedDate) || new Date().toISOString().split('T')[0],
-         reviewedDate: formatDate(application.reviewedDate),
          reviewNotes: application.reviewNotes,
-         score: application.score,
-         feedback: application.feedback,
          offerDate: formatDate(application.offerDate),
          offeredSalary: application.offeredSalary,
          offerExpiryDate: formatDate(application.offerExpiryDate),
@@ -910,11 +882,6 @@ export class ApplicationService {
          offerResponseDate: formatDate(application.offerResponseDate),
          rejectionReason: application.rejectionReason,
          expectedStartDate: formatDate(application.expectedStartDate),
-         applicationNotes: application.applicationNotes,
-         priority: application.priority,
-         tags: application.tags,
-         reviewedBy: application.reviewedBy,
-         hiringManagerId: application.hiringManagerId,
          isScreeningCompleted: application.isScreeningCompleted ?? false,
          screeningScore: application.screeningScore,
          screeningStatus: application.screeningStatus,

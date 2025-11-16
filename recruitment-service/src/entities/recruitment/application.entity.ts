@@ -46,32 +46,11 @@ export class ApplicationEntity extends BaseEntity {
    appliedDate: Date;
 
    @Column({
-      type: 'timestamp',
-      nullable: true,
-      comment: 'Date when application was reviewed',
-   })
-   reviewedDate?: Date;
-
-   @Column({
       type: 'text',
       nullable: true,
       comment: 'Notes from reviewer',
    })
    reviewNotes?: string;
-
-   @Column({
-      type: 'int',
-      nullable: true,
-      comment: 'Overall application score (1-10)',
-   })
-   score?: number;
-
-   @Column({
-      type: 'text',
-      nullable: true,
-      comment: 'Feedback on the application',
-   })
-   feedback?: string;
 
    @Column({
       type: 'date',
@@ -125,28 +104,6 @@ export class ApplicationEntity extends BaseEntity {
    })
    expectedStartDate?: Date;
 
-   @Column({
-      type: 'text',
-      nullable: true,
-      comment: 'Additional notes about the application',
-   })
-   applicationNotes?: string;
-
-   @Column({
-      type: 'varchar',
-      length: 50,
-      nullable: true,
-      comment: 'Priority level (low, medium, high, urgent)',
-   })
-   priority?: string;
-
-   @Column({
-      type: 'text',
-      nullable: true,
-      comment: 'Tags for categorization (JSON array)',
-   })
-   tags?: string;
-
    // Foreign Keys
    @Column({
       type: 'int',
@@ -161,20 +118,6 @@ export class ApplicationEntity extends BaseEntity {
       comment: 'Reference to candidate',
    })
    candidateId: number;
-
-   @Column({
-      type: 'int',
-      nullable: true,
-      comment: 'Reference to employee who reviewed application (User Service)',
-   })
-   reviewedBy?: number;
-
-   @Column({
-      type: 'int',
-      nullable: true,
-      comment: 'Reference to hiring manager (User Service)',
-   })
-   hiringManagerId?: number;
 
    // CV Screening fields
    @Column({

@@ -185,13 +185,6 @@ export class JobPostingEntity extends BaseEntity {
    })
    positionId: number;
 
-   @Column({
-      type: 'int',
-      nullable: true,
-      comment: 'Reference to hiring manager (User Service)',
-   })
-   hiringManagerId?: number;
-
    @ManyToOne(() => QuestionSetEntity, { nullable: true, onDelete: 'SET NULL' })
    @JoinColumn({
       name: 'question_set_id',

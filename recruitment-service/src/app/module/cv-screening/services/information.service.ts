@@ -510,8 +510,6 @@ export class InformationService {
            candidateId,
            resumeUrl: '',
            coverLetter: aiAnalysis?.summary || undefined,
-           applicationNotes: aiAnalysis ? `AI Analysis: ${JSON.stringify(aiAnalysis)}` : undefined,
-           priority: 'medium' as const,
         };
 
         let created = await this.applicationService.create(dto as any);

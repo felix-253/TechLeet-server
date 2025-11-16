@@ -43,19 +43,6 @@ export class ApplicationTool extends BaseTool {
         type: 'string',
         description: 'Expected start date if hired (YYYY-MM-DD, optional for create)'
       },
-      priority: {
-        type: 'string',
-        enum: ['low', 'medium', 'high', 'urgent'],
-        description: 'Priority level (optional for create)'
-      },
-      applicationNotes: {
-        type: 'string',
-        description: 'Additional notes about the application (optional for create)'
-      },
-      tags: {
-        type: 'string',
-        description: 'Tags for categorization (JSON array, optional for create)'
-      },
       status: {
         type: 'string',
         enum: ['submitted', 'screening', 'interviewing', 'offer', 'hired', 'rejected', 'withdrawn'],
@@ -176,9 +163,6 @@ export class ApplicationTool extends BaseTool {
         coverLetter: params.coverLetter,
         resumeUrl: params.resumeUrl,
         expectedStartDate: params.expectedStartDate ? new Date(params.expectedStartDate) : undefined,
-        priority: params.priority,
-        applicationNotes: params.applicationNotes,
-        tags: params.tags,
         status: 'submitted',
         appliedDate: new Date(),
         createdAt: new Date()
@@ -236,8 +220,6 @@ export class ApplicationTool extends BaseTool {
         coverLetter: application.coverLetter,
         resumeUrl: application.resumeUrl,
         reviewNotes: application.reviewNotes,
-        score: application.score,
-        feedback: application.feedback,
         jobPosting: {
           id: jobPosting?.jobPostingId,
           title: jobPosting?.title,
@@ -270,7 +252,6 @@ export class ApplicationTool extends BaseTool {
     const oldStatus = application.status;
     await this.applicationRepository.update(params.id, {
       status: params.status,
-      reviewedDate: new Date(),
       updatedAt: new Date()
     });
 
@@ -278,8 +259,7 @@ export class ApplicationTool extends BaseTool {
       {
         applicationId: params.id,
         oldStatus,
-        newStatus: params.status,
-        reviewedDate: new Date()
+        newStatus: params.status
       },
       `Application ${params.id} status updated from "${oldStatus}" to "${params.status}"`
     );

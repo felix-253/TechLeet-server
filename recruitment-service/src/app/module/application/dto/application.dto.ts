@@ -58,31 +58,6 @@ export class CreateApplicationDto {
    @IsDateString()
    expectedStartDate?: string;
 
-   @ApiPropertyOptional({
-      description: 'Priority level',
-      example: 'medium',
-      enum: ['low', 'medium', 'high', 'urgent'],
-   })
-   @IsOptional()
-   @IsString()
-   @IsIn(['low', 'medium', 'high', 'urgent'])
-   priority?: string;
-
-   @ApiPropertyOptional({
-      description: 'Additional notes about the application',
-      example: 'Candidate has relevant experience in similar projects',
-   })
-   @IsOptional()
-   @IsString()
-   applicationNotes?: string;
-
-   @ApiPropertyOptional({
-      description: 'Tags for categorization (JSON array)',
-      example: '["urgent", "local-candidate"]',
-   })
-   @IsOptional()
-   @IsString()
-   tags?: string;
 }
 
 export class UpdateApplicationDto {
@@ -141,27 +116,6 @@ export class UpdateApplicationDto {
    reviewNotes?: string;
 
    @ApiPropertyOptional({
-      description: 'Overall application score (1-10)',
-      example: 8,
-      minimum: 1,
-      maximum: 10,
-   })
-   @IsOptional()
-   @IsInt()
-   @Min(1)
-   @Max(10)
-   @Type(() => Number)
-   score?: number;
-
-   @ApiPropertyOptional({
-      description: 'Feedback on the application',
-      example: 'Strong candidate with relevant experience',
-   })
-   @IsOptional()
-   @IsString()
-   feedback?: string;
-
-   @ApiPropertyOptional({
       description: 'Salary offered (VND)',
       example: 45000000,
       minimum: 0,
@@ -205,58 +159,6 @@ export class UpdateApplicationDto {
    @IsOptional()
    @IsDateString()
    expectedStartDate?: string;
-
-   @ApiPropertyOptional({
-      description: 'Priority level',
-      example: 'high',
-      enum: ['low', 'medium', 'high', 'urgent'],
-   })
-   @IsOptional()
-   @IsString()
-   @IsIn(['low', 'medium', 'high', 'urgent'])
-   priority?: string;
-
-   @ApiPropertyOptional({
-      description: 'Additional notes about the application',
-      example: 'Updated notes after interview',
-   })
-   @IsOptional()
-   @IsString()
-   applicationNotes?: string;
-
-   @ApiPropertyOptional({
-      description: 'Tags for categorization (JSON array)',
-      example: '["interviewed", "recommended"]',
-   })
-   @IsOptional()
-   @IsString()
-   tags?: string;
-
-   @ApiPropertyOptional({
-      description: 'Reference to employee who reviewed application',
-      example: 5,
-   })
-   @IsOptional()
-   @IsInt()
-   @Type(() => Number)
-   reviewedBy?: number;
-
-   @ApiPropertyOptional({
-      description: 'Reference to hiring manager',
-      example: 3,
-   })
-   @IsOptional()
-   @IsInt()
-   @Type(() => Number)
-   hiringManagerId?: number;
-
-   @ApiPropertyOptional({
-      description: 'Date when application was reviewed (YYYY-MM-DD)',
-      example: '2024-01-16',
-   })
-   @IsOptional()
-   @IsDateString()
-   reviewedDate?: string;
 
    @ApiPropertyOptional({
       description: 'Date when offer was made (YYYY-MM-DD)',
@@ -319,28 +221,10 @@ export class ApplicationResponseDto {
    appliedDate: string;
 
    @ApiPropertyOptional({
-      description: 'Date when application was reviewed',
-      example: '2024-01-16T14:20:00Z',
-   })
-   reviewedDate?: string;
-
-   @ApiPropertyOptional({
       description: 'Notes from reviewer',
       example: 'Good technical background',
    })
    reviewNotes?: string;
-
-   @ApiPropertyOptional({
-      description: 'Overall application score (1-10)',
-      example: 8,
-   })
-   score?: number;
-
-   @ApiPropertyOptional({
-      description: 'Feedback on the application',
-      example: 'Strong candidate with relevant experience',
-   })
-   feedback?: string;
 
    @ApiPropertyOptional({
       description: 'Date when offer was made',
@@ -383,36 +267,6 @@ export class ApplicationResponseDto {
       example: '2024-02-01',
    })
    expectedStartDate?: string;
-
-   @ApiPropertyOptional({
-      description: 'Additional notes about the application',
-      example: 'Candidate has relevant experience',
-   })
-   applicationNotes?: string;
-
-   @ApiPropertyOptional({
-      description: 'Priority level',
-      example: 'medium',
-   })
-   priority?: string;
-
-   @ApiPropertyOptional({
-      description: 'Tags for categorization',
-      example: '["urgent", "local-candidate"]',
-   })
-   tags?: string;
-
-   @ApiPropertyOptional({
-      description: 'Reference to employee who reviewed application',
-      example: 5,
-   })
-   reviewedBy?: number;
-
-   @ApiPropertyOptional({
-      description: 'Reference to hiring manager',
-      example: 3,
-   })
-   hiringManagerId?: number;
 
    // CV Screening fields
    @ApiPropertyOptional({
@@ -555,41 +409,6 @@ export class GetApplicationsQueryDto {
    ])
    status?: string;
 
-   @ApiPropertyOptional({
-      description: 'Filter by minimum score',
-      example: 7,
-      minimum: 1,
-      maximum: 10,
-   })
-   @IsOptional()
-   @IsInt()
-   @Min(1)
-   @Max(10)
-   @Type(() => Number)
-   minScore?: number;
-
-   @ApiPropertyOptional({
-      description: 'Filter by maximum score',
-      example: 10,
-      minimum: 1,
-      maximum: 10,
-   })
-   @IsOptional()
-   @IsInt()
-   @Min(1)
-   @Max(10)
-   @Type(() => Number)
-   maxScore?: number;
-
-   @ApiPropertyOptional({
-      description: 'Filter by priority level',
-      example: 'high',
-      enum: ['low', 'medium', 'high', 'urgent'],
-   })
-   @IsOptional()
-   @IsString()
-   @IsIn(['low', 'medium', 'high', 'urgent'])
-   priority?: string;
 
    @ApiPropertyOptional({
       description: 'Filter by date range start (YYYY-MM-DD)',
@@ -648,31 +467,13 @@ export class GetApplicationsQueryDto {
    offerStatus?: string;
 
    @ApiPropertyOptional({
-      description: 'Filter by employee who reviewed application',
-      example: 5,
-   })
-   @IsOptional()
-   @IsInt()
-   @Type(() => Number)
-   reviewedBy?: number;
-
-   @ApiPropertyOptional({
-      description: 'Filter by hiring manager ID',
-      example: 3,
-   })
-   @IsOptional()
-   @IsInt()
-   @Type(() => Number)
-   hiringManagerId?: number;
-
-   @ApiPropertyOptional({
       description: 'Sort field',
       example: 'appliedDate',
-      enum: ['applicationId', 'appliedDate', 'score', 'screeningScore', 'status'],
+      enum: ['applicationId', 'appliedDate', 'screeningScore', 'status'],
    })
    @IsOptional()
    @IsString()
-   @IsIn(['applicationId', 'appliedDate', 'score', 'screeningScore', 'status'])
+   @IsIn(['applicationId', 'appliedDate', 'screeningScore', 'status'])
    sortBy?: string = 'appliedDate';
 
    @ApiPropertyOptional({

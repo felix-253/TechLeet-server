@@ -105,10 +105,6 @@ export class JobPostingTool extends BaseTool {
         type: 'number',
         description: 'Minimum score required for this job'
       },
-      hiringManagerId: {
-        type: 'number',
-        description: 'ID of the hiring manager'
-      },
       filters: {
         type: 'object',
         description: 'Filters for querying job postings',
@@ -416,8 +412,7 @@ export class JobPostingTool extends BaseTool {
       isTest: params.isTest || false,
       questionSetId: params.questionSetId,
       quantityQuestion: params.quantityQuestion,
-      minScore: params.minScore,
-      hiringManagerId: params.hiringManagerId
+      minScore: params.minScore
     });
 
     const savedJob = await this.jobPostingRepository.save(jobPosting);

@@ -285,7 +285,6 @@ export class JobPostingService {
          experienceLevel: jobPosting.experienceLevel,
          departmentId: jobPosting.departmentId,
          positionId: jobPosting.positionId,
-         hiringManagerId: jobPosting.hiringManagerId,
          isTest: jobPosting.isTest,
          questionSetId: jobPosting.questionSetId,
          quantityQuestion: jobPosting.quantityQuestion,

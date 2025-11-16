@@ -143,11 +143,6 @@ export class CreateJobPostingDto {
       description: 'ID of the hiring manager (User Service)',
       example: 1,
    })
-   @IsOptional()
-   @IsInt()
-   @Type(() => Number)
-   hiringManagerId?: number;
-
    @ApiPropertyOptional({
       description: 'Whether this job posting requires a test',
       example: false,
@@ -327,11 +322,6 @@ export class UpdateJobPostingDto {
       description: 'ID of the hiring manager (User Service)',
       example: 1,
    })
-   @IsOptional()
-   @IsInt()
-   @Type(() => Number)
-   hiringManagerId?: number;
-
    @ApiPropertyOptional({
       description: 'Whether this job posting requires a test',
       example: false,
@@ -465,12 +455,6 @@ export class JobPostingResponseDto {
       example: 1,
    })
    positionId: number;
-
-   @ApiPropertyOptional({
-      description: 'Hiring manager ID',
-      example: 1,
-   })
-   hiringManagerId?: number;
 
    @ApiPropertyOptional({
       description: 'Whether this job posting requires a test',
