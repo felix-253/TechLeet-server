@@ -41,6 +41,20 @@ export class ChatRequestDto {
     parameters: any;
     confirmed: boolean;
   };
+
+  @ApiPropertyOptional({
+    description: 'Page context to provide additional information about current page',
+    example: {
+      page: 'job-create',
+      formData: { title: 'React Developer' }
+    }
+  })
+  @IsOptional()
+  @IsObject()
+  pageContext?: {
+    page: string;
+    formData?: any;
+  };
 }
 
 export class ChatResponseDto {

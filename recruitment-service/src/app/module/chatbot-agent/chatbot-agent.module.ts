@@ -34,6 +34,7 @@ import { EmailTool } from './tools/email.tool';
 import { CalendarTool } from './tools/calendar.tool';
 import { QuestionSetTool } from './tools/question-set.tool';
 import { ReportTool } from './tools/report.tool';
+import { JobContentGenerationTool } from './tools/job-content-generation.tool';
 
 // External services (reuse from existing modules)
 import { CvEmbeddingService } from '../cv-screening/processors/cv-embedding.service';
@@ -85,6 +86,7 @@ import { ChatbotAgentController } from './chatbot-agent.controller';
     CalendarTool,
     QuestionSetTool,
     ReportTool,
+    JobContentGenerationTool,
     
     // External services
     CvEmbeddingService,
