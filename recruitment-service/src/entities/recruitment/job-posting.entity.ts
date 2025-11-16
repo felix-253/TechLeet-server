@@ -192,12 +192,6 @@ export class JobPostingEntity extends BaseEntity {
    })
    hiringManagerId?: number;
 
-   // Relationships will be added after ApplicationEntity is created
-   // @OneToMany(() => ApplicationEntity, application => application.jobPosting, {
-   //    cascade: ['soft-remove']
-   // })
-   // applications: ApplicationEntity[];
-
    @ManyToOne(() => QuestionSetEntity, { nullable: true, onDelete: 'SET NULL' })
    @JoinColumn({
       name: 'question_set_id',
