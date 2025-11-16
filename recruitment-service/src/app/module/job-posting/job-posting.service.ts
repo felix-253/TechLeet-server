@@ -28,14 +28,6 @@ export class JobPostingService {
             }
          }
 
-         // Validate experience range
-         if (createJobPostingDto.minExperience && createJobPostingDto.maxExperience) {
-            if (createJobPostingDto.minExperience > createJobPostingDto.maxExperience) {
-               throw new BadRequestException(
-                  'Minimum experience cannot be greater than maximum experience',
-               );
-            }
-         }
 
          // Validate application deadline is in the future
          const deadline = new Date(createJobPostingDto.applicationDeadline);
@@ -156,15 +148,6 @@ export class JobPostingService {
          throw new BadRequestException('Minimum salary cannot be greater than maximum salary');
       }
 
-      // Validate experience range if both are provided
-      const newMinExp = updateJobPostingDto.minExperience ?? jobPosting.minExperience;
-      const newMaxExp = updateJobPostingDto.maxExperience ?? jobPosting.maxExperience;
-
-      if (newMinExp && newMaxExp && newMinExp > newMaxExp) {
-         throw new BadRequestException(
-            'Minimum experience cannot be greater than maximum experience',
-         );
-      }
 
       // Validate application deadline if provided
       if (updateJobPostingDto.applicationDeadline) {
@@ -300,10 +283,6 @@ export class JobPostingService {
          location: jobPosting.location,
          employmentType: jobPosting.employmentType,
          experienceLevel: jobPosting.experienceLevel,
-         skills: jobPosting.skills,
-         minExperience: jobPosting.minExperience,
-         maxExperience: jobPosting.maxExperience,
-         educationLevel: jobPosting.educationLevel,
          departmentId: jobPosting.departmentId,
          positionId: jobPosting.positionId,
          hiringManagerId: jobPosting.hiringManagerId,

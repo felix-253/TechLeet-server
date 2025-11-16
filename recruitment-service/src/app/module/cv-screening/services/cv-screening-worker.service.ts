@@ -493,15 +493,25 @@ export class CvScreeningWorkerService {
          ...(processedData.skills.tools || []),
       ];
       
+      // Extract skills from requirements if skills field is not set
+      const jobSkills = jobPosting.skills || this.extractSkillsFromRequirements(jobPosting.requirements || '');
+      
       const skillsScore = this.scoringService.calculateSkillsMatchScore(
          allCvSkills,
-         jobPosting.skills || ''
+         jobSkills
       );
 
+      // Map experienceLevel to min/max experience range if minExperience/maxExperience are not set
+      const { minExp, maxExp } = this.mapExperienceLevelToRange(
+         jobPosting.experienceLevel,
+         jobPosting.minExperience,
+         jobPosting.maxExperience
+      );
+      
       const experienceScore = this.scoringService.calculateExperienceMatchScore(
          processedData.totalExperienceYears,
-         jobPosting.minExperience || 0,
-         jobPosting.maxExperience || 10
+         minExp,
+         maxExp
       );
 
       const educationScore = this.scoringService.calculateEducationMatchScore(
@@ -517,17 +527,17 @@ export class CvScreeningWorkerService {
          `[SCORING] CV Skills: [${allCvSkills.slice(0, 10).join(', ')}${allCvSkills.length > 10 ? '...' : ''}]`
       );
       this.logger.log(
-         `[SCORING] Job requires: [${(jobPosting.skills || '').split(/[,;]/).map(s => s.trim()).join(', ')}] → Skills Score: ${(skillsScore * 100).toFixed(1)}%`
+         `[SCORING] Job requires: [${jobSkills.split(/[,;]/).map(s => s.trim()).join(', ')}] → Skills Score: ${(skillsScore * 100).toFixed(1)}%`
       );
       this.logger.log(
          `[SCORING] Education: CV has ${processedData.education.length} entries, Job requires: "${jobPosting.educationLevel || 'none'}" → Education Score: ${(educationScore * 100).toFixed(1)}%`
       );
 
       // Log experience score for debugging
-      const experienceGap = (jobPosting.minExperience || 0) - processedData.totalExperienceYears;
+      const experienceGap = minExp - processedData.totalExperienceYears;
       if (experienceGap > 0) {
          this.logger.log(
-            `Experience gap for Job ${jobPostingId}: CV has ${processedData.totalExperienceYears} years, required ${jobPosting.minExperience || 0}+ years (gap: ${experienceGap} years) → Experience Score: ${(experienceScore * 100).toFixed(1)}%`
+            `Experience gap for Job ${jobPostingId}: CV has ${processedData.totalExperienceYears} years, required ${minExp}+ years (gap: ${experienceGap} years) → Experience Score: ${(experienceScore * 100).toFixed(1)}%`
          );
       }
 
@@ -548,6 +558,70 @@ export class CvScreeningWorkerService {
       }
 
       return scores;
+   }
+
+   /**
+    * Map experienceLevel to min/max experience range
+    * If minExperience/maxExperience are already set, use them
+    * Otherwise, derive from experienceLevel
+    */
+   private mapExperienceLevelToRange(
+      experienceLevel?: string,
+      minExperience?: number,
+      maxExperience?: number
+   ): { minExp: number; maxExp: number } {
+      // If minExperience/maxExperience are already set, use them
+      if (minExperience !== undefined && minExperience !== null) {
+         return {
+            minExp: minExperience,
+            maxExp: maxExperience !== undefined && maxExperience !== null ? maxExperience : 20
+         };
+      }
+
+      // Map experienceLevel to range
+      const levelMap: Record<string, { min: number; max: number }> = {
+         'entry': { min: 0, max: 1 },
+         'junior': { min: 1, max: 3 },
+         'mid': { min: 3, max: 5 },
+         'senior': { min: 5, max: 10 },
+         'lead': { min: 5, max: 15 },
+         'manager': { min: 5, max: 15 }
+      };
+
+      const range = experienceLevel ? levelMap[experienceLevel.toLowerCase()] : null;
+      if (range) {
+         return { minExp: range.min, maxExp: range.max };
+      }
+
+      // Default fallback
+      return { minExp: 0, maxExp: 10 };
+   }
+
+   /**
+    * Extract skills from requirements text
+    * This is a simple extraction - can be enhanced with NLP if needed
+    */
+   private extractSkillsFromRequirements(requirements: string): string {
+      if (!requirements) return '';
+      
+      // Try to extract common technical skills patterns
+      // This is a simple regex-based extraction
+      // For production, consider using NLP or more sophisticated parsing
+      const skillPatterns = [
+         /(?:React|ReactJS|Vue|Angular|Node\.?js|Python|Java|JavaScript|TypeScript|PHP|Ruby|Go|Rust|C\+\+|C#|Swift|Kotlin|Dart)/gi,
+         /(?:MongoDB|PostgreSQL|MySQL|Redis|Elasticsearch|DynamoDB)/gi,
+         /(?:AWS|Azure|GCP|Docker|Kubernetes|Jenkins|Git|CI\/CD)/gi
+      ];
+      
+      const extractedSkills: string[] = [];
+      skillPatterns.forEach(pattern => {
+         const matches = requirements.match(pattern);
+         if (matches) {
+            extractedSkills.push(...matches.map(m => m.trim()));
+         }
+      });
+      
+      return [...new Set(extractedSkills)].join(', '); // Remove duplicates
    }
 
    /**

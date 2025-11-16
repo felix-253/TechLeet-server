@@ -123,46 +123,6 @@ export class CreateJobPostingDto {
    @IsIn(['entry', 'junior', 'senior', 'lead', 'manager'])
    experienceLevel?: string;
 
-   @ApiPropertyOptional({
-      description: 'Required skills (comma-separated)',
-      example: 'React, Node.js, TypeScript, PostgreSQL',
-   })
-   @IsOptional()
-   @IsString()
-   skills?: string;
-
-   @ApiPropertyOptional({
-      description: 'Minimum years of experience required',
-      example: 3,
-      minimum: 0,
-   })
-   @IsOptional()
-   @IsInt()
-   @Min(0)
-   @Type(() => Number)
-   minExperience?: number;
-
-   @ApiPropertyOptional({
-      description: 'Maximum years of experience preferred',
-      example: 8,
-      minimum: 0,
-   })
-   @IsOptional()
-   @IsInt()
-   @Min(0)
-   @Type(() => Number)
-   maxExperience?: number;
-
-   @ApiPropertyOptional({
-      description: 'Education level required',
-      example: 'Bachelor degree in Computer Science',
-      maxLength: 100,
-   })
-   @IsOptional()
-   @IsString()
-   @MaxLength(100)
-   educationLevel?: string;
-
    @ApiProperty({
       description: 'ID of the department (Company Service)',
       example: 1,
@@ -346,46 +306,6 @@ export class UpdateJobPostingDto {
    experienceLevel?: string;
 
    @ApiPropertyOptional({
-      description: 'Required skills (comma-separated)',
-      example: 'React, Node.js, TypeScript, PostgreSQL',
-   })
-   @IsOptional()
-   @IsString()
-   skills?: string;
-
-   @ApiPropertyOptional({
-      description: 'Minimum years of experience required',
-      example: 3,
-      minimum: 0,
-   })
-   @IsOptional()
-   @IsInt()
-   @Min(0)
-   @Type(() => Number)
-   minExperience?: number;
-
-   @ApiPropertyOptional({
-      description: 'Maximum years of experience preferred',
-      example: 8,
-      minimum: 0,
-   })
-   @IsOptional()
-   @IsInt()
-   @Min(0)
-   @Type(() => Number)
-   maxExperience?: number;
-
-   @ApiPropertyOptional({
-      description: 'Education level required',
-      example: 'Bachelor degree in Computer Science',
-      maxLength: 100,
-   })
-   @IsOptional()
-   @IsString()
-   @MaxLength(100)
-   educationLevel?: string;
-
-   @ApiPropertyOptional({
       description: 'ID of the department (Company Service)',
       example: 1,
    })
@@ -533,30 +453,6 @@ export class JobPostingResponseDto {
       example: 'senior',
    })
    experienceLevel?: string;
-
-   @ApiPropertyOptional({
-      description: 'Required skills',
-      example: 'React, Node.js, TypeScript, PostgreSQL',
-   })
-   skills?: string;
-
-   @ApiPropertyOptional({
-      description: 'Minimum years of experience required',
-      example: 3,
-   })
-   minExperience?: number;
-
-   @ApiPropertyOptional({
-      description: 'Maximum years of experience preferred',
-      example: 8,
-   })
-   maxExperience?: number;
-
-   @ApiPropertyOptional({
-      description: 'Education level required',
-      example: 'Bachelor degree in Computer Science',
-   })
-   educationLevel?: string;
 
    @ApiProperty({
       description: 'Department ID',

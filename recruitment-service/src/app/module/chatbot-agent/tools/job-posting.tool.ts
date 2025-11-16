@@ -89,22 +89,6 @@ export class JobPostingTool extends BaseTool {
         enum: ['entry', 'junior', 'senior', 'lead', 'manager'],
         description: 'Experience level required'
       },
-      skills: {
-        type: 'string',
-        description: 'Required skills (comma-separated)'
-      },
-      minExperience: {
-        type: 'number',
-        description: 'Minimum years of experience required'
-      },
-      maxExperience: {
-        type: 'number',
-        description: 'Maximum years of experience preferred'
-      },
-      educationLevel: {
-        type: 'string',
-        description: 'Education level required'
-      },
       isTest: {
         type: 'boolean',
         description: 'Whether this job posting requires a test'
@@ -429,10 +413,6 @@ export class JobPostingTool extends BaseTool {
       benefits: params.benefits,
       employmentType: params.employmentType,
       experienceLevel: params.experienceLevel,
-      skills: params.skills,
-      minExperience: params.minExperience,
-      maxExperience: params.maxExperience,
-      educationLevel: params.educationLevel,
       isTest: params.isTest || false,
       questionSetId: params.questionSetId,
       quantityQuestion: params.quantityQuestion,
