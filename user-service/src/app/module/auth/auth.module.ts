@@ -10,7 +10,6 @@ import { EmployeeEntity } from '@/entities/master/employee.entity';
 import { EmployeeController } from '../employee/employee.controller';
 import { LocalStrategy } from './strategy/local-strategy.strategy';
 import { RefreshStrategy } from './strategy/refresh-strategy.strategy';
-import { SessionEntity } from '@/entities/transaction/session.entity';
 import { EmployeeRepository } from '@/repositories/employee.repository';
 import { PermissionRepository } from '@/repositories/permission.repository';
 import { EmailService } from '@/utils/email/email.service';
@@ -18,7 +17,7 @@ import { EmployeeService } from '../employee/employee.service';
 
 @Module({
    imports: [
-      TypeOrmModule.forFeature([EmployeeEntity, PermissionEntity, SessionEntity]),
+      TypeOrmModule.forFeature([EmployeeEntity, PermissionEntity]),
       PermissionModule,
       JwtCoreModule.register(),
       //repositories
