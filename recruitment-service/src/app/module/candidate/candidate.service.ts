@@ -8,6 +8,8 @@ import {
    CandidateResponseDto,
    GetCandidatesQueryDto
 } from './candidate.dto';
+import { formatDate, getCurrentDateString } from '../../../common/utils';
+import { formatSalary } from '../../../common/utils';
 
 @Injectable()
 export class CandidateService {
@@ -272,27 +274,6 @@ export class CandidateService {
    }
 
    private mapToResponseDto(candidate: CandidateEntity): CandidateResponseDto {
-      // Helper function to safely format dates
-      const formatDate = (date: Date | string | null | undefined): string | undefined => {
-         if (!date) return undefined;
-         try {
-            if (typeof date === 'string') {
-               // If it's already a string, check if it's a valid date string
-               const parsedDate = new Date(date);
-               if (isNaN(parsedDate.getTime())) return undefined;
-               return parsedDate.toISOString().split('T')[0];
-            }
-            if (date instanceof Date) {
-               if (isNaN(date.getTime())) return undefined;
-               return date.toISOString().split('T')[0];
-            }
-            return undefined;
-         } catch (error) {
-            console.error('Error formatting date:', error, 'Date value:', date);
-            return undefined;
-         }
-      };
-
       const getAge = (): number | undefined => {
          if (!candidate.birthDate) return undefined;
          const today = new Date();
@@ -307,7 +288,7 @@ export class CandidateService {
 
       const getFormattedExpectedSalary = (): string | undefined => {
          if (!candidate.expectedSalary) return undefined;
-         return new Intl.NumberFormat('vi-VN').format(candidate.expectedSalary) + ' VND';
+         return formatSalary(candidate.expectedSalary) + ' VND';
       };
 
       return {
@@ -324,7 +305,7 @@ export class CandidateService {
          githubUrl: candidate.githubUrl,
          portfolioUrl: candidate.portfolioUrl,
          status: candidate.status,
-         appliedDate: formatDate(candidate.appliedDate) || new Date().toISOString().split('T')[0],
+         appliedDate: formatDate(candidate.appliedDate) || getCurrentDateString(),
          summary: candidate.summary,
          yearsOfExperience: candidate.yearsOfExperience,
          currentJobTitle: candidate.currentJobTitle,

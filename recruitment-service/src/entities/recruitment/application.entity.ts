@@ -1,6 +1,8 @@
-import { Column, Entity, PrimaryGeneratedColumn, Index, OneToOne, JoinColumn } from 'typeorm';
+import { Column, Entity, PrimaryGeneratedColumn, Index, OneToOne, JoinColumn, ManyToOne } from 'typeorm';
 import { BaseEntity } from '../base/base.entities';
 import { ExaminationEntity } from '../question/examination.entity';
+import { JobPostingEntity } from './job-posting.entity';
+import { CandidateEntity } from './candidate.entity';
 
 @Entity('application')
 @Index(['status'])
@@ -154,23 +156,21 @@ export class ApplicationEntity extends BaseEntity {
    @OneToOne(() => ExaminationEntity, (examination) => examination.application)
    examination: ExaminationEntity;
 
-   // Relationships will be added after all entities are created
-   // @ManyToOne(() => JobPostingEntity, jobPosting => jobPosting.applications, {
-   //    onDelete: 'CASCADE'
-   // })
-   // @JoinColumn({ name: 'jobPostingId' })
-   // jobPosting: JobPostingEntity;
+   // Relationships
+   @ManyToOne(() => JobPostingEntity, (jobPosting) => jobPosting.applications, {
+      onDelete: 'CASCADE',
+   })
+   @JoinColumn({ name: 'jobPostingId' })
+   jobPosting?: JobPostingEntity;
 
-   // @ManyToOne(() => CandidateEntity, candidate => candidate.applications, {
-   //    onDelete: 'CASCADE'
-   // })
-   // @JoinColumn({ name: 'candidateId' })
-   // candidate: CandidateEntity;
+   @ManyToOne(() => CandidateEntity, (candidate) => candidate.applications, {
+      onDelete: 'CASCADE',
+   })
+   @JoinColumn({ name: 'candidateId' })
+   candidate?: CandidateEntity;
 
-   // @OneToMany(() => InterviewEntity, interview => interview.application, {
-   //    cascade: ['soft-remove']
-   // })
-   // interviews: InterviewEntity[];
+   // Note: InterviewEntity uses candidate_id + job_id for linking, not application_id
+   // If direct interview-application relation is needed, add application_id to interviews table
 
    // Computed properties
    get daysSinceApplied(): number {

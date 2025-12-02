@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, FindManyOptions, In, Brackets } from 'typeorm';
+import { Repository, FindManyOptions, In, Brackets, DataSource } from 'typeorm';
 import { ApplicationEntity } from '../../../entities/recruitment/application.entity';
 import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
 import { CandidateEntity } from '../../../entities/recruitment/candidate.entity';
@@ -18,6 +18,8 @@ import { CvScreeningService } from '../cv-screening/cv-screening.service';
 import { InformationService } from '../cv-screening/services/information.service';
 import { RecruitmentEmailService } from '../email/email.service';
 import { QuestionService } from '../question/question.service';
+import { formatDate, getCurrentDateString } from '../../../common/utils';
+import { formatSalary } from '../../../common/utils';
 
 @Injectable()
 export class ApplicationService {
@@ -32,6 +34,7 @@ export class ApplicationService {
       private readonly candidateRepository: Repository<CandidateEntity>,
       @InjectRepository(InterviewEntity)
       private readonly interviewRepository: Repository<InterviewEntity>,
+      private readonly dataSource: DataSource,
       private readonly cvScreeningService: CvScreeningService,
       private readonly informationService: InformationService,
       private readonly recruitmentEmailService: RecruitmentEmailService,
@@ -109,117 +112,116 @@ export class ApplicationService {
    }
 
    async create(createApplicationDto: CreateApplicationDto): Promise<ApplicationResponseDto> {
-      try {
-         // Verify job posting exists and is active
-         const jobPosting = await this.jobPostingRepository.findOne({
-            where: { jobPostingId: createApplicationDto.jobPostingId },
-            relations: ['questionSet'],
-         });
+      // Use transaction to ensure atomicity for database operations
+      const { savedApplication, candidate, jobPosting } = await this.dataSource.transaction(
+         async (manager) => {
+            // Verify job posting exists and is active
+            const jobPosting = await manager.findOne(JobPostingEntity, {
+               where: { jobPostingId: createApplicationDto.jobPostingId },
+               relations: ['questionSet'],
+            });
 
-         if (!jobPosting) {
-            throw new NotFoundException('Job posting not found');
-         }
+            if (!jobPosting) {
+               throw new NotFoundException('Job posting not found');
+            }
 
-         if (jobPosting.status !== 'published') {
-            throw new BadRequestException('Job posting is not published');
-         }
+            if (jobPosting.status !== 'published') {
+               throw new BadRequestException('Job posting is not published');
+            }
 
-         if (new Date(jobPosting.applicationDeadline) <= new Date()) {
-            throw new BadRequestException('Application deadline has passed');
-         }
+            if (new Date(jobPosting.applicationDeadline) <= new Date()) {
+               throw new BadRequestException('Application deadline has passed');
+            }
 
-         // Verify candidate exists
-         const candidate = await this.candidateRepository.findOne({
-            where: { candidateId: createApplicationDto.candidateId },
-         });
+            // Verify candidate exists
+            const candidate = await manager.findOne(CandidateEntity, {
+               where: { candidateId: createApplicationDto.candidateId },
+            });
 
-         if (!candidate) {
-            throw new NotFoundException('Candidate not found');
-         }
+            if (!candidate) {
+               throw new NotFoundException('Candidate not found');
+            }
 
-         // Check if application already exists for this job posting and candidate
-         const existingApplication = await this.applicationRepository.findOne({
-            where: {
+            // Check if application already exists for this job posting and candidate
+            const existingApplication = await manager.findOne(ApplicationEntity, {
+               where: {
+                  jobPostingId: createApplicationDto.jobPostingId,
+                  candidateId: createApplicationDto.candidateId,
+               },
+            });
+
+            if (existingApplication) {
+               throw new BadRequestException('Candidate has already applied for this job posting');
+            }
+
+            // Create application - explicitly exclude status to prevent client manipulation
+            // Extract only allowed fields, explicitly ignore status if present
+            const applicationData: Partial<CreateApplicationDto> = {
                jobPostingId: createApplicationDto.jobPostingId,
                candidateId: createApplicationDto.candidateId,
-            },
-         });
+               coverLetter: createApplicationDto.coverLetter,
+               resumeUrl: createApplicationDto.resumeUrl,
+               expectedStartDate: createApplicationDto.expectedStartDate,
+            };
+            const application = manager.create(ApplicationEntity, {
+               ...applicationData,
+               expectedStartDate: applicationData.expectedStartDate
+                  ? new Date(applicationData.expectedStartDate)
+                  : undefined,
+               status: 'submitted', // Always set to submitted - client cannot override
+               appliedDate: new Date(),
+            });
 
-         if (existingApplication) {
-            throw new BadRequestException('Candidate has already applied for this job posting');
-         }
+            const savedApplication = await manager.save(application);
+            return { savedApplication, candidate, jobPosting };
+         },
+      );
 
-         // Create application - explicitly exclude status to prevent client manipulation
-         // Extract only allowed fields, explicitly ignore status if present
-         const applicationData: Partial<CreateApplicationDto> = {
-            jobPostingId: createApplicationDto.jobPostingId,
-            candidateId: createApplicationDto.candidateId,
-            coverLetter: createApplicationDto.coverLetter,
-            resumeUrl: createApplicationDto.resumeUrl,
-            expectedStartDate: createApplicationDto.expectedStartDate,
-         };
-         const application = this.applicationRepository.create({
-            ...applicationData,
-            expectedStartDate: applicationData.expectedStartDate
-               ? new Date(applicationData.expectedStartDate)
-               : undefined,
-            status: 'submitted', // Always set to submitted - client cannot override
-            appliedDate: new Date(),
-         });
-
-         const savedApplication = await this.applicationRepository.save(application);
-
-         // Trigger CV screening if resume is provided
-         if (savedApplication.resumeUrl) {
-            try {
-               this.logger.log(
-                  `Triggering CV screening for application ${savedApplication.applicationId}`,
-               );
-               await this.cvScreeningService.triggerScreening(savedApplication.applicationId);
-               this.logger.log(
-                  `CV screening triggered successfully for application ${savedApplication.applicationId}`,
-               );
-            } catch (error) {
-               this.logger.error(
-                  `Failed to trigger CV screening for application ${savedApplication.applicationId}: ${error.message}`,
-                  error.stack,
-               );
-               // Don't fail the application creation if screening fails
-            }
-         } else {
-            this.logger.warn(
-               `No resume URL provided for application ${savedApplication.applicationId}, skipping CV screening`,
-            );
-         }
-
-         // Send thank you email to candidate
+      // Trigger CV screening outside transaction (can fail independently)
+      if (savedApplication.resumeUrl) {
          try {
             this.logger.log(
-               `Sending thank you email for application ${savedApplication.applicationId}`,
+               `Triggering CV screening for application ${savedApplication.applicationId}`,
             );
-            await this.recruitmentEmailService.sendApplicationThankYouEmail(
-               candidate,
-               jobPosting,
-               savedApplication,
-            );
+            await this.cvScreeningService.triggerScreening(savedApplication.applicationId);
             this.logger.log(
-               `✅ Thank you email sent successfully for application ${savedApplication.applicationId}`,
+               `CV screening triggered successfully for application ${savedApplication.applicationId}`,
             );
-         } catch (emailError) {
+         } catch (error) {
             this.logger.error(
-               `❌ Failed to send thank you email for application ${savedApplication.applicationId}: ${emailError.message}`,
-               emailError.stack,
+               `Failed to trigger CV screening for application ${savedApplication.applicationId}: ${error.message}`,
+               error.stack,
             );
-            // Don't fail the application creation if email fails
+            // Don't fail the application creation if screening fails
          }
-
-         return this.mapToResponseDto(savedApplication);
-      } catch (error) {
-         if (error instanceof BadRequestException || error instanceof NotFoundException) {
-            throw error;
-         }
-         throw new BadRequestException('Failed to create application', error.message);
+      } else {
+         this.logger.warn(
+            `No resume URL provided for application ${savedApplication.applicationId}, skipping CV screening`,
+         );
       }
+
+      // Send thank you email outside transaction (can fail independently)
+      try {
+         this.logger.log(
+            `Sending thank you email for application ${savedApplication.applicationId}`,
+         );
+         await this.recruitmentEmailService.sendApplicationThankYouEmail(
+            candidate,
+            jobPosting,
+            savedApplication,
+         );
+         this.logger.log(
+            `✅ Thank you email sent successfully for application ${savedApplication.applicationId}`,
+         );
+      } catch (emailError) {
+         this.logger.error(
+            `❌ Failed to send thank you email for application ${savedApplication.applicationId}: ${emailError.message}`,
+            emailError.stack,
+         );
+         // Don't fail the application creation if email fails
+      }
+
+      return this.mapToResponseDto(savedApplication);
    }
 
    async findAll(
@@ -807,27 +809,6 @@ export class ApplicationService {
    }
 
    private mapToResponseDto(application: ApplicationEntity): ApplicationResponseDto {
-      // Helper function to safely format dates
-      const formatDate = (date: Date | string | null | undefined): string | undefined => {
-         if (!date) return undefined;
-         try {
-            if (typeof date === 'string') {
-               // If it's already a string, check if it's a valid date string
-               const parsedDate = new Date(date);
-               if (isNaN(parsedDate.getTime())) return undefined;
-               return parsedDate.toISOString().split('T')[0];
-            }
-            if (date instanceof Date) {
-               if (isNaN(date.getTime())) return undefined;
-               return date.toISOString().split('T')[0];
-            }
-            return undefined;
-         } catch (error) {
-            console.error('Error formatting date:', error, 'Date value:', date);
-            return undefined;
-         }
-      };
-
       const getDaysSinceApplied = (): number => {
          const today = new Date();
          const applied = new Date(application.appliedDate);
@@ -837,7 +818,7 @@ export class ApplicationService {
 
       const getFormattedOfferedSalary = (): string | undefined => {
          if (!application.offeredSalary) return undefined;
-         return new Intl.NumberFormat('vi-VN').format(application.offeredSalary) + ' VND';
+         return formatSalary(application.offeredSalary) + ' VND';
       };
 
       const getIsOfferActive = (): boolean => {
@@ -873,7 +854,7 @@ export class ApplicationService {
          coverLetter: application.coverLetter,
          resumeUrl: application.resumeUrl,
          status: application.status,
-         appliedDate: formatDate(application.appliedDate) || new Date().toISOString().split('T')[0],
+         appliedDate: formatDate(application.appliedDate) || getCurrentDateString(),
          reviewNotes: application.reviewNotes,
          offerDate: formatDate(application.offerDate),
          offeredSalary: application.offeredSalary,

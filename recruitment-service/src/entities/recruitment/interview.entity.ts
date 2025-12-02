@@ -3,11 +3,17 @@ import {
    CreateDateColumn,
    DeleteDateColumn,
    Entity,
+   Index,
    PrimaryGeneratedColumn,
    UpdateDateColumn,
 } from 'typeorm';
 
 @Entity('interviews')
+@Index(['candidate_id'])
+@Index(['job_id'])
+@Index(['status'])
+@Index(['scheduled_at'])
+@Index(['candidate_id', 'job_id'])
 export class InterviewEntity {
    @PrimaryGeneratedColumn()
    interview_id: number;

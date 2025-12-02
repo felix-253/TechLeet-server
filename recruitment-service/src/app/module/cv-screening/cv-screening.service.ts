@@ -45,96 +45,112 @@ export class CvScreeningService {
 
    /**
     * Trigger CV screening for an application with validation
+    * Uses pessimistic locking to prevent race conditions
     */
    async triggerScreening(
       applicationId: number,
       resumePath?: string,
       priority: number = 0
    ): Promise<ScreeningResultDto> {
+      // Input validation (outside transaction)
+      if (!applicationId || applicationId <= 0) {
+         throw new BadRequestException('Invalid application ID provided');
+      }
+
+      if (priority < 0 || priority > 10) {
+         throw new BadRequestException('Priority must be between 0 and 10');
+      }
+
+      this.logger.log(`Triggering CV screening for application ${applicationId} with priority ${priority}`);
+
       try {
-         // Input validation
-         if (!applicationId || applicationId <= 0) {
-            throw new BadRequestException('Invalid application ID provided');
-         }
+         // Use transaction with pessimistic locking to prevent race conditions
+         const result = await this.dataSource.transaction(async (manager) => {
+            // Check if application exists
+            const application = await manager.findOne(ApplicationEntity, {
+               where: { applicationId },
+            });
 
-         if (priority < 0 || priority > 10) {
-            throw new BadRequestException('Priority must be between 0 and 10');
-         }
-
-         this.logger.log(`Triggering CV screening for application ${applicationId} with priority ${priority}`);
-
-         // Check if application exists
-         const application = await this.applicationRepository.findOne({
-            where: { applicationId },
-         });
-
-         if (!application) {
-            throw new CvApplicationNotFoundException(applicationId);
-         }
-
-         if (!application.resumeUrl && !resumePath) {
-            throw new BadRequestException(`No resume URL or path provided for application ${applicationId}`);
-         }
-
-         // Check if screening already exists and is not failed
-         const existingScreening = await this.screeningRepository.findOne({
-            where: { applicationId },
-         });
-
-         if (existingScreening && existingScreening.status !== ScreeningStatus.FAILED) {
-            this.logger.warn(`Screening already exists for application ${applicationId} with status ${existingScreening.status}`);
-            return this.mapToDto(existingScreening);
-         }
-
-         // If screening exists but failed, try to retry the failed job first
-         if (existingScreening && existingScreening.status === ScreeningStatus.FAILED) {
-            this.logger.log(`Retrying failed screening for application ${applicationId}`);
-            const retrySuccess = await this.queueService.retryFailedJobForApplication(applicationId);
-            if (retrySuccess) {
-               this.logger.log(`Successfully retried failed job for application ${applicationId}`);
-               // Update status back to pending
-               existingScreening.status = ScreeningStatus.PENDING;
-               await this.screeningRepository.save(existingScreening);
-               return this.mapToDto(existingScreening);
+            if (!application) {
+               throw new CvApplicationNotFoundException(applicationId);
             }
-            // If retry failed, continue to create new job
-            this.logger.warn(`Could not retry failed job for application ${applicationId}, creating new job instead`);
-         }
 
-         // Add to queue for processing
-         const job = await this.queueService.addCvProcessingJob(
-            {
-               applicationId,
-               jobPostingId: application.jobPostingId,
-               resumeUrl: application.resumeUrl || '',
-               resumePath,
-               priority,
-            },
-            { priority }
-         );
+            if (!application.resumeUrl && !resumePath) {
+               throw new BadRequestException(`No resume URL or path provided for application ${applicationId}`);
+            }
 
-         this.logger.log(`CV screening job ${job.id} added to queue for application ${applicationId}`);
+            // Check if screening already exists with pessimistic lock to prevent duplicates
+            const existingScreening = await manager.findOne(CvScreeningResultEntity, {
+               where: { applicationId },
+               lock: { mode: 'pessimistic_write' },
+            });
 
-         // Create initial screening record with PENDING status
-         let screeningResult = await this.screeningRepository.findOne({
-            where: { applicationId },
-         });
+            if (existingScreening && existingScreening.status !== ScreeningStatus.FAILED) {
+               this.logger.warn(`Screening already exists for application ${applicationId} with status ${existingScreening.status}`);
+               return { screening: existingScreening, shouldAddJob: false, application };
+            }
 
-         if (!screeningResult) {
-            screeningResult = this.screeningRepository.create({
+            // If screening exists but failed, mark for retry
+            if (existingScreening && existingScreening.status === ScreeningStatus.FAILED) {
+               this.logger.log(`Retrying failed screening for application ${applicationId}`);
+               existingScreening.status = ScreeningStatus.PENDING;
+               const updatedScreening = await manager.save(existingScreening);
+               return { screening: updatedScreening, shouldAddJob: true, shouldRetry: true, application };
+            }
+
+            // Create new screening record with PENDING status
+            const screeningResult = manager.create(CvScreeningResultEntity, {
                applicationId,
                jobPostingId: application.jobPostingId,
                status: ScreeningStatus.PENDING,
             });
-            screeningResult = await this.screeningRepository.save(screeningResult);
+            const savedScreening = await manager.save(screeningResult);
+            return { screening: savedScreening, shouldAddJob: true, shouldRetry: false, application };
+         });
+
+         // Add job to queue outside of transaction (queue is external system)
+         if (result.shouldAddJob) {
+            if (result.shouldRetry) {
+               const retrySuccess = await this.queueService.retryFailedJobForApplication(applicationId);
+               if (!retrySuccess) {
+                  this.logger.warn(`Could not retry failed job for application ${applicationId}, creating new job instead`);
+                  await this.addJobToQueue(applicationId, result.application, resumePath, priority);
+               } else {
+                  this.logger.log(`Successfully retried failed job for application ${applicationId}`);
+               }
+            } else {
+               await this.addJobToQueue(applicationId, result.application, resumePath, priority);
+            }
          }
 
-         return this.mapToDto(screeningResult);
+         return this.mapToDto(result.screening);
 
       } catch (error) {
          this.logger.error(`Failed to trigger screening for application ${applicationId}: ${error.message}`, error.stack);
          throw error;
       }
+   }
+
+   /**
+    * Helper to add job to queue
+    */
+   private async addJobToQueue(
+      applicationId: number,
+      application: ApplicationEntity,
+      resumePath: string | undefined,
+      priority: number
+   ): Promise<void> {
+      const job = await this.queueService.addCvProcessingJob(
+         {
+            applicationId,
+            jobPostingId: application.jobPostingId,
+            resumeUrl: application.resumeUrl || '',
+            resumePath,
+            priority,
+         },
+         { priority }
+      );
+      this.logger.log(`CV screening job ${job.id} added to queue for application ${applicationId}`);
    }
 
    /**

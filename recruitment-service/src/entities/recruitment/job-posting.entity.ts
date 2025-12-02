@@ -1,7 +1,8 @@
-import { Column, Entity, PrimaryGeneratedColumn, Index, ManyToOne, JoinColumn } from 'typeorm';
+import { Column, Entity, PrimaryGeneratedColumn, Index, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
 import { BaseEntity } from '../base/base.entities';
 import { FilterScoreEntity } from './filter-score.entity';
 import { QuestionSetEntity } from '../question/question_set.entity';
+import { ApplicationEntity } from './application.entity';
 
 @Entity('job_posting')
 @Index(['title'])
@@ -192,6 +193,10 @@ export class JobPostingEntity extends BaseEntity {
       foreignKeyConstraintName: 'fk_job_posting_question_set',
    })
    questionSet?: QuestionSetEntity;
+
+   // Relations
+   @OneToMany(() => ApplicationEntity, (application) => application.jobPosting)
+   applications?: ApplicationEntity[];
 
    // Computed properties
    get salaryRange(): string | null {

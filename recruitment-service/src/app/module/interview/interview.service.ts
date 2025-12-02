@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { InterviewEntity } from '../../../entities/recruitment/interview.entity';
@@ -13,6 +13,8 @@ import { ApplicationEntity } from '../../../entities/recruitment/application.ent
 
 @Injectable()
 export class InterviewService {
+   private readonly logger = new Logger(InterviewService.name);
+
    constructor(
       @InjectRepository(InterviewEntity)
       private readonly interviewRepository: Repository<InterviewEntity>,
@@ -57,7 +59,7 @@ export class InterviewService {
          createInterviewDto.location,
          notesLink,
       ).catch(error => {
-         console.error('Failed to send interview confirmation email:', error);
+         this.logger.error('Failed to send interview confirmation email:', error);
       });
 
       return savedInterview;
@@ -91,18 +93,17 @@ export class InterviewService {
             await this.applicationRepository.update(application.applicationId, {
                status: newStatus,
             });
-            console.log(
+            this.logger.log(
                `Updated application ${application.applicationId} status to ${newStatus} for candidate ${candidateId}, job ${jobId}`
             );
          } else {
-            console.warn(
+            this.logger.warn(
                `Application not found for candidate ${candidateId}, job ${jobId} - cannot update status`
             );
          }
       } catch (error) {
-         console.error(
-            `Failed to update application status for candidate ${candidateId}, job ${jobId}:`,
-            error
+         this.logger.error(
+            `Failed to update application status for candidate ${candidateId}, job ${jobId}: ${error.message}`
          );
          // Don't throw error - application status update failure shouldn't break interview creation
       }
@@ -127,7 +128,7 @@ export class InterviewService {
          });
 
          if (!candidate) {
-            console.error(`❌ Candidate with ID ${candidateId} not found`);
+            this.logger.error(`Candidate with ID ${candidateId} not found`);
             return;
          }
 
@@ -137,7 +138,7 @@ export class InterviewService {
          });
 
          if (!jobPosting) {
-            console.error(`❌ Job posting with ID ${jobId} not found`);
+            this.logger.error(`Job posting with ID ${jobId} not found`);
             return;
          }
 
@@ -193,12 +194,12 @@ export class InterviewService {
                      },
                   );
                } catch (error) {
-                  console.error(`❌ Failed to send email to interviewer ${interviewerEmails[i]}:`, error);
+                  this.logger.error(`Failed to send email to interviewer ${interviewerEmails[i]}: ${error.message}`);
                }
             }
          }
       } catch (error) {
-         console.error('Error in sendInterviewConfirmationEmailAsync:', error);
+         this.logger.error(`Error in sendInterviewConfirmationEmailAsync: ${error.message}`);
          throw error;
       }
    }
@@ -292,7 +293,7 @@ export class InterviewService {
             previousScheduledAt,
             notesLink,
          ).catch(error => {
-            console.error('Failed to send interview update email:', error);
+            this.logger.error(`Failed to send interview update email: ${error.message}`);
          });
       }
 
@@ -320,7 +321,7 @@ export class InterviewService {
          });
 
          if (!candidate) {
-            console.error(`❌ Candidate with ID ${candidateId} not found`);
+            this.logger.error(`Candidate with ID ${candidateId} not found`);
             return;
          }
 
@@ -330,7 +331,7 @@ export class InterviewService {
          });
 
          if (!jobPosting) {
-            console.error(`❌ Job posting with ID ${jobId} not found`);
+            this.logger.error(`Job posting with ID ${jobId} not found`);
             return;
          }
 
@@ -421,12 +422,12 @@ export class InterviewService {
                      },
                   );
                } catch (error) {
-                  console.error(`❌ Failed to send email to interviewer ${interviewerEmails[i]}:`, error);
+                  this.logger.error(`Failed to send email to interviewer ${interviewerEmails[i]}: ${error.message}`);
                }
             }
          }
       } catch (error) {
-         console.error('Error in sendInterviewUpdateEmailAsync:', error);
+         this.logger.error(`Error in sendInterviewUpdateEmailAsync: ${error.message}`);
          throw error;
       }
    }

@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ApplicationController } from './application.controller';
 import { ApplicationService } from './application.service';
+import { ApplicationStatusService } from './application-status.service';
 import { ApplicationEntity } from '../../../entities/recruitment/application.entity';
 import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
 import { CandidateEntity } from '../../../entities/recruitment/candidate.entity';
@@ -25,7 +26,7 @@ import { QuestionModule } from '../question/question.module';
       QuestionModule,
    ],
    controllers: [ApplicationController],
-   providers: [ApplicationService],
-   exports: [ApplicationService],
+   providers: [ApplicationService, ApplicationStatusService],
+   exports: [ApplicationService, ApplicationStatusService],
 })
 export class ApplicationModule {}

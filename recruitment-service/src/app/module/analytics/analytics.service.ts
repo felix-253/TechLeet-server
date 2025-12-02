@@ -246,50 +246,67 @@ export class AnalyticsService {
          return [];
       }
 
+      // Use single aggregated query instead of N+1 day-by-day queries
+      let rawResults: Array<{ date: string; count: string }> = [];
+      const label = type.charAt(0).toUpperCase() + type.slice(1);
+
+      if (type === 'applications') {
+         rawResults = await this.applicationRepository
+            .createQueryBuilder('app')
+            .select("DATE_TRUNC('day', app.appliedDate)::date", 'date')
+            .addSelect('COUNT(*)', 'count')
+            .where('app.appliedDate BETWEEN :start AND :end', { start, end })
+            .groupBy("DATE_TRUNC('day', app.appliedDate)")
+            .orderBy('date', 'ASC')
+            .getRawMany();
+      } else if (type === 'jobs') {
+         rawResults = await this.jobPostingRepository
+            .createQueryBuilder('job')
+            .select("DATE_TRUNC('day', job.createdAt)::date", 'date')
+            .addSelect('COUNT(*)', 'count')
+            .where('job.createdAt BETWEEN :start AND :end', { start, end })
+            .groupBy("DATE_TRUNC('day', job.createdAt)")
+            .orderBy('date', 'ASC')
+            .getRawMany();
+      } else if (type === 'candidates') {
+         rawResults = await this.candidateRepository
+            .createQueryBuilder('candidate')
+            .select("DATE_TRUNC('day', candidate.createdAt)::date", 'date')
+            .addSelect('COUNT(*)', 'count')
+            .where('candidate.createdAt BETWEEN :start AND :end', { start, end })
+            .groupBy("DATE_TRUNC('day', candidate.createdAt)")
+            .orderBy('date', 'ASC')
+            .getRawMany();
+      } else if (type === 'interviews') {
+         rawResults = await this.interviewRepository
+            .createQueryBuilder('interview')
+            .select("DATE_TRUNC('day', interview.scheduled_at)::date", 'date')
+            .addSelect('COUNT(*)', 'count')
+            .where('interview.scheduled_at BETWEEN :start AND :end', { start, end })
+            .groupBy("DATE_TRUNC('day', interview.scheduled_at)")
+            .orderBy('date', 'ASC')
+            .getRawMany();
+      }
+
+      // Create a map of date -> count for quick lookup
+      const countMap = new Map<string, number>();
+      for (const row of rawResults) {
+         const dateStr = new Date(row.date).toISOString().split('T')[0];
+         countMap.set(dateStr, parseInt(row.count, 10));
+      }
+
+      // Generate complete date range with 0s for missing days
       const trends: TrendDataDto[] = [];
       const currentDate = new Date(start);
       const endDate = new Date(end);
 
       while (currentDate <= endDate) {
-         const dayStart = new Date(currentDate);
-         dayStart.setHours(0, 0, 0, 0);
-         const dayEnd = new Date(currentDate);
-         dayEnd.setHours(23, 59, 59, 999);
-
-         let count = 0;
-
-         if (type === 'applications') {
-            count = await this.applicationRepository.count({
-               where: {
-                  appliedDate: Between(dayStart, dayEnd),
-               },
-            });
-         } else if (type === 'jobs') {
-            count = await this.jobPostingRepository.count({
-               where: {
-                  createdAt: Between(dayStart, dayEnd),
-               },
-            });
-         } else if (type === 'candidates') {
-            count = await this.candidateRepository.count({
-               where: {
-                  createdAt: Between(dayStart, dayEnd),
-               },
-            });
-         } else if (type === 'interviews') {
-            count = await this.interviewRepository.count({
-               where: {
-                  scheduled_at: Between(dayStart, dayEnd),
-               },
-            });
-         }
-
+         const dateStr = currentDate.toISOString().split('T')[0];
          trends.push({
-            date: dayStart.toISOString().split('T')[0],
-            value: count,
-            label: type.charAt(0).toUpperCase() + type.slice(1),
+            date: dateStr,
+            value: countMap.get(dateStr) || 0,
+            label,
          });
-
          currentDate.setDate(currentDate.getDate() + 1);
       }
 

@@ -1,10 +1,13 @@
-import { Column, Entity, PrimaryGeneratedColumn, Index } from 'typeorm';
+import { Column, Entity, PrimaryGeneratedColumn, Index, OneToMany } from 'typeorm';
 import { BaseEntity } from '../base/base.entities';
+import { ApplicationEntity } from './application.entity';
 
 @Entity('candidate')
 @Index(['email'], { unique: true })
 @Index(['phoneNumber'])
 @Index(['status'])
+@Index(['yearsOfExperience'])
+@Index(['appliedDate'])
 export class CandidateEntity extends BaseEntity {
    @PrimaryGeneratedColumn('identity', {
       comment: 'Unique identifier for the candidate'
@@ -233,11 +236,11 @@ export class CandidateEntity extends BaseEntity {
    })
    source?: string;
 
-   // Relationships will be added after ApplicationEntity is created
-   // @OneToMany(() => ApplicationEntity, application => application.candidate, {
-   //    cascade: ['soft-remove']
-   // })
-   // applications: ApplicationEntity[];
+   // Relations
+   @OneToMany(() => ApplicationEntity, (application) => application.candidate, {
+      cascade: ['soft-remove'],
+   })
+   applications?: ApplicationEntity[];
 
    // Computed properties
    get fullName(): string {

@@ -9,6 +9,7 @@ import {
    GetJobPostingsQueryDto,
 } from './job-posting.dto';
 import * as dayjs from 'dayjs';
+import { formatSalaryRange } from '../../../common/utils';
 
 @Injectable()
 export class JobPostingService {
@@ -108,7 +109,7 @@ export class JobPostingService {
       if (Object.keys(whereConditions).length > 0) {
          findOptions.where = whereConditions;
       }
-      console.log(findOptions);
+      // DEBUG: this.logger.debug(JSON.stringify(findOptions, null, 2));
       const [jobPostings, total] = await this.jobPostingRepository.findAndCount(findOptions);
       return {
          data: jobPostings.map((jp) => this.mapToResponseDto(jp)),
@@ -254,21 +255,6 @@ export class JobPostingService {
    }
 
    private mapToResponseDto(jobPosting: JobPostingEntity): JobPostingResponseDto {
-      const formatSalary = (amount: number): string => {
-         return new Intl.NumberFormat('vi-VN').format(amount);
-      };
-
-      const getSalaryRange = (): string | undefined => {
-         if (jobPosting.salaryMin && jobPosting.salaryMax) {
-            return `${formatSalary(jobPosting.salaryMin)} - ${formatSalary(jobPosting.salaryMax)} VND`;
-         } else if (jobPosting.salaryMin) {
-            return `From ${formatSalary(jobPosting.salaryMin)} VND`;
-         } else if (jobPosting.salaryMax) {
-            return `Up to ${formatSalary(jobPosting.salaryMax)} VND`;
-         }
-         return undefined;
-      };
-
       return {
          jobPostingId: jobPosting.jobPostingId,
          title: jobPosting.title,
@@ -289,7 +275,7 @@ export class JobPostingService {
          questionSetId: jobPosting.questionSetId,
          quantityQuestion: jobPosting.quantityQuestion,
          minScore: jobPosting.minScore,
-         salaryRange: getSalaryRange(),
+         salaryRange: formatSalaryRange(jobPosting.salaryMin, jobPosting.salaryMax) || undefined,
          isJobActive:
             jobPosting.status === 'published' &&
             dayjs(jobPosting.applicationDeadline).isAfter(dayjs()),
