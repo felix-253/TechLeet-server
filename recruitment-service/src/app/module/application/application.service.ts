@@ -236,41 +236,102 @@ export class ApplicationService {
          offerStatus,
          sortBy = 'appliedDate',
          sortOrder = 'DESC',
+         keyword,
+         isScreeningCompleted,
+         minScreeningScore,
+         dateFrom,
+         dateTo,
       } = query;
 
-      const findOptions: FindManyOptions<ApplicationEntity> = {
-         skip: page * limit,
-         take: limit,
-         order: { [sortBy]: sortOrder },
-      };
+      const qb = this.applicationRepository
+         .createQueryBuilder('application')
+         .leftJoinAndSelect('application.candidate', 'candidate')
+         .leftJoinAndSelect('application.jobPosting', 'jobPosting');
 
       // Build where conditions
-      const whereConditions: any = {};
-
       if (jobPostingId) {
-         whereConditions.jobPostingId = jobPostingId;
+         qb.andWhere('application.jobPostingId = :jobPostingId', { jobPostingId });
       }
 
       if (candidateId) {
-         whereConditions.candidateId = candidateId;
+         qb.andWhere('application.candidateId = :candidateId', { candidateId });
       }
 
       if (status) {
-         whereConditions.status = status;
+         qb.andWhere('application.status = :status', { status });
       }
 
       if (offerStatus) {
-         whereConditions.offerStatus = offerStatus;
+         qb.andWhere('application.offerStatus = :offerStatus', { offerStatus });
       }
 
-      if (Object.keys(whereConditions).length > 0) {
-         findOptions.where = whereConditions;
+      if (isScreeningCompleted !== undefined) {
+         qb.andWhere('application.isScreeningCompleted = :isScreeningCompleted', { isScreeningCompleted });
       }
 
-      const [applications, total] = await this.applicationRepository.findAndCount(findOptions);
+      if (minScreeningScore !== undefined) {
+         qb.andWhere('application.screeningScore >= :minScreeningScore', { minScreeningScore });
+      }
+
+      if (dateFrom) {
+         qb.andWhere('application.appliedDate >= :dateFrom', { dateFrom });
+      }
+
+      if (dateTo) {
+         qb.andWhere('application.appliedDate <= :dateTo', { dateTo });
+      }
+
+      if (keyword) {
+         qb.andWhere(
+            new Brackets((subQb) => {
+               subQb.where('candidate.firstName ILIKE :keyword', { keyword: `%${keyword}%` })
+                  .orWhere('candidate.lastName ILIKE :keyword', { keyword: `%${keyword}%` })
+                  .orWhere('candidate.email ILIKE :keyword', { keyword: `%${keyword}%` })
+                  .orWhere('jobPosting.title ILIKE :keyword', { keyword: `%${keyword}%` });
+            }),
+         );
+      }
+
+      // Apply sorting
+      if (sortBy === 'appliedDate') {
+         qb.orderBy('application.appliedDate', sortOrder);
+      } else if (sortBy === 'screeningScore') {
+         qb.orderBy('application.screeningScore', sortOrder, 'NULLS LAST');
+      } else if (sortBy === 'applicationId') {
+         qb.orderBy('application.applicationId', sortOrder);
+      } else if (sortBy === 'status') {
+         qb.orderBy('application.status', sortOrder);
+      } else {
+         qb.orderBy('application.appliedDate', sortOrder);
+      }
+
+      // Apply pagination
+      qb.skip(page * limit).take(limit);
+
+      const [applications, total] = await qb.getManyAndCount();
+
+      // Map to DTOs with candidate and jobPosting data
+      const data = applications.map((app) => {
+         const dto = this.mapToResponseDto(app);
+         if (app.candidate) {
+            (dto as any).candidate = {
+               candidateId: app.candidate.candidateId,
+               firstName: app.candidate.firstName,
+               lastName: app.candidate.lastName,
+               email: app.candidate.email,
+            };
+         }
+         if (app.jobPosting) {
+            (dto as any).jobPosting = {
+               jobPostingId: app.jobPosting.jobPostingId,
+               title: app.jobPosting.title,
+            };
+         }
+         return dto;
+      });
 
       return {
-         data: applications.map((app) => this.mapToResponseDto(app)),
+         data,
          total,
       };
    }

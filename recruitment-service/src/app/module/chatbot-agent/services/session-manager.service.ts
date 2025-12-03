@@ -125,13 +125,13 @@ export class SessionManagerService {
       await this.sessionRepository.query(
         `UPDATE chat_session 
          SET messages = (
-           SELECT COALESCE(jsonb_agg(msg ORDER BY idx), '[]'::jsonb)
+           SELECT COALESCE(jsonb_agg(msg ORDER BY idx DESC), '[]'::jsonb)
            FROM (
              SELECT msg, idx
              FROM (
-               SELECT jsonb_array_elements(messages) as msg, 
-                      generate_subscripts(messages, 1) as idx
-               FROM chat_session
+               SELECT msg, ordinality as idx
+               FROM chat_session,
+               jsonb_array_elements(messages) WITH ORDINALITY AS t(msg, ordinality)
                WHERE "sessionId" = $1
              ) existing
              UNION ALL
@@ -140,8 +140,8 @@ export class SessionManagerService {
              LIMIT 100
            ) limited
          ),
-         "lastActiveAt" = CURRENT_TIMESTAMP,
-         "expiresAt" = $3::timestamp
+         last_active_at = CURRENT_TIMESTAMP,
+         expires_at = $3::timestamp
          WHERE "sessionId" = $1`,
         [sessionId, messageJson, expiresAt]
       );

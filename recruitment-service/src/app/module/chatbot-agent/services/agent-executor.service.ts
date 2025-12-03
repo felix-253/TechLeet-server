@@ -373,14 +373,37 @@ Available tools: ${context.availableTools.map((t) => t.name).join(', ')}
 
    /**
     * Build conversation history for Gemini ChatSession
+    * Google Generative AI requires first message to be 'user', not 'model'
     */
    private buildConversationHistory(
       messages: ChatMessage[],
    ): Array<{ role: string; parts: Array<{ text: string }> }> {
-      return messages.slice(-10).map((msg) => ({
-         role: msg.role === 'user' ? 'user' : 'model',
-         parts: [{ text: msg.content }],
-      }));
+      if (!messages || messages.length === 0) {
+         return [];
+      }
+
+      // Take last 10 messages
+      const recentMessages = messages.slice(-10);
+      
+      // Filter and validate: ensure first message is 'user'
+      const validMessages: Array<{ role: string; parts: Array<{ text: string }> }> = [];
+      
+      for (let i = 0; i < recentMessages.length; i++) {
+         const msg = recentMessages[i];
+         const role = msg.role === 'user' ? 'user' : 'model';
+         
+         // If this is the first message and it's not 'user', skip it
+         if (validMessages.length === 0 && role !== 'user') {
+            continue;
+         }
+         
+         validMessages.push({
+            role,
+            parts: [{ text: msg.content }],
+         });
+      }
+
+      return validMessages;
    }
 
    /**

@@ -11,6 +11,7 @@ import { ApplicationEntity } from '../../../entities/recruitment/application.ent
 import { CandidateEntity } from '../../../entities/recruitment/candidate.entity';
 import { InterviewEntity } from '../../../entities/recruitment/interview.entity';
 import { CvEmbeddingEntity } from '../../../entities/recruitment/cv-embedding.entity';
+import { CvScreeningResultEntity } from '../../../entities/recruitment/cv-screening-result.entity';
 import { QuestionSetEntity } from '../../../entities/question/question_set.entity';
 import { QuestionSetItemEntity } from '../../../entities/question/question_set_item.entity';
 import { QuestionEntity } from '../../../entities/question/question.entity';
@@ -35,11 +36,14 @@ import { CalendarTool } from './tools/calendar.tool';
 import { QuestionSetTool } from './tools/question-set.tool';
 import { ReportTool } from './tools/report.tool';
 import { JobContentGenerationTool } from './tools/job-content-generation.tool';
+import { CvScreeningTool } from './tools/cv-screening.tool';
 
 // External services (reuse from existing modules)
 import { CvEmbeddingService } from '../cv-screening/processors/cv-embedding.service';
 import { RecruitmentEmailModule } from '../email/email.module';
 import { AnalyticsModule } from '../analytics/analytics.module';
+import { ApplicationModule } from '../application/application.module';
+import { CvScreeningModule } from '../cv-screening/cv-screening.module';
 
 // Controller
 import { ChatbotAgentController } from './chatbot-agent.controller';
@@ -54,6 +58,7 @@ import { ChatbotAgentController } from './chatbot-agent.controller';
       CandidateEntity,
       InterviewEntity,
       CvEmbeddingEntity,
+      CvScreeningResultEntity,
       QuestionSetEntity,
       QuestionSetItemEntity,
       QuestionEntity,
@@ -62,6 +67,8 @@ import { ChatbotAgentController } from './chatbot-agent.controller';
     ConfigModule,
     RecruitmentEmailModule,
     AnalyticsModule,
+    ApplicationModule,
+    CvScreeningModule,
   ],
   controllers: [ChatbotAgentController],
   providers: [
@@ -87,6 +94,7 @@ import { ChatbotAgentController } from './chatbot-agent.controller';
     QuestionSetTool,
     ReportTool,
     JobContentGenerationTool,
+    CvScreeningTool,
     
     // External services
     CvEmbeddingService,

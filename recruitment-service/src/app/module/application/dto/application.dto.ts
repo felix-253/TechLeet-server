@@ -357,7 +357,7 @@ export class GetApplicationsQueryDto {
    @IsOptional()
    @IsInt()
    @Min(1)
-   @Max(100)
+   @Max(10000)
    @Type(() => Number)
    limit?: number = 10;
 

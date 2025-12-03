@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Not, IsNull } from 'typeorm';
+import * as pgvector from 'pgvector';
 import { RagDocumentEntity, DocumentEntityType } from '../../../../entities/recruitment/rag-document.entity';
 import { CvEmbeddingService } from '../../cv-screening/processors/cv-embedding.service';
 import { MetadataFiltersDto, RetrievalResultDto } from '../dto/session.dto';
@@ -72,6 +73,9 @@ export class RetrieverService {
     const threshold = options.threshold || this.defaultThreshold;
     const filters = options.filters || {};
 
+    // Convert embedding array to PostgreSQL vector format
+    const embeddingVector = pgvector.toSql(queryEmbedding);
+    
     let query = `
       SELECT 
         doc."documentId",
@@ -79,13 +83,13 @@ export class RetrieverService {
         doc.entity_id AS "entityId",
         doc.content,
         doc.metadata,
-        (1 - (doc.embedding <=> $1::vector)) as similarity
+        (1 - (doc.embedding::vector <=> $1::vector)) as similarity
       FROM rag_document doc
       WHERE doc.embedding IS NOT NULL
-        AND (1 - (doc.embedding <=> $1::vector)) >= $2
+        AND (1 - (doc.embedding::vector <=> $1::vector)) >= $2
     `;
 
-    const params: any[] = [queryEmbedding, threshold];
+    const params: any[] = [embeddingVector, threshold];
     let paramIndex = 3;
 
     // Add entity type filter
@@ -129,7 +133,7 @@ export class RetrieverService {
     }
 
     // Order by similarity and limit
-    query += ` ORDER BY doc.embedding <=> $1::vector LIMIT $${paramIndex++}`;
+    query += ` ORDER BY doc.embedding::vector <=> $1::vector LIMIT $${paramIndex++}`;
     params.push(limit);
 
     return { query, params };
