@@ -39,7 +39,7 @@ import * as Joi from 'joi';
             // Google Gemini Configuration
             GEMINI_API_KEY: Joi.string().optional(),
             GEMINI_MODEL: Joi.string().default('gemini-1.5-flash-latest'),
-            GEMINI_EMBEDDING_MODEL: Joi.string().default('text-embedding-004'),
+            GEMINI_EMBEDDING_MODEL: Joi.string().default('gemini-embedding-001'),
             GEMINI_MAX_TOKENS: Joi.number().default(1500),
             GEMINI_TEMPERATURE: Joi.number().default(0.3),
 

@@ -16,7 +16,7 @@ export class CreateChatbotAgentTables1756540878381 implements MigrationInterface
         "content" TEXT NOT NULL,
         "embedding" vector(768),
         "metadata" JSONB,
-        "model" VARCHAR(50) NOT NULL DEFAULT 'text-embedding-004',
+        "model" VARCHAR(50) NOT NULL DEFAULT 'gemini-embedding-001',
         "dimensions" INTEGER NOT NULL DEFAULT 768,
         "created_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         "updated_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP

@@ -27,7 +27,7 @@ export const CV_SCREENING_CONFIG = {
    
    // Model configuration
    MODELS: {
-      EMBEDDING_DEFAULT: 'text-embedding-004',
+      EMBEDDING_DEFAULT: 'gemini-embedding-001',
       EMBEDDING_DIMENSIONS: 768,
    },
    

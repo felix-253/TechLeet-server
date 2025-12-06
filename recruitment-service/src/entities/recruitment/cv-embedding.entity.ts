@@ -75,7 +75,7 @@ export class CvEmbeddingEntity {
    @Column({
       type: 'varchar', // Will be migrated to vector(768) in migration
       nullable: true, // Allow NULL initially, embeddings are generated asynchronously
-      comment: 'Vector embedding of the text (768 dimensions for Gemini text-embedding-004)'
+      comment: 'Vector embedding of the text (768 dimensions for Gemini gemini-embedding-001)'
    })
    @ApiPropertyOptional({
       description: 'Vector embedding of the text',
@@ -87,12 +87,12 @@ export class CvEmbeddingEntity {
       type: 'varchar',
       length: 50,
       nullable: false,
-      default: 'text-embedding-004',
+      default: 'gemini-embedding-001',
       comment: 'Model used to generate the embedding'
    })
    @ApiProperty({
       description: 'Model used to generate the embedding',
-      example: 'text-embedding-004'
+      example: 'gemini-embedding-001'
    })
    model: string;
 
