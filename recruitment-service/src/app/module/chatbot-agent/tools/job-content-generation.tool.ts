@@ -57,6 +57,30 @@ export class JobContentGenerationTool extends BaseTool {
       vacancies: {
         type: 'number',
         description: 'Number of positions to fill'
+      },
+      departmentId: {
+        type: 'number',
+        description: 'Department ID if user provides it or mentions a specific department'
+      },
+      positionId: {
+        type: 'number',
+        description: 'Position ID if user provides it or mentions a specific position'
+      },
+      headquarterId: {
+        type: 'number',
+        description: 'Headquarter/Branch ID if user provides it'
+      },
+      applicationDeadline: {
+        type: 'string',
+        description: 'Application deadline date (YYYY-MM-DD) if user provides it'
+      },
+      positionName: {
+        type: 'string',
+        description: 'Position name if mentioned by user (e.g. "Senior React Developer")'
+      },
+      headquarterName: {
+        type: 'string',
+        description: 'Headquarter/Branch name if mentioned by user (e.g. "TechLeet HCM", "Hà Nội")'
       }
     },
     required: []
@@ -106,55 +130,121 @@ export class JobContentGenerationTool extends BaseTool {
         vacancies: params.vacancies
       });
 
-      // Identify missing fields
+      // 1. Try to assume department from job title if not provided
       const missingFields: string[] = [];
       const questions: string[] = [];
 
-      if (!params.departmentId && !params.departmentName) {
-        missingFields.push('departmentId');
-        questions.push('Bạn muốn chọn phòng ban nào cho vị trí này?');
+      let inferredDepartmentName = '';
+      if (!params.departmentId && !params.departmentName && jobTitle) {
+         inferredDepartmentName = this.inferDepartmentFromTitle(jobTitle);
+         if (inferredDepartmentName) {
+            this.logger.log(`Inferred department '${inferredDepartmentName}' from title '${jobTitle}'`);
+         }
       }
 
-      if (!params.positionId && !params.positionName) {
-        missingFields.push('positionId');
-        questions.push('Bạn muốn chọn vị trí cụ thể nào?');
+      // 2. Identify missing fields
+      // (variables initialized above)
+
+      // 2. Identify missing fields
+      // User requested to skip department/position/location questions and let them fill manually
+      // So we do NOT add them to missingFields anymore.
+      
+      // We still infer department just for logging/internal context if needed, but won't block.
+      if (inferredDepartmentName) {
+         // Optionally we could add this to suggestions if we wanted, but for now we just log
       }
 
-      if (!params.headquarterId) {
-        missingFields.push('headquarterId');
-        questions.push('Bạn muốn chọn chi nhánh làm việc nào?');
-      }
-
-      if (!params.applicationDeadline) {
-        missingFields.push('applicationDeadline');
-        questions.push('Hạn nộp hồ sơ là ngày nào? (định dạng: YYYY-MM-DD)');
-      }
-
-      // Try to suggest department and position if departmentName is provided
+      // 3. Resolve Suggestions (Metadata Lookup)
       let suggestions: any = {};
-      if (params.departmentName) {
+      
+      // A. Department Suggestion
+      const targetDepartmentName = params.departmentName || inferredDepartmentName;
+      let matchedDepartmentId: number | undefined;
+
+      if (targetDepartmentName) {
         try {
           const departments = await this.companyServiceClient.getDepartments();
+          // Find approximate match
           const matchedDept = departments.find(
-            d => d.name.toLowerCase().includes(params.departmentName.toLowerCase())
+            d => d.name.toLowerCase().includes(targetDepartmentName.toLowerCase()) || 
+                 targetDepartmentName.toLowerCase().includes(d.name.toLowerCase())
           );
+          
           if (matchedDept) {
             suggestions.departmentId = matchedDept.departmentId;
-            
-            // Try to get positions for this department
-            const positions = await this.companyServiceClient.getPositionsByDepartment(matchedDept.departmentId);
-            if (positions.length > 0 && params.position) {
-              const matchedPos = positions.find(
-                p => p.name.toLowerCase().includes(params.position.toLowerCase())
-              );
-              if (matchedPos) {
-                suggestions.positionId = matchedPos.positionId;
-              }
-            }
+            matchedDepartmentId = matchedDept.departmentId;
+            this.logger.log(`Matched department '${targetDepartmentName}' to ID ${matchedDept.departmentId}`);
+          } else {
+             // If inferred but no match in DB, we still might want to ask? 
+             // Or just let the frontend handle the name? 
+             // For now, if we inferred it but cant match ID, we might as well ask the user to be sure
+             if (inferredDepartmentName) {
+                // If it was inferred but invalid, treat as missing? 
+                // Or pass the name to the frontend? 
+                // Let's pass the inferred name in suggestions as a fallback if possible? 
+                // The interface expects IDs. 
+                // So if no ID match, we effectively failed the suggestion.
+                // We should add it to missingFields?
+                if (!params.departmentId && !params.departmentName) {
+                   missingFields.push('departmentId');
+                   questions.push(`Bạn có muốn chọn phòng ban là '${inferredDepartmentName}' không? (Không tìm thấy ID tương ứng)`);
+                }
+             }
           }
         } catch (error) {
           this.logger.warn('Failed to fetch departments for suggestions:', error);
         }
+      }
+
+      // B. Position Suggestion (Dependent on Department)
+      // Only if we found a department (either provided or inferred+matched)
+      if (matchedDepartmentId) {
+         try {
+            const positions = await this.companyServiceClient.getPositionsByDepartment(matchedDepartmentId);
+            const positionText = params.positionName || params.position || jobTitle; // Use jobTitle as fallback for position search
+            
+            if (positions.length > 0 && positionText) {
+               // Try to find best match
+               const matchedPos = positions.find(
+                  p => p.name.toLowerCase().includes(positionText.toLowerCase()) ||
+                       positionText.toLowerCase().includes(p.name.toLowerCase())
+               );
+               
+               if (matchedPos) {
+                  suggestions.positionId = matchedPos.positionId;
+                  // If we found a position match, we can remove positionId from missingFields!
+                  const posIndex = missingFields.indexOf('positionId');
+                  if (posIndex > -1) {
+                     missingFields.splice(posIndex, 1);
+                     // Also remove the question
+                     // Note: Removing from questions array by index assumes parallel arrays. 
+                     // Since we push strictly in order, we need to be careful.
+                     // Better to filter questions.
+                     // But questions logic was simple strings.
+                     // Let's just clear the question if we found it.
+                     const qIndex = questions.findIndex(q => q.includes('vị trí'));
+                     if (qIndex > -1) questions.splice(qIndex, 1);
+                  }
+               }
+            }
+         } catch (error) {
+             this.logger.warn('Failed to fetch positions for suggestions:', error);
+         }
+      }
+
+      // C. Headquarter Suggestion
+      if (params.headquarterName) {
+         try {
+            const branches = await this.companyServiceClient.getBranches();
+            const matchedBranch = branches.find(
+               b => b.name.toLowerCase().includes(params.headquarterName.toLowerCase())
+            );
+            if (matchedBranch) {
+               suggestions.headquarterId = matchedBranch.branchId;
+            }
+         } catch (error) {
+            this.logger.warn('Failed to fetch branches for suggestions:', error);
+         }
       }
 
       // Build user-friendly message without showing JSON
@@ -219,11 +309,12 @@ QUAN TRỌNG về phần Yêu cầu (requirements):
   * NodeJS Developer: Node.js, Express.js, RESTful API, Database (MongoDB, PostgreSQL), Git
   * Designer: Adobe Photoshop, Adobe Illustrator, Figma, UI/UX design principles
 - Ví dụ cho Non-Tech jobs:
-  * Senior Accountant: Microsoft Excel (pivot tables, formulas), phần mềm kế toán (QuickBooks, SAP), Chuẩn mực Kế toán Việt Nam (VAS), GAAP/IFRS, báo cáo tài chính, thuế (VAT, Corporate Tax)
-  * HR Manager: HRIS/ATS systems, Luật Lao động Việt Nam, talent acquisition, employer branding
-  * Marketing Manager: Google Analytics, Facebook Ads, SEO tools, content creation, social media management
+    *   Senior Accountant: Microsoft Excel (pivot tables, formulas), phần mềm kế toán (QuickBooks, SAP), Chuẩn mực Kế toán Việt Nam (VAS), GAAP/IFRS, báo cáo tài chính, thuế (VAT, Corporate Tax)
+   *   HR Manager: HRIS/ATS systems, Luật Lao động Việt Nam, talent acquisition, employer branding
+   *   Marketing Manager: Google Analytics, Facebook Ads, SEO tools, content creation, social media management
 - Không chỉ viết chung chung như "có kiến thức về lập trình" hoặc "có kinh nghiệm trong lĩnh vực", mà phải liệt kê CỤ THỂ các công nghệ, phần mềm, tools, chuẩn mực, quy trình chuyên môn cần thiết
 - Sau đó mới thêm các yêu cầu về soft skills (làm việc nhóm, giao tiếp, học hỏi, etc.)
+- Luôn sử dụng tên công ty là "TechLeet" trong nội dung.
 
 Trả lời bằng JSON format với các field: title, description, requirements, benefits, employmentType, experienceLevel, salaryMin, salaryMax, vacancies.`;
 
@@ -358,7 +449,7 @@ Trả lời bằng JSON format với các field: title, description, requirement
     const jobTitle = context.jobTitle || context.position || 'vị trí này';
     const jobType = context.jobType || '';
     
-    let description = `Chúng tôi đang tìm kiếm ${jobTitle} để tham gia vào đội ngũ của chúng tôi.\n\n`;
+    let description = `Tại TechLeet, chúng tôi đang tìm kiếm ${jobTitle} để tham gia vào đội ngũ của chúng tôi.\n\n`;
     
     if (jobType.includes('intern') || jobType.includes('thực tập')) {
       description += `Đây là cơ hội tuyệt vời cho các bạn sinh viên hoặc người mới bắt đầu muốn phát triển kỹ năng trong môi trường chuyên nghiệp.\n\n`;
@@ -787,5 +878,27 @@ Trả lời bằng JSON format với các field: title, description, requirement
     
     return undefined;
   }
-}
 
+  private inferDepartmentFromTitle(title: string): string {
+     const t = title.toLowerCase();
+     if (/(dev|engineer|program|tech|data|software|test|qa|product owner|scrum|mobile|web|fullstack|frontend|backend|system|cloud|security|it)/.test(t)) {
+        return 'Engineering';
+     }
+     if (/(design|ui|ux|art|creative|graphic)/.test(t)) {
+        return 'Design';
+     }
+     if (/(market|social|seo|content|brand|media)/.test(t)) {
+        return 'Marketing';
+     }
+     if (/(sales|biz|business|customer|account|telesale)/.test(t)) {
+        return 'Sales';
+     }
+     if (/(hr|human|recruit|talent|people|admin|office)/.test(t)) {
+        return 'Human Resources';
+     }
+     if (/(finance|accountant|kế toán|audit|tax|treasury)/.test(t)) {
+        return 'Finance';
+     }
+     return '';
+  }
+}

@@ -15,7 +15,7 @@ export class JobPostingTool extends BaseTool {
     properties: {
       action: {
         type: 'string',
-        enum: ['create', 'update', 'delete', 'get', 'list', 'get_stats'],
+        enum: ['update', 'delete', 'get', 'list', 'get_stats'],
         description: 'Action to perform on job postings'
       },
       id: {
@@ -152,8 +152,7 @@ export class JobPostingTool extends BaseTool {
       }
 
       switch (params.action) {
-        case 'create':
-          return await this.createJobPosting(params, context);
+
         case 'update':
           return await this.updateJobPosting(params, context);
         case 'delete':

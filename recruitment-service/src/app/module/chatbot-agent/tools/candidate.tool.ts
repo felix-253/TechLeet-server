@@ -62,6 +62,7 @@ export class CandidateTool extends BaseTool {
         type: 'object',
         description: 'Filters for querying candidates',
         properties: {
+          keyword: { type: 'string', description: 'Search by name or email' },
           skills: { type: 'array', items: { type: 'string' } },
           experience: { type: 'number' },
           location: { type: 'string' },
@@ -88,6 +89,14 @@ export class CandidateTool extends BaseTool {
     }
 
     try {
+      // Auto-resolve ID if missing but name/email provided for get/update/schedule/get_stats
+      if (!params.id && (params.action === 'get' || params.action === 'update' || params.action === 'schedule_interview' || params.action === 'get_stats')) {
+         const resolvedId = await this.resolveCandidateId(params);
+         if (resolvedId) {
+            params.id = resolvedId;
+         }
+      }
+
       switch (params.action) {
         case 'get':
           return await this.getCandidate(params, context);
@@ -107,9 +116,39 @@ export class CandidateTool extends BaseTool {
     }
   }
 
+  private async resolveCandidateId(params: any): Promise<number | null> {
+      // Try to resolve by email first (most precise)
+      if (params.email) {
+          const candidate = await this.candidateRepository.findOne({ where: { email: params.email } });
+          if (candidate) return candidate.candidateId;
+      }
+      
+      // Try by full name or partial name
+      const name = params.name || (params.firstName && params.lastName ? `${params.firstName} ${params.lastName}` : params.firstName || params.lastName);
+      if (name) {
+          const candidates = await this.candidateRepository.createQueryBuilder('c')
+             .where("LOWER(CONCAT(c.firstName, ' ', c.lastName)) LIKE LOWER(:name)", { name: `%${name}%` })
+             .orWhere("LOWER(c.email) LIKE LOWER(:name)", { name: `%${name}%` })
+             .getMany();
+          
+          if (candidates.length === 1) {
+              return candidates[0].candidateId;
+          }
+          // If multiple found, we can't auto-resolve safely without more info, 
+          // but for a chatbot, maybe returning the most recent one is acceptable or just letting the tool fail explicitly later?
+          // Let's return null so the specific method can handle the "missing ID" error or "ambiguous" error.
+      }
+      return null;
+  }
+
   private async getCandidate(params: any, context: ToolContext): Promise<ToolResult> {
     if (!params.id) {
-      return this.createErrorResult('Missing ID', 'Candidate ID is required');
+       // Check if we failed to resolve
+       const name = params.name || params.firstName || params.lastName || params.email;
+       if (name) {
+          return this.createErrorResult('Ambiguous or Not Found', `Could not find a unique candidate matching "${name}". Please be more specific (e.g. provide full email).`);
+       }
+       return this.createErrorResult('Missing ID', 'Candidate ID (or unique Name/Email) is required');
     }
 
     const candidate = await this.candidateRepository.findOne({
@@ -140,7 +179,7 @@ export class CandidateTool extends BaseTool {
 
   private async updateCandidate(params: any, context: ToolContext): Promise<ToolResult> {
     if (!params.id) {
-      return this.createErrorResult('Missing ID', 'Candidate ID is required for update');
+       return this.createErrorResult('Missing ID', 'Candidate ID (or unique Name/Email) is required for update');
     }
 
     const candidate = await this.candidateRepository.findOne({
@@ -176,7 +215,8 @@ export class CandidateTool extends BaseTool {
 
   private async scheduleInterview(params: any, context: ToolContext): Promise<ToolResult> {
     if (!params.id || !params.interviewDetails) {
-      return this.createErrorResult('Missing parameters', 'Candidate ID and interview details are required');
+       if (!params.id) return this.createErrorResult('Missing ID', 'Could not identify candidate. Please provide ID or unique Name.');
+       return this.createErrorResult('Missing parameters', 'Candidate ID and interview details are required');
     }
 
     const candidate = await this.candidateRepository.findOne({
@@ -224,6 +264,9 @@ export class CandidateTool extends BaseTool {
 
     // Apply filters
     if (params.filters) {
+      if (params.filters.keyword) {
+         queryBuilder.andWhere("(LOWER(candidate.firstName) LIKE LOWER(:k) OR LOWER(candidate.lastName) LIKE LOWER(:k) OR LOWER(candidate.email) LIKE LOWER(:k))", { k: `%${params.filters.keyword}%` });
+      }
       if (params.filters.skills && params.filters.skills.length > 0) {
         queryBuilder.andWhere('candidate.skills && :skills', { skills: params.filters.skills });
       }
@@ -299,6 +342,9 @@ export class CandidateTool extends BaseTool {
 
     // Apply search filters
     if (params.filters) {
+       if (params.filters.keyword) {
+           queryBuilder.andWhere("(LOWER(candidate.firstName) LIKE LOWER(:k) OR LOWER(candidate.lastName) LIKE LOWER(:k) OR LOWER(candidate.email) LIKE LOWER(:k))", { k: `%${params.filters.keyword}%` });
+       }
       if (params.filters.skills && params.filters.skills.length > 0) {
         queryBuilder.andWhere('candidate.skills && :skills', { skills: params.filters.skills });
       }

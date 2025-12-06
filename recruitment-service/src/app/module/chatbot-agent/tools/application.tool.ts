@@ -28,6 +28,14 @@ export class ApplicationTool extends BaseTool {
         type: 'number',
         description: 'Job posting ID (for get_by_job)'
       },
+      jobTitle: {
+         type: 'string',
+         description: 'Job title (fuzzy match) for get_by_job'
+      },
+      candidateName: {
+         type: 'string',
+         description: 'Candidate name for get_by_candidate'
+      },
       limit: {
         type: 'number',
         description: 'Maximum number of results to return (for get_by_job, default: all)'
@@ -433,8 +441,24 @@ export class ApplicationTool extends BaseTool {
   }
 
   private async getApplicationsByJob(params: any, context: ToolContext): Promise<ToolResult> {
-    if (!params.jobPostingId) {
-      return this.createErrorResult('Missing jobPostingId', 'Job posting ID is required');
+    if (!params.jobPostingId && !params.jobTitle) {
+      return this.createErrorResult('Missing parameters', 'Job posting ID or Job Title is required');
+    }
+
+    let jobPostingId = params.jobPostingId;
+    if (!jobPostingId && params.jobTitle) {
+        // Resolve job title
+        const jobs = await this.jobPostingRepository.createQueryBuilder('j')
+          .where("LOWER(j.title) LIKE LOWER(:title)", { title: `%${params.jobTitle}%` })
+          .getMany();
+        
+        if (jobs.length === 1) {
+            jobPostingId = jobs[0].jobPostingId;
+        } else if (jobs.length > 1) {
+            return this.createErrorResult('Ambiguous Job Title', `Found ${jobs.length} jobs matching "${params.jobTitle}". Please be more specific.`);
+        } else {
+            return this.createErrorResult('Job Not Found', `No job found matching "${params.jobTitle}"`);
+        }
     }
 
     const sortBy = params.sortBy || 'screeningScore';
@@ -525,23 +549,42 @@ export class ApplicationTool extends BaseTool {
   }
 
   private async getApplicationsByCandidate(params: any, context: ToolContext): Promise<ToolResult> {
-    if (!params.candidateId) {
-      return this.createErrorResult('Missing candidateId', 'Candidate ID is required');
+    if (!params.candidateId && !params.candidateName) {
+      return this.createErrorResult('Missing parameters', 'Candidate ID or Candidate Name is required');
+    }
+
+    let candidateId = params.candidateId;
+    if (!candidateId && params.candidateName) {
+       // Search for candidate by name
+       const candidates = await this.candidateRepository.createQueryBuilder('c')
+         .where("LOWER(CONCAT(c.firstName, ' ', c.lastName)) LIKE LOWER(:name)", { name: `%${params.candidateName}%` })
+         .getMany();
+       
+       if (candidates.length === 1) {
+          candidateId = candidates[0].candidateId;
+       } else if (candidates.length > 1) {
+          return this.createErrorResult('Ambiguous Candidate Name', `Found ${candidates.length} candidates matching "${params.candidateName}". Please provide full name or ID.`);
+       } else {
+          return this.createErrorResult('Candidate Not Found', `No candidate found matching "${params.candidateName}"`);
+       }
     }
 
     const applications = await this.applicationRepository.find({
-      where: { candidateId: params.candidateId },
+      where: { candidateId: candidateId },
       order: { appliedDate: 'DESC' }
     });
 
     const candidate = await this.candidateRepository.findOne({
-      where: { candidateId: params.candidateId }
+      where: { candidateId: candidateId }
     });
 
     // Get job postings for applications
     const jobPostingIds = applications.map(app => app.jobPostingId);
-    const jobPostings = await this.jobPostingRepository.findByIds(jobPostingIds);
-    const jobPostingMap = new Map(jobPostings.map(job => [job.jobPostingId, job]));
+    let jobPostingMap = new Map();
+    if (jobPostingIds.length > 0) {
+      const jobPostings = await this.jobPostingRepository.findByIds(jobPostingIds);
+      jobPostingMap = new Map(jobPostings.map(job => [job.jobPostingId, job]));
+    }
 
     return this.createSuccessResult(
       {
@@ -565,7 +608,7 @@ export class ApplicationTool extends BaseTool {
         }),
         totalApplications: applications.length
       },
-      `Found ${applications.length} applications for candidate ${params.candidateId}`
+      `Found ${applications.length} applications for candidate "${candidate?.firstName} ${candidate?.lastName}"`
     );
   }
 

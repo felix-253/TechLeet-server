@@ -29,12 +29,16 @@ export class RetrieverService {
    */
   async retrieve(query: string, options: RetrievalOptions = {}): Promise<RetrievalResultDto[]> {
     const startTime = Date.now();
+    let queryEmbedding: any = null;
     
     try {
       this.logger.log(`Retrieving documents for query: "${query}"`);
 
       // Generate query embedding
-      const queryEmbedding = await this.cvEmbeddingService.generateEmbedding(query);
+      queryEmbedding = await this.cvEmbeddingService.generateEmbedding(query);
+      const queryDimensions = queryEmbedding.embedding.length;
+      
+      this.logger.log(`Query embedding dimensions: ${queryDimensions}`);
       
       // Build search query with filters
       const searchQuery = this.buildSearchQuery(queryEmbedding.embedding, options);
@@ -53,10 +57,15 @@ export class RetrieverService {
       }));
 
       const processingTime = Date.now() - startTime;
-      this.logger.log(`Retrieved ${formattedResults.length} documents in ${processingTime}ms`);
+      this.logger.log(`Retrieved ${formattedResults.length} documents in ${processingTime}ms (filtered by dimensions: ${queryDimensions})`);
 
       return formattedResults;
     } catch (error) {
+      // Check if error is about dimension mismatch
+      if (error.message && error.message.includes('different vector dimensions')) {
+        const queryDims = queryEmbedding?.embedding?.length || 'unknown';
+        this.logger.warn(`Dimension mismatch detected. Query dimensions: ${queryDims}. This may indicate documents with incompatible embeddings in database.`);
+      }
       this.logger.error(`Retrieval failed for query "${query}":`, error);
       throw error;
     }
@@ -73,6 +82,9 @@ export class RetrieverService {
     const threshold = options.threshold || this.defaultThreshold;
     const filters = options.filters || {};
 
+    // Get query embedding dimensions
+    const queryDimensions = queryEmbedding.length;
+    
     // Convert embedding array to PostgreSQL vector format
     const embeddingVector = pgvector.toSql(queryEmbedding);
     
@@ -86,11 +98,12 @@ export class RetrieverService {
         (1 - (doc.embedding::vector <=> $1::vector)) as similarity
       FROM rag_document doc
       WHERE doc.embedding IS NOT NULL
-        AND (1 - (doc.embedding::vector <=> $1::vector)) >= $2
+        AND doc.dimensions = $2
+        AND (1 - (doc.embedding::vector <=> $1::vector)) >= $3
     `;
 
-    const params: any[] = [embeddingVector, threshold];
-    let paramIndex = 3;
+    const params: any[] = [embeddingVector, queryDimensions, threshold];
+    let paramIndex = 4;
 
     // Add entity type filter
     if (filters.entityTypes && filters.entityTypes.length > 0) {
@@ -296,6 +309,14 @@ export class RetrieverService {
       .groupBy('doc.entityType')
       .getRawMany();
 
+    // Get dimension distribution
+    const dimensionStats = await this.ragDocumentRepository
+      .createQueryBuilder('doc')
+      .select('doc.dimensions, COUNT(*) as count')
+      .where('doc.embedding IS NOT NULL')
+      .groupBy('doc.dimensions')
+      .getRawMany();
+
     return {
       totalDocuments: totalDocs,
       documentsWithEmbeddings: docsWithEmbeddings,
@@ -304,7 +325,47 @@ export class RetrieverService {
         acc[stat.entityType] = parseInt(stat.count);
         return acc;
       }, {}),
+      dimensionDistribution: dimensionStats.reduce((acc, stat) => {
+        acc[stat.dimensions] = parseInt(stat.count);
+        return acc;
+      }, {}),
       lastUpdated: new Date()
+    };
+  }
+
+  /**
+   * Check for documents with incompatible embedding dimensions
+   */
+  async checkDimensionCompatibility(expectedDimensions: number = 768): Promise<{
+    compatible: number;
+    incompatible: number;
+    incompatibleDocs: Array<{ documentId: number; dimensions: number; entityType: string; entityId: number }>;
+  }> {
+    const allDocs = await this.ragDocumentRepository
+      .createQueryBuilder('doc')
+      .select(['doc.documentId', 'doc.dimensions', 'doc.entityType', 'doc.entityId'])
+      .where('doc.embedding IS NOT NULL')
+      .getMany();
+
+    const compatible = allDocs.filter(doc => doc.dimensions === expectedDimensions).length;
+    const incompatible = allDocs.filter(doc => doc.dimensions !== expectedDimensions).length;
+    const incompatibleDocs = allDocs
+      .filter(doc => doc.dimensions !== expectedDimensions)
+      .map(doc => ({
+        documentId: doc.documentId,
+        dimensions: doc.dimensions,
+        entityType: doc.entityType,
+        entityId: doc.entityId
+      }));
+
+    if (incompatible > 0) {
+      this.logger.warn(`Found ${incompatible} documents with incompatible dimensions (expected: ${expectedDimensions})`);
+    }
+
+    return {
+      compatible,
+      incompatible,
+      incompatibleDocs
     };
   }
 }

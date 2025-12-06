@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { CompanyServiceClient } from '../../analytics/company-service.client';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { SessionManagerService } from './session-manager.service';
 import { RetrieverService } from './retriever.service';
@@ -37,6 +38,7 @@ export class AgentExecutorService {
 
    constructor(
       private readonly configService: ConfigService,
+      private readonly companyServiceClient: CompanyServiceClient,
       private readonly sessionManager: SessionManagerService,
       private readonly retriever: RetrieverService,
       private readonly rateLimiter: RateLimiterService,
@@ -173,8 +175,23 @@ export class AgentExecutorService {
       pageContext?: any,
    ): Promise<ChatResponseDto> {
       try {
+         // Fetch company metadata for context
+         let companyMetadata = { departments: [], positions: [], branches: [] };
+         try {
+            const [departments, positions, branches] = await Promise.all([
+               this.companyServiceClient.getDepartments(),
+               this.companyServiceClient.getPositions(),
+               this.companyServiceClient.getBranches() // Assuming getBranches exists or similar
+            ]).catch(() => [[], [], []]); // Fallback to empty if fails
+            
+            // @ts-ignore
+            companyMetadata = { departments, positions, branches };
+         } catch (e) {
+            this.logger.warn('Failed to fetch company metadata for prompt context', e);
+         }
+
          // Build system prompt (include pageContext if available)
-         const systemPrompt = this.buildSystemPrompt(context, pageContext);
+         const systemPrompt = this.buildSystemPrompt(context, pageContext, companyMetadata);
 
          // Get available tools for Gemini function calling
          const tools = context.availableTools.map((tool) => tool.getToolDefinition());
@@ -304,7 +321,7 @@ export class AgentExecutorService {
    /**
     * Build system prompt
     */
-   private buildSystemPrompt(context: AgentContext, pageContext?: any): string {
+   private buildSystemPrompt(context: AgentContext, pageContext?: any, companyMetadata?: any): string {
       const { sessionContext } = context;
 
       let pageContextInfo = '';
@@ -315,6 +332,22 @@ export class AgentExecutorService {
             pageContextInfo += `\n- Khi user yêu cầu tạo job hoặc điền thông tin job, hãy sử dụng tool generate_job_content để tạo nội dung`;
             pageContextInfo += `\n- Sau khi generate, hỏi lại user về các field không thể suy luận: departmentId, positionId, headquarterId, applicationDeadline`;
          }
+      }
+
+      let metadataInfo = '';
+      if (companyMetadata) {
+          if (companyMetadata.departments && companyMetadata.departments.length > 0) {
+              metadataInfo += `\nDanh sách Phòng ban (Department):\n`;
+              metadataInfo += companyMetadata.departments.map((d: any) => `- ${d.name} (ID: ${d.departmentId})`).join('\n');
+          }
+          if (companyMetadata.positions && companyMetadata.positions.length > 0) {
+              metadataInfo += `\n\nDanh sách Vị trí (Position):\n`;
+              metadataInfo += companyMetadata.positions.map((p: any) => `- ${p.name} (ID: ${p.positionId})`).join('\n');
+          }
+          if (companyMetadata.branches && companyMetadata.branches.length > 0) {
+              metadataInfo += `\n\nDanh sách Chi nhánh (Headquarter/Branch):\n`;
+              metadataInfo += companyMetadata.branches.map((b: any) => `- ${b.name} (ID: ${b.branchId || b.id})`).join('\n');
+          }
       }
 
       return `
@@ -342,9 +375,21 @@ Nguyên tắc:
 5. Sử dụng tools để lấy dữ liệu chính xác và cập nhật thông tin
 6. Luôn cung cấp context và giải thích cho các recommendations
 7. Khi user đang ở trang create job và yêu cầu tạo job, sử dụng generate_job_content tool để tạo nội dung
-8. Sau khi generate content, hỏi lại user về các field bắt buộc không thể suy luận (departmentId, positionId, headquarterId, applicationDeadline)
-9. QUAN TRỌNG: KHÔNG BAO GIỜ hiển thị JSON, code blocks với JSON, hoặc raw data structure trong câu trả lời. Chỉ trả lời bằng ngôn ngữ tự nhiên, dễ hiểu. Dữ liệu JSON chỉ dùng để xử lý nội bộ, không hiển thị cho user.
-10. Khi tool trả về kết quả, hãy mô tả kết quả bằng ngôn ngữ tự nhiên thay vì hiển thị raw JSON hoặc data structure.
+8. Sau khi generate content, KHÔNG hỏi thêm về các thông tin còn thiếu (department, position, location...). Hãy để user tự điền thủ công trên form.
+9. QUAN TRỌNG - Xử lý follow-up messages và confirmation:
+   a) Khi user cung cấp thông tin bổ sung, hãy extract và gọi lại tool generate_job_content.
+   b) Khi user xác nhận ngắn gọn (ok, đồng ý), hãy tự động extract thông tin từ history.
+   c) Luôn check conversation history trước khi hỏi lại.
+10. QUAN TRỌNG: 
+    - KHÔNG BAO GIỜ hiển thị JSON, code blocks với JSON, hoặc raw data structure.
+    - KHÔNG BAO GIỜ hiển thị các key kỹ thuật như "departmentId", "positionId" trong câu trả lời.
+11. Khi tool trả về kết quả, hãy mô tả kết quả bằng ngôn ngữ tự nhiên.
+12. Tự động map tên phòng ban/vị trí sang ID:
+    - Sử dụng danh sách Metadata để tìm ID tương ứng.
+    - Nếu không tìm thấy ID, hãy truyền TÊN vào các trường name (departmentName, positionName...).
+
+THÔNG TIN METADATA (Dùng để map Name -> ID):
+${metadataInfo}
 
 Available tools: ${context.availableTools.map((t) => t.name).join(', ')}
     `.trim();
@@ -354,9 +399,59 @@ Available tools: ${context.availableTools.map((t) => t.name).join(', ')}
     * Build user prompt with context
     */
    private buildUserPrompt(query: string, context: AgentContext): string {
-      const { retrievedDocuments } = context;
+      const { retrievedDocuments, conversationHistory } = context;
 
       let prompt = `Truy vấn người dùng: ${query}\n\n`;
+
+      // Check if previous message was about job content generation asking for missing fields
+      const lastAssistantMessage = conversationHistory
+         .filter(m => m.role === 'assistant')
+         .slice(-1)[0];
+      
+      const lastToolCalls = (lastAssistantMessage?.toolCalls as any[]) || [];
+      const lastJobContentToolCall = lastToolCalls.find(
+         (tc: any) => tc && tc.toolName === 'generate_job_content'
+      );
+
+      if (lastJobContentToolCall && lastJobContentToolCall.result) {
+         const toolResult = lastJobContentToolCall.result;
+         const hasMissingFields = toolResult.success && 
+                                  toolResult.data && 
+                                  Array.isArray(toolResult.data.missingFields) &&
+                                  toolResult.data.missingFields.length > 0;
+
+         if (hasMissingFields) {
+            const originalParams = lastJobContentToolCall.parameters || {};
+            const missingFields = toolResult.data.missingFields || [];
+            
+            prompt += `CONTEXT QUAN TRỌNG: Trong conversation trước, bạn đã gọi tool generate_job_content và đã tạo nội dung job posting. Tool đã trả về missingFields và generatedFields.\n\n`;
+            prompt += `Các tham số đã sử dụng lần trước: ${JSON.stringify(originalParams)}\n\n`;
+            if (toolResult.data.generatedFields) {
+               prompt += `Generated fields từ lần trước: ${JSON.stringify(toolResult.data.generatedFields)}\n\n`;
+            }
+            
+            // Map technical field names to friendly names
+            const friendlyMissingFields = missingFields.map(field => {
+               const map: any = {
+                  'departmentId': 'Tên Phòng ban',
+                  'positionId': 'Tên Vị trí',
+                  'headquarterId': 'Chi nhánh/Văn phòng',
+                  'applicationDeadline': 'Hạn nộp hồ sơ'
+               };
+               return map[field] || field;
+            });
+
+            prompt += `Các thông tin còn thiếu: ${friendlyMissingFields.join(', ')}\n\n`;
+            
+            prompt += `User đang phản hồi lại câu hỏi của bạn. Bạn CẦN:\n`;
+            prompt += `1. Đọc message hiện tại của user VÀ xem lại conversation history để tìm thông tin cho các missing fields\n`;
+            prompt += `2. Nếu user đã cung cấp thông tin (ví dụ: "Phòng Engineering", "Vị trí Senior", "TPHCM", "30/4/2025"...), hãy extract giá trị đó\n`;
+            prompt += `3. Gọi lại tool generate_job_content với TẤT CẢ thông tin: các tham số từ lần trước + thông tin mới extract được + thông tin từ conversation history\n`;
+            prompt += `4. LƯU Ý QUAN TRỌNG: Nếu user cung cấp Tên (ví dụ "Phòng Engineering", "HCM"), và bạn KHÔNG THỂ map sang ID chính xác, hãy truyền thẳng giá trị đó vào các trường Name (departmentName, positionName, headquarterName). Tool sẽ tự động xử lý.\n`;
+            prompt += `5. Chỉ khi thực sự KHÔNG tìm thấy thông tin trong toàn bộ conversation, mới hỏi lại user. TUYỆT ĐỐI KHÔNG HỎI ID, HÃY HỎI TÊN VÀ KHÔNG dùng key kỹ thuật (VD: KHÔNG viết "departmentId: ...").\n\n`;
+         }
+      }
+
 
       if (retrievedDocuments.length > 0) {
          prompt += `Thông tin liên quan từ database:\n`;
@@ -370,6 +465,8 @@ Available tools: ${context.availableTools.map((t) => t.name).join(', ')}
 
       return prompt;
    }
+
+
 
    /**
     * Build conversation history for Gemini ChatSession
