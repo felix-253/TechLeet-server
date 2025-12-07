@@ -293,6 +293,24 @@ export class ApplicationResponseDto {
    })
    screeningCompletedAt?: string;
 
+   @ApiPropertyOptional({
+      description: 'AI-generated summary of the CV',
+      example: 'Experienced software engineer...',
+   })
+   aiSummary?: string;
+
+   @ApiPropertyOptional({
+      description: 'Key highlights identified by AI',
+      example: ['Strong technical skills', 'Leadership experience'],
+   })
+   keyHighlights?: string[];
+
+   @ApiPropertyOptional({
+      description: 'Potential concerns identified by AI',
+      example: ['Job hopping', 'Gap in employment'],
+   })
+   concerns?: string[];
+
    // Computed properties
    @ApiPropertyOptional({
       description: 'Days since application was submitted',

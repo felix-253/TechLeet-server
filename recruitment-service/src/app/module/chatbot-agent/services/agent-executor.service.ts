@@ -34,7 +34,7 @@ export interface AgentContext {
 export class AgentExecutorService {
    private readonly logger = new Logger(AgentExecutorService.name);
    private readonly genAI: GoogleGenerativeAI;
-   private readonly defaultModel = 'gemini-2.0-flash';
+   private readonly defaultModel = 'gemini-2.5-flash-lite';
 
    constructor(
       private readonly configService: ConfigService,
@@ -375,21 +375,29 @@ Nguyên tắc:
 5. Sử dụng tools để lấy dữ liệu chính xác và cập nhật thông tin
 6. Luôn cung cấp context và giải thích cho các recommendations
 7. Khi user đang ở trang create job và yêu cầu tạo job, sử dụng generate_job_content tool để tạo nội dung
-8. Sau khi generate content, KHÔNG hỏi thêm về các thông tin còn thiếu (department, position, location...). Hãy để user tự điền thủ công trên form.
+8. Sau khi generate content, hỏi lại user về các field bắt buộc không thể suy luận (departmentId, positionId, headquarterId, applicationDeadline)
 9. QUAN TRỌNG - Xử lý follow-up messages và confirmation:
-   a) Khi user cung cấp thông tin bổ sung, hãy extract và gọi lại tool generate_job_content.
-   b) Khi user xác nhận ngắn gọn (ok, đồng ý), hãy tự động extract thông tin từ history.
-   c) Luôn check conversation history trước khi hỏi lại.
-10. QUAN TRỌNG: 
-    - KHÔNG BAO GIỜ hiển thị JSON, code blocks với JSON, hoặc raw data structure.
-    - KHÔNG BAO GIỜ hiển thị các key kỹ thuật như "departmentId", "positionId" trong câu trả lời.
-11. Khi tool trả về kết quả, hãy mô tả kết quả bằng ngôn ngữ tự nhiên.
+   a) Khi user cung cấp thông tin trong message (ví dụ: "departmentId: 1, positionId: 1, headquarterId: 1, applicationDeadline: 7/12/2025"), bạn PHẢI:
+      - Nhận biết đây là thông tin bổ sung cho request trước đó
+      - Extract các giá trị từ message của user
+      - Gọi lại tool generate_job_content với TẤT CẢ thông tin: thông tin đã generate trước đó + các thông tin mới từ user
+      - KHÔNG hỏi lại từ đầu
+   b) Khi user chỉ nói các từ ngắn như "tạo", "ok", "tiếp tục", "được" (confirmation messages), bạn PHẢI:
+      - Hiểu đây là xác nhận để tiếp tục với context đã có
+      - Tự động extract thông tin từ conversation history (các message trước đó của user)
+      - Nếu đã có đủ thông tin, gọi tool ngay lập tức
+      - Nếu vẫn thiếu, chỉ hỏi về các field còn thiếu, KHÔNG hỏi lại từ đầu
+   c) Luôn check conversation history để tìm thông tin đã được user cung cấp trong các message trước đó
+10. QUAN TRỌNG: KHÔNG BAO GIỜ hiển thị JSON, code blocks với JSON, hoặc raw data structure trong câu trả lời. Chỉ trả lời bằng ngôn ngữ tự nhiên, dễ hiểu. Dữ liệu JSON chỉ dùng để xử lý nội bộ, không hiển thị cho user.
+11. Khi tool trả về kết quả, hãy mô tả kết quả bằng ngôn ngữ tự nhiên thay vì hiển thị raw JSON hoặc data structure.
 12. Tự động map tên phòng ban/vị trí sang ID:
-    - Sử dụng danh sách Metadata để tìm ID tương ứng.
-    - Nếu không tìm thấy ID, hãy truyền TÊN vào các trường name (departmentName, positionName...).
+    - Sử dụng danh sách Metadata dưới đây để tìm ID tương ứng khi user cung cấp tên (ví dụ: "Phòng Engineering" -> departmentId: 1).
+    - Nếu user cung cấp tên gần đúng, hãy tự động suy luận ID hợp lý nhất.
+    - Chỉ hỏi lại nếu không tìm thấy tên phù hợp hoặc có nhiều tên trùng lặp.
 
 THÔNG TIN METADATA (Dùng để map Name -> ID):
 ${metadataInfo}
+
 
 Available tools: ${context.availableTools.map((t) => t.name).join(', ')}
     `.trim();
@@ -424,31 +432,22 @@ Available tools: ${context.availableTools.map((t) => t.name).join(', ')}
             const originalParams = lastJobContentToolCall.parameters || {};
             const missingFields = toolResult.data.missingFields || [];
             
+            // NEW APPROACH: Trust the LLM to extract information/context from conversation history
+            // We just inform the model about the situation and let it do its job
+
             prompt += `CONTEXT QUAN TRỌNG: Trong conversation trước, bạn đã gọi tool generate_job_content và đã tạo nội dung job posting. Tool đã trả về missingFields và generatedFields.\n\n`;
             prompt += `Các tham số đã sử dụng lần trước: ${JSON.stringify(originalParams)}\n\n`;
             if (toolResult.data.generatedFields) {
                prompt += `Generated fields từ lần trước: ${JSON.stringify(toolResult.data.generatedFields)}\n\n`;
             }
-            
-            // Map technical field names to friendly names
-            const friendlyMissingFields = missingFields.map(field => {
-               const map: any = {
-                  'departmentId': 'Tên Phòng ban',
-                  'positionId': 'Tên Vị trí',
-                  'headquarterId': 'Chi nhánh/Văn phòng',
-                  'applicationDeadline': 'Hạn nộp hồ sơ'
-               };
-               return map[field] || field;
-            });
-
-            prompt += `Các thông tin còn thiếu: ${friendlyMissingFields.join(', ')}\n\n`;
+            prompt += `Missing fields cần bổ sung: ${missingFields.join(', ')}\n\n`;
             
             prompt += `User đang phản hồi lại câu hỏi của bạn. Bạn CẦN:\n`;
             prompt += `1. Đọc message hiện tại của user VÀ xem lại conversation history để tìm thông tin cho các missing fields\n`;
             prompt += `2. Nếu user đã cung cấp thông tin (ví dụ: "Phòng Engineering", "Vị trí Senior", "TPHCM", "30/4/2025"...), hãy extract giá trị đó\n`;
             prompt += `3. Gọi lại tool generate_job_content với TẤT CẢ thông tin: các tham số từ lần trước + thông tin mới extract được + thông tin từ conversation history\n`;
-            prompt += `4. LƯU Ý QUAN TRỌNG: Nếu user cung cấp Tên (ví dụ "Phòng Engineering", "HCM"), và bạn KHÔNG THỂ map sang ID chính xác, hãy truyền thẳng giá trị đó vào các trường Name (departmentName, positionName, headquarterName). Tool sẽ tự động xử lý.\n`;
-            prompt += `5. Chỉ khi thực sự KHÔNG tìm thấy thông tin trong toàn bộ conversation, mới hỏi lại user. TUYỆT ĐỐI KHÔNG HỎI ID, HÃY HỎI TÊN VÀ KHÔNG dùng key kỹ thuật (VD: KHÔNG viết "departmentId: ...").\n\n`;
+            prompt += `4. LƯU Ý: Với departmentId/positionId/headquarterId, nếu user đưa tên (text), hãy cố gắng map sang ID nếu có thể, hoặc dùng trường Name tương ứng (departmentName, positionName...) để gọi tool. Tool sẽ tự xử lý suggestions.\n`;
+            prompt += `5. Chỉ khi thực sự KHÔNG tìm thấy thông tin trong toàn bộ conversation, mới hỏi lại user.\n\n`;
          }
       }
 

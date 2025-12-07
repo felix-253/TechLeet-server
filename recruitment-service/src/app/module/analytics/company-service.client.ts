@@ -78,15 +78,13 @@ export class CompanyServiceClient {
             params: { limit: 100 }
          });
 
-         // Check if response.data.data exists and is an array (Paginated response)
-         if (response.data && Array.isArray(response.data.data)) {
+         if (response.data && response.data.data) {
             return response.data.data.map((dept: any) => ({
                departmentId: dept.departmentId || dept.id,
                name: dept.name || dept.departmentName
             }));
          }
 
-         // Check if response.data itself is an array
          if (Array.isArray(response.data)) {
             return response.data.map((dept: any) => ({
                departmentId: dept.departmentId || dept.id,
@@ -110,7 +108,7 @@ export class CompanyServiceClient {
 
          const response = await this.httpClient.get('/positions', { params });
 
-         if (response.data && Array.isArray(response.data.data)) {
+         if (response.data && response.data.data) {
             return response.data.data.map((pos: any) => ({
                positionId: pos.positionId || pos.id,
                name: pos.name || pos.positionName,
@@ -152,22 +150,21 @@ export class CompanyServiceClient {
    }
    async getBranches(): Promise<Array<{ branchId: number; name: string }>> {
       try {
-         // Using /headquarters endpoint as /branches does not exist
-         const response = await this.httpClient.get('/headquarters', {
+         const response = await this.httpClient.get('/branches', {
             params: { limit: 100 }
          });
 
-         if (response.data && Array.isArray(response.data.data)) {
+         if (response.data && response.data.data) {
             return response.data.data.map((branch: any) => ({
-               branchId: branch.headquarterId || branch.id, // mapped from headquarterId
-               name: branch.headquarterName || branch.name || branch.address
+               branchId: branch.branchId || branch.id,
+               name: branch.name || branch.branchName || branch.locationName
             }));
          }
 
          if (Array.isArray(response.data)) {
             return response.data.map((branch: any) => ({
-               branchId: branch.headquarterId || branch.id,
-               name: branch.headquarterName || branch.name || branch.address
+               branchId: branch.branchId || branch.id,
+               name: branch.name || branch.branchName || branch.locationName
             }));
          }
 

@@ -65,7 +65,6 @@ export class InterviewTool extends BaseTool {
         type: 'object',
         description: 'Filters for querying interviews',
         properties: {
-          candidateName: { type: 'string', description: 'Search by candidate name' },
           candidateId: { type: 'number' },
           jobId: { type: 'number' },
           status: { type: 'string' },

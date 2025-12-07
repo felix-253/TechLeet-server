@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import * as fs from 'fs';
+import * as path from 'path';
 import * as crypto from 'crypto';
 import { CvScreeningResultEntity, ScreeningStatus } from '../../../../entities/recruitment/cv-screening-result.entity';
 import { ApplicationEntity } from '../../../../entities/recruitment/application.entity';
@@ -193,7 +194,9 @@ export class CvScreeningWorkerService {
             );
          } catch (error) {
             // Graceful degradation: continue without AI summary
-            this.logger.warn(`AI summary generation failed, continuing with partial results: ${error.message}`);
+            console.log("ERROR", error.message);
+            
+            this.logger.error(`AI summary generation failed, continuing with partial results: ${error.message}`);
             summary = {
                summary: 'AI summary temporarily unavailable',
                keyHighlights: [],
@@ -248,16 +251,7 @@ export class CvScreeningWorkerService {
          const processingTime = Date.now() - startTime;
          this.logger.error(`CV screening failed for application ${applicationId}: ${error.message}`, error.stack);
 
-         // Update screening record with error
-         if (screeningResult) {
-            await this.updateScreeningProgress(screeningResult.screeningId, {
-               status: ScreeningStatus.FAILED,
-               errorMessage: error.message,
-               processingTimeMs: processingTime,
-            });
-         }
-
-         return {
+         const failedResult = {
             screeningId: screeningResult?.screeningId || 0,
             status: ScreeningStatus.FAILED,
             overallScore: 0,
@@ -270,6 +264,28 @@ export class CvScreeningWorkerService {
             processingTimeMs: processingTime,
             error: error.message,
          };
+
+         // Update screening record with error
+         if (screeningResult) {
+            await this.updateScreeningProgress(screeningResult.screeningId, {
+               status: ScreeningStatus.FAILED,
+               errorMessage: error.message,
+               processingTimeMs: processingTime,
+            });
+         }
+
+         // CRITICAL Fix: Also update the application status so it doesn't get stuck in 'submitted'
+         try {
+            await this.updateApplicationScreeningStatus(applicationId, {
+               ...failedResult,
+               status: ScreeningStatus.SCREENING_FAILED // Ensure we explicitly pass SCREENING_FAILED mapping
+            } as any); 
+            this.logger.log(`Updated application ${applicationId} status to failed after screening error`);
+         } catch (updateError) {
+            this.logger.error(`Failed to update application status after screening error: ${updateError.message}`);
+         }
+
+         return failedResult;
       }
    }
 
@@ -332,16 +348,24 @@ export class CvScreeningWorkerService {
       }
 
       // Convert URL to local file path if needed
-      const localFilePath = this.convertUrlToLocalPath(filePath);
+      let localFilePath = this.convertUrlToLocalPath(filePath);
+      
+      // Decode URL encoded characters (e.g. %20 -> space) if any
+      localFilePath = decodeURIComponent(localFilePath);
+      
+      // Resolve to absolute path to avoid cwd issues
+      const absolutePath = path.resolve(process.cwd(), localFilePath);
+      
       this.logger.log(`Converted local file path: ${localFilePath}`);
+      this.logger.log(`Resolved absolute path: ${absolutePath}`);
 
-      // Validate file using utility
-      const validation = FileValidationUtil.validateFile(localFilePath);
+      // Validate file using utility (check absolute path)
+      const validation = FileValidationUtil.validateFile(absolutePath);
       if (!validation.isValid) {
          const errorMsg = validation.error || 'Unknown validation error';
          this.logger.error(`File validation failed: ${errorMsg}`);
          if (errorMsg.includes('not found')) {
-            throw new CvFileNotFoundException(localFilePath, filePath);
+            throw new CvFileNotFoundException(absolutePath, filePath);
          } else if (errorMsg.includes('too large')) {
             throw new CvFileTooLargeException(validation.fileSizeMB || 0, CV_SCREENING_CONFIG.FILE.MAX_SIZE_MB);
          } else {
@@ -349,9 +373,10 @@ export class CvScreeningWorkerService {
          }
       }
 
-      this.logger.log(`Extracting text from file: ${localFilePath} (${(validation.fileSizeMB || 0).toFixed(2)}MB)`);
+      this.logger.log(`Extracting text from file: ${absolutePath} (${(validation.fileSizeMB || 0).toFixed(2)}MB)`);
 
-      const result = await this.textExtractionService.extractTextFromPdf(localFilePath);
+      // Pass absolute path to extraction service
+      const result = await this.textExtractionService.extractTextFromPdf(absolutePath);
       
       // Validate extracted text
       const textValidation = FileValidationUtil.validateExtractedText(result.text);

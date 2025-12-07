@@ -6,6 +6,7 @@ import { JobPostingEntity } from '../../../entities/recruitment/job-posting.enti
 import { CandidateEntity } from '../../../entities/recruitment/candidate.entity';
 import { InterviewEntity } from '../../../entities/recruitment/interview.entity';
 import { ExaminationEntity } from '../../../entities/question/examination.entity';
+import { CvScreeningResultEntity } from '../../../entities/recruitment/cv-screening-result.entity';
 import {
    CreateApplicationDto,
    UpdateApplicationDto,
@@ -340,9 +341,26 @@ export class ApplicationService {
       const row = await this.applicationRepository
          .createQueryBuilder('application')
          .leftJoin('candidate', 'candidate', 'application.candidateId = candidate.candidateId')
-         .select(['row_to_json(application) as application', 'row_to_json(candidate) as candidate'])
+         .leftJoin(
+            CvScreeningResultEntity,
+            'cvScreeningResult',
+            'cvScreeningResult.applicationId = application.applicationId',
+         )
+         .select([
+            'row_to_json(application) as application',
+            'row_to_json(candidate) as candidate',
+            'cvScreeningResult.aiSummary as "aiSummary"',
+            'cvScreeningResult.keyHighlights as "keyHighlights"',
+            'cvScreeningResult.concerns as "concerns"',
+         ])
          .where('application.applicationId = :applicationId', { applicationId })
          .getRawOne();
+
+      if (row && row.application) {
+         row.application.aiSummary = row.aiSummary;
+         row.application.keyHighlights = row.keyHighlights;
+         row.application.concerns = row.concerns;
+      }
 
       return row;
    }
@@ -932,6 +950,10 @@ export class ApplicationService {
                ? application.screeningCompletedAt.toISOString()
                : new Date(application.screeningCompletedAt).toISOString()
             : undefined,
+         aiSummary: (application as any).cvScreeningResult?.aiSummary,
+         keyHighlights: (application as any).cvScreeningResult?.keyHighlights,
+         concerns: (application as any).cvScreeningResult?.concerns,
+
          daysSinceApplied: getDaysSinceApplied(),
          formattedOfferedSalary: getFormattedOfferedSalary(),
          isOfferActive: getIsOfferActive(),
