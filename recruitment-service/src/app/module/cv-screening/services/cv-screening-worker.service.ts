@@ -677,8 +677,8 @@ export class CvScreeningWorkerService {
       try {
          const processingTime = Date.now() - startTime;
 
-         // Normalize overallScore from 0-100 to 0-1 for adaptive threshold
-         const normalizedScore = scores.overallScore / 100;
+         // Use raw overallScore (0-100) for adaptive threshold
+         const scoreForThreshold = scores.overallScore;
 
          // Apply adaptive threshold to determine pass/fail
          let finalStatus: ScreeningStatus;
@@ -694,7 +694,7 @@ export class CvScreeningWorkerService {
             try {
                adaptiveThresholdResult = await this.adaptiveThresholdService.processNewCV(
                   jobPostingId,
-                  normalizedScore
+                  scoreForThreshold
                );
 
                // Set final status based on adaptive threshold decision
@@ -705,7 +705,7 @@ export class CvScreeningWorkerService {
                }
 
                this.logger.log(
-                  `Adaptive Threshold Result for Job ${jobPostingId}: Score ${scores.overallScore.toFixed(2)} (normalized: ${normalizedScore.toFixed(3)}) → ${adaptiveThresholdResult.decision.toUpperCase()} | Threshold: ${adaptiveThresholdResult.newThreshold.toFixed(3)}`
+                  `Adaptive Threshold Result for Job ${jobPostingId}: Score ${scores.overallScore.toFixed(2)} → ${adaptiveThresholdResult.decision.toUpperCase()} | Threshold: ${adaptiveThresholdResult.newThreshold.toFixed(3)}`
                );
             } catch (adaptiveError) {
                // If adaptive threshold fails, fallback to COMPLETED status

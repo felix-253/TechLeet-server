@@ -410,14 +410,14 @@ export class CvScreeningService {
          let adaptiveThresholdResult: IScreeningResult | undefined = undefined;
          if (jobPostingId) {
             try {
-               // Normalize score from 0-100 to 0-1 for adaptive threshold
-               const normalizedScore = actualFitScore / 100;
+               // Use raw score (0-100) for adaptive threshold
+               const scoreForThreshold = actualFitScore;
                adaptiveThresholdResult = await this.adaptiveThresholdService.processNewCV(
                   jobPostingId,
-                  normalizedScore
+                  scoreForThreshold
                );
                this.logger.log(
-                  `[TEST] Adaptive Threshold: Score ${actualFitScore.toFixed(2)} (normalized: ${normalizedScore.toFixed(3)}) → ${adaptiveThresholdResult.decision.toUpperCase()} | Threshold: ${adaptiveThresholdResult.newThreshold.toFixed(3)}`
+                  `[TEST] Adaptive Threshold: Score ${actualFitScore.toFixed(2)} → ${adaptiveThresholdResult.decision.toUpperCase()} | Threshold: ${adaptiveThresholdResult.newThreshold.toFixed(3)}`
                );
             } catch (adaptiveError) {
                this.logger.warn(
