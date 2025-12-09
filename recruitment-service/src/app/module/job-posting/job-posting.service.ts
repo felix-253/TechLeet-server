@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, FindManyOptions, Like, Between } from 'typeorm';
+import { Repository, FindManyOptions, Like, Between, LessThan, In } from 'typeorm';
 import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import {
    CreateJobPostingDto,
    UpdateJobPostingDto,
@@ -252,6 +253,26 @@ export class JobPostingService {
       );
 
       return activeJobPostings.map((jp) => this.mapToResponseDto(jp));
+   }
+
+   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+   async handleJobExpiry() {
+      // Find all published jobs with deadline in the past
+      const expiredJobs = await this.jobPostingRepository.find({
+         where: {
+            status: 'published',
+            applicationDeadline: LessThan(new Date()),
+         },
+      });
+
+      if (expiredJobs.length > 0) {
+         // Update status to closed
+         await this.jobPostingRepository.update(
+            { jobPostingId: In(expiredJobs.map((job) => job.jobPostingId)) },
+            { status: 'closed' },
+         );
+         console.log(`[JobExpiry] Closed ${expiredJobs.length} expired job postings.`);
+      }
    }
 
    private mapToResponseDto(jobPosting: JobPostingEntity): JobPostingResponseDto {

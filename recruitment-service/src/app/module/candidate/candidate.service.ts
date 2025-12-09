@@ -26,7 +26,10 @@ export class CandidateService {
          });
 
          if (existingCandidate) {
-            throw new BadRequestException('Email address already exists');
+            // If candidate exists, we return it so they can proceed with application
+            // Ideally we might want to update their info, but for now we just return the existing record
+            // to unblock the application process.
+            return this.mapToResponseDto(existingCandidate);
          }
 
          // Validate birth date if provided

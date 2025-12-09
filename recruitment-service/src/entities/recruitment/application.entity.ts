@@ -153,6 +153,13 @@ export class ApplicationEntity extends BaseEntity {
    })
    screeningCompletedAt?: Date;
 
+   @Column({
+      type: 'text',
+      nullable: true,
+      comment: 'Error message if screening failed',
+   })
+   screeningError?: string;
+
    @OneToOne(() => ExaminationEntity, (examination) => examination.application)
    examination: ExaminationEntity;
 

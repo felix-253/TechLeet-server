@@ -802,6 +802,7 @@ export class CvScreeningWorkerService {
          screeningStatus: screeningStatus,
          status: applicationStatus,
          screeningCompletedAt: screeningResult.completedAt,
+         screeningError: screeningResult.errorMessage || (screeningResult as any).error,
       });
 
       this.logger.log(
