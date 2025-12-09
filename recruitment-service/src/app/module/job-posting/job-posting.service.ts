@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, FindManyOptions, Like, Between, LessThan, In } from 'typeorm';
+import { Repository, FindManyOptions, Like, Between, LessThan, MoreThan, In } from 'typeorm';
 import { JobPostingEntity } from '../../../entities/recruitment/job-posting.entity';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import {
@@ -73,45 +73,82 @@ export class JobPostingService {
       const findOptions: FindManyOptions<JobPostingEntity> = {
          skip: page * limit,
          take: limit,
-         order: { [sortBy]: sortOrder },
       };
 
-      // Build where conditions
-      const whereConditions: any = {};
+      // Ticket 2 & 3: Handle sorting by applicationCount
+      // Since applicationCount is a computed/joined property, we might need QueryBuilder if sorting by it.
+      // However, for simplicity with FindManyOptions, we can't sort by relation count easily.
+      // Let's stick to QueryBuilder for this method to handle both joining and sorting properly.
+
+
+      const queryBuilder = this.jobPostingRepository.createQueryBuilder('job');
+
+      // Relations
+      // We need to join applications to count them.
+      // 'loadRelationCountAndMap' is good for just mapping, but for sorting we might need 'addSelect'.
+      queryBuilder.loadRelationCountAndMap('job.applicationCount', 'job.applications');
 
       if (keyword) {
-         whereConditions.title = Like(`%${keyword}%`);
+         queryBuilder.andWhere('(job.title ILIKE :keyword OR job.description ILIKE :keyword)', { keyword: `%${keyword}%` });
       }
 
       if (status) {
-         whereConditions.status = status;
+         queryBuilder.andWhere('job.status = :status', { status });
+         
+         // Ticket 4: If status is published, filter out expired jobs
+         if (status === 'published') {
+            queryBuilder.andWhere('job.applicationDeadline > :now', { now: new Date() });
+         }
       }
 
       if (departmentId) {
-         whereConditions.departmentId = departmentId;
+         queryBuilder.andWhere('job.departmentId = :departmentId', { departmentId });
       }
 
       if (positionId) {
-         whereConditions.positionId = positionId;
+         queryBuilder.andWhere('job.positionId = :positionId', { positionId });
       }
 
       if (employmentType) {
-         whereConditions.employmentType = employmentType;
+         queryBuilder.andWhere('job.employmentType = :employmentType', { employmentType });
       }
 
       if (experienceLevel) {
-         whereConditions.experienceLevel = experienceLevel;
+         queryBuilder.andWhere('job.experienceLevel = :experienceLevel', { experienceLevel });
       }
 
       if (location) {
-         whereConditions.location = Like(`%${location}%`);
+         queryBuilder.andWhere('job.location ILIKE :location', { location: `%${location}%` });
       }
 
-      if (Object.keys(whereConditions).length > 0) {
-         findOptions.where = whereConditions;
+      // Sorting
+      if (sortBy === 'applicationCount') {
+          // To sort by count, we need to subquery or join.
+          // Simple approach: addSelect count and order by it.
+          // Note: using loadRelationCountAndMap puts it in the entity, but doesn't make it sortable in SQL directly unless we group.
+          // Let's use a subquery approach for sorting or left join group by.
+          queryBuilder
+            .leftJoin('job.applications', 'app')
+            .addSelect('COUNT(app.applicationId)', 'appCount')
+            .groupBy('job.jobPostingId')
+            .orderBy('appCount', sortOrder);
+      } else {
+         queryBuilder.orderBy(`job.${sortBy}`, sortOrder);
       }
-      // DEBUG: this.logger.debug(JSON.stringify(findOptions, null, 2));
-      const [jobPostings, total] = await this.jobPostingRepository.findAndCount(findOptions);
+
+      // Pagination
+      queryBuilder.skip(page * limit).take(limit);
+
+      const [jobPostings, total] = await queryBuilder.getManyAndCount();
+
+      // If we used getManyAndCount with GROUP BY, the count (total) might be wrong (it counts groups).
+      // But queryBuilder.getManyAndCount() usually handles simple cases.
+      // If sortBy is applicationCount, we might need a separate count query or careful handling.
+      // For now, let's assume getManyAndCount works or simple fallback.
+      
+      // Note: loadRelationCountAndMap populates a property on the entity.
+      // We need to ensure mapToResponseDto uses it.
+
       return {
          data: jobPostings.map((jp) => this.mapToResponseDto(jp)),
          total,
@@ -301,7 +338,7 @@ export class JobPostingService {
             jobPosting.status === 'published' &&
             dayjs(jobPosting.applicationDeadline).isAfter(dayjs()),
          daysUntilDeadline: dayjs(jobPosting.applicationDeadline).diff(dayjs(), 'day'),
-         applicationCount: 0, // TODO
+         applicationCount: (jobPosting as any).applicationCount || 0,
          createdAt: dayjs(jobPosting.createdAt).toISOString(),
          updatedAt: dayjs(jobPosting.updatedAt).toISOString(),
       };

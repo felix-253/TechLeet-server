@@ -608,11 +608,11 @@ export class GetJobPostingsQueryDto {
    @ApiPropertyOptional({
       description: 'Sort field',
       example: 'createdAt',
-      enum: ['jobPostingId', 'title', 'createdAt', 'applicationDeadline', 'status', 'vacancies'],
+      enum: ['jobPostingId', 'title', 'createdAt', 'applicationDeadline', 'status', 'vacancies', 'applicationCount'],
    })
    @IsOptional()
    @IsString()
-   @IsIn(['jobPostingId', 'title', 'createdAt', 'applicationDeadline', 'status', 'vacancies'])
+   @IsIn(['jobPostingId', 'title', 'createdAt', 'applicationDeadline', 'status', 'vacancies', 'applicationCount'])
    sortBy?: string = 'createdAt';
 
    @ApiPropertyOptional({

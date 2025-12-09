@@ -562,11 +562,16 @@ export class AnalyticsService {
                .map((item) => [item.departmentId, parseInt(item.interviewCount || '0', 10)]),
          );
 
+         const departmentsList = await this.companyServiceClient.getDepartments();
+         const departmentNameMap = new Map(
+            departmentsList.map((d) => [d.departmentId, d.name])
+         );
+
          const result: DepartmentStatsDto[] = departmentStats
             .filter((item) => item.departmentId !== null && item.departmentId !== undefined)
             .map((item) => ({
                departmentId: item.departmentId,
-               departmentName: `Department ${item.departmentId}`,
+               departmentName: departmentNameMap.get(item.departmentId) || `Department ${item.departmentId}`,
                jobCount: parseInt(item.jobCount || '0', 10),
                applicationCount: parseInt(item.applicationCount || '0', 10),
                interviewCount: interviewMap.get(item.departmentId) || 0,
