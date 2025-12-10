@@ -5,6 +5,8 @@ import {
    Get,
    Post,
    Put,
+   Delete,
+   Param,
    Query,
    UseGuards,
    UseInterceptors,
@@ -92,5 +94,13 @@ export class EmployeeController {
    @ApiOperation({ summary: 'Generate permission names for existing permissions without names' })
    async generateMissingPermissionNames(): Promise<{ updated: number }> {
       return await this.EmployeeService.generateMissingPermissionNames();
+   }
+
+   @UseGuards(JwtAuthGuard)
+   @Delete(':id')
+   @ApiBearerAuth('token')
+   @ApiOperation({ summary: 'Soft delete employee' })
+   async deleteEmployee(@Param('id') id: number): Promise<void> {
+      return await this.EmployeeService.deleteEmployee(id);
    }
 }

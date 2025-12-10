@@ -70,15 +70,35 @@ export class EmployeeService {
 
          const foundEmployee = await this.employeeRepository.findById(employeeId);
          if (!foundEmployee) throw new NotFoundException('Not found employee');
+
          const permissionEntityList =
             await this.permissionRepository.findPermissionsByListId(permissions);
+
          if (!permissionEntityList || permissionEntityList.length === 0) {
             throw new NotFoundException('No valid permissions found for the provided IDs');
          }
-         const updateResult = await this.employeeRepository.updateEmployee(
-            Object.assign(foundEmployee, ...permissions, dataUpdate),
-         );
+
+         // Update properties
+         Object.assign(foundEmployee, dataUpdate);
+         // Update permissions relationship
+         foundEmployee.permissions = permissionEntityList;
+
+         const updateResult = await this.employeeRepository.updateEmployee(foundEmployee);
          return updateResult;
+      } catch (error) {
+         throw new InternalServerErrorException(error);
+      }
+   }
+
+   async deleteEmployee(id: number): Promise<void> {
+      try {
+         const foundEmployee = await this.employeeRepository.findById(id);
+         if (!foundEmployee) throw new NotFoundException('Not found employee');
+
+         // Soft delete by setting isActive to false and soft removing
+         foundEmployee.isActive = false;
+         await this.employeeRepository.updateEmployee(foundEmployee);
+         await this.employeeRepository.softDelete(id);
       } catch (error) {
          throw new InternalServerErrorException(error);
       }

@@ -145,6 +145,10 @@ export class EmployeeRepository {
       return await this.employeeRepository.save(employee);
    }
 
+   async softDelete(employeeId: number): Promise<void> {
+      await this.employeeRepository.softDelete(employeeId);
+   }
+
    async generateMissingEmployeeCodes(): Promise<number> {
       const employeesWithoutCode = await this.employeeRepository.find({
          where: { employeeCode: null },
@@ -159,7 +163,9 @@ export class EmployeeRepository {
 
          // Try to generate a unique employee code
          while (!isUnique && attempts < 100) {
-            const randomNum = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+            const randomNum = Math.floor(Math.random() * 10000)
+               .toString()
+               .padStart(4, '0');
             employeeCode = `EMP${year}${randomNum}`;
 
             const existing = await this.employeeRepository.findOne({
