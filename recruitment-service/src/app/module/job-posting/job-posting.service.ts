@@ -123,15 +123,11 @@ export class JobPostingService {
 
       // Sorting
       if (sortBy === 'applicationCount') {
-          // To sort by count, we need to subquery or join.
-          // Simple approach: addSelect count and order by it.
-          // Note: using loadRelationCountAndMap puts it in the entity, but doesn't make it sortable in SQL directly unless we group.
-          // Let's use a subquery approach for sorting or left join group by.
-          queryBuilder
+         queryBuilder
             .leftJoin('job.applications', 'app')
-            .addSelect('COUNT(app.applicationId)', 'appCount')
+            .addSelect('COUNT(app.applicationId)', 'app_count')
             .groupBy('job.jobPostingId')
-            .orderBy('appCount', sortOrder);
+            .orderBy('app_count', sortOrder);
       } else {
          queryBuilder.orderBy(`job.${sortBy}`, sortOrder);
       }

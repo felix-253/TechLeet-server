@@ -3,6 +3,7 @@ import { BaseEntity } from '../base/base.entities';
 import { ExaminationEntity } from '../question/examination.entity';
 import { JobPostingEntity } from './job-posting.entity';
 import { CandidateEntity } from './candidate.entity';
+import { CvScreeningResultEntity } from './cv-screening-result.entity';
 
 @Entity('application')
 @Index(['status'])
@@ -159,6 +160,11 @@ export class ApplicationEntity extends BaseEntity {
       comment: 'Error message if screening failed',
    })
    screeningError?: string;
+
+   // CV screening relation (no new FK, maps to existing applicationId)
+   @OneToOne(() => CvScreeningResultEntity, { createForeignKeyConstraints: false })
+   @JoinColumn({ name: 'applicationId', referencedColumnName: 'applicationId' })
+   cvScreeningResult?: CvScreeningResultEntity;
 
    @OneToOne(() => ExaminationEntity, (examination) => examination.application)
    examination: ExaminationEntity;

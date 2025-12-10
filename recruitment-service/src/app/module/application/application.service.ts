@@ -247,7 +247,8 @@ export class ApplicationService {
       const qb = this.applicationRepository
          .createQueryBuilder('application')
          .leftJoinAndSelect('application.candidate', 'candidate')
-         .leftJoinAndSelect('application.jobPosting', 'jobPosting');
+         .leftJoinAndSelect('application.jobPosting', 'jobPosting')
+         .leftJoinAndSelect('application.cvScreeningResult', 'cvScreeningResult');
 
       // Build where conditions
       if (jobPostingId) {
