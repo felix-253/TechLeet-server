@@ -4,7 +4,7 @@ import {
    Controller,
    Get,
    Post,
-   Put,
+   Patch,
    Delete,
    Param,
    Query,
@@ -65,7 +65,7 @@ export class EmployeeController {
    }
 
    @UseGuards(JwtAuthGuard)
-   @Put('')
+   @Patch('')
    @ApiBearerAuth('token')
    @ApiBody({
       description: 'Update new employee by role admin',

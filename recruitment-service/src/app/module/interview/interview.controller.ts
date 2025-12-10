@@ -1,7 +1,6 @@
 import {
    Controller,
    Post,
-   Put,
    Patch,
    Delete,
    Get,
@@ -28,7 +27,7 @@ export class InterviewController {
       return this.interviewService.createInterview(createInterviewDto);
    }
 
-   @Put(':id')
+   @Patch(':id')
    @ApiOperation({ summary: 'Update interview' })
    @ApiParam({ name: 'id', description: 'Interview ID' })
    @ApiBody({ type: UpdateInterviewDto })
@@ -107,10 +106,7 @@ export class InterviewController {
          required: ['notes'],
       },
    })
-   async updateInterviewNotes(
-      @Param('id', ParseIntPipe) id: number,
-      @Body('notes') notes: string,
-   ) {
+   async updateInterviewNotes(@Param('id', ParseIntPipe) id: number, @Body('notes') notes: string) {
       return this.interviewService.updateInterviewNotes(id, notes);
    }
 

@@ -2,7 +2,7 @@ import {
    Controller,
    Get,
    Post,
-   Put,
+   Patch,
    Delete,
    Body,
    Param,
@@ -52,7 +52,7 @@ export class QuestionController {
       return this.questionService.createQuestion(dto);
    }
 
-   @Put('questions/:id')
+   @Patch('questions/:id')
    async updateQuestion(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateQuestionDto) {
       return this.questionService.updateQuestion(id, dto);
    }
@@ -91,7 +91,7 @@ export class QuestionController {
       return this.questionService.createQuestionSet(dto);
    }
 
-   @Put('question-sets/:id')
+   @Patch('question-sets/:id')
    async updateQuestionSet(
       @Param('id', ParseIntPipe) id: number,
       @Body() dto: UpdateQuestionSetDto,
@@ -135,7 +135,7 @@ export class QuestionController {
       return this.questionService.getExaminationDetail(id);
    }
 
-   @Put('examinations/score/:id')
+   @Patch('examinations/score/:id')
    async updateExamScore(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateScoreDto) {
       return this.questionService.updateExamScore(id, dto);
    }
