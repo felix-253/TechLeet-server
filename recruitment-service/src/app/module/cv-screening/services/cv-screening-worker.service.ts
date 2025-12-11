@@ -468,19 +468,10 @@ export class CvScreeningWorkerService {
     * - Significant cost reduction
     */
    private async ensureJobEmbedding(jobPostingId: number, jobPosting: JobPostingEntity) {
-      // Check cache first (database lookup)
-      const existingEmbedding = await this.embeddingService.getEmbedding(jobPostingId);
-
-      if (existingEmbedding) {
-         this.logger.log(`Using cached job embedding for job posting ${jobPostingId}`);
-         return existingEmbedding;
-      }
-
-      // Create job description text for embedding
+      // Always check by jobPostingId + type (avoid treating embeddingId as cache hit)
       const jobText = JobDescriptionUtil.createJobDescriptionText(jobPosting);
 
-      this.logger.log(`Generating new job embedding for job posting ${jobPostingId}`);
-      return this.embeddingService.generateAndStoreJobEmbedding(
+      return this.embeddingService.ensureJobEmbedding(
          jobPostingId,
          jobText,
          EmbeddingType.JOB_DESCRIPTION
