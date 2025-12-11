@@ -122,29 +122,9 @@ export class JobContentGenerationTool extends BaseTool {
         vacancies: params.vacancies
       });
 
-      // Identify missing fields
+      // Do not prompt user for additional structured fields here
       const missingFields: string[] = [];
       const questions: string[] = [];
-
-      if (!params.departmentId && !params.departmentName) {
-        missingFields.push('departmentId');
-        questions.push('Bạn muốn chọn phòng ban nào cho vị trí này?');
-      }
-
-      if (!params.positionId && !params.positionName) {
-        missingFields.push('positionId');
-        questions.push('Bạn muốn chọn vị trí cụ thể nào?');
-      }
-
-      if (!params.headquarterId) {
-        missingFields.push('headquarterId');
-        questions.push('Bạn muốn chọn chi nhánh làm việc nào?');
-      }
-
-      if (!params.applicationDeadline) {
-        missingFields.push('applicationDeadline');
-        questions.push('Hạn nộp hồ sơ là ngày nào? (định dạng: YYYY-MM-DD)');
-      }
 
       // Try to suggest department and position if departmentName is provided
       let suggestions: any = {};
@@ -262,16 +242,7 @@ Trả lời bằng JSON format với các field: title, description, requirement
 
       // Validate and normalize
       // If AI didn't generate requirements or generated generic ones, use fallback
-      let requirements = parsed.requirements;
-      
-      // Convert requirements to string if needed
-      if (requirements && typeof requirements !== 'string') {
-        if (Array.isArray(requirements)) {
-          requirements = requirements.join('\n');
-        } else {
-          requirements = String(requirements);
-        }
-      }
+      let requirements = this.normalizeRequirements(parsed.requirements);
       
       // Check if this is a tech job or non-tech job
       const jobTitle = (context.jobTitle || context.position || '').toLowerCase();
@@ -279,7 +250,7 @@ Trả lời bằng JSON format với các field: title, description, requirement
       
       // For non-tech jobs, trust AI more - only use fallback if completely empty or very generic
       // For tech jobs, use stricter validation
-      if (!requirements) {
+      if (!requirements || !requirements.trim()) {
         requirements = this.generateDefaultRequirements(context);
       } else if (isTechJob && this.isGenericRequirements(requirements)) {
         // Only check generic for tech jobs
@@ -428,6 +399,121 @@ Trả lời bằng JSON format với các field: title, description, requirement
     requirements += `- Kỹ năng giải quyết vấn đề tốt\n`;
     
     return requirements;
+  }
+
+  private normalizeRequirements(requirements: any): string {
+    if (!requirements) return '';
+    if (typeof requirements === 'string') return requirements.trim();
+    
+    if (Array.isArray(requirements)) {
+      const lines = requirements
+        .map(req => this.normalizeRequirementItem(req))
+        .filter(line => line.length > 0);
+      
+      return lines.length
+        ? lines.map(line => line.startsWith('-') ? line : `- ${line}`).join('\n')
+        : '';
+    }
+    
+    if (typeof requirements === 'object') {
+      const sections = Object.entries(requirements)
+        .map(([key, value]) => {
+          const formattedValue = this.formatRequirementValue(value);
+          if (!formattedValue) return '';
+          
+          const title = this.formatRequirementKey(key);
+          return title ? `${title}:\n${formattedValue}` : formattedValue;
+        })
+        .filter(section => section.length > 0);
+      
+      if (sections.length > 0) {
+        return sections.join('\n');
+      }
+      
+      // Fall back to pretty JSON to avoid [object Object]
+      return JSON.stringify(requirements, null, 2);
+    }
+    
+    return String(requirements);
+  }
+
+  private normalizeRequirementItem(item: any): string {
+    if (item === null || item === undefined) return '';
+    if (typeof item === 'string') return item.trim();
+    
+    if (Array.isArray(item)) {
+      return item
+        .map(value => this.normalizeRequirementItem(value))
+        .filter(v => v.length > 0)
+        .join(', ');
+    }
+    
+    if (typeof item === 'object') {
+      const parts = Object.entries(item)
+        .map(([key, value]) => {
+          const normalized = this.normalizeRequirementItem(value);
+          if (!normalized) return '';
+          
+          const title = this.formatRequirementKey(key);
+          return title ? `${title}: ${normalized}` : normalized;
+        })
+        .filter(Boolean);
+      
+      return parts.join(', ');
+    }
+    
+    return String(item);
+  }
+
+  private formatRequirementValue(value: any): string {
+    if (value === null || value === undefined) return '';
+    
+    if (typeof value === 'string') {
+      const lines = value
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean);
+      
+      return lines.map(line => line.startsWith('-') ? line : `- ${line}`).join('\n');
+    }
+    
+    if (Array.isArray(value)) {
+      const lines = value
+        .map(item => this.normalizeRequirementItem(item))
+        .filter(line => line.length > 0);
+      
+      return lines.length
+        ? lines.map(line => line.startsWith('-') ? line : `- ${line}`).join('\n')
+        : '';
+    }
+    
+    if (typeof value === 'object') {
+      const lines = Object.entries(value)
+        .map(([key, val]) => {
+          const normalized = this.normalizeRequirementItem(val);
+          if (!normalized) return '';
+          
+          const title = this.formatRequirementKey(key);
+          return title ? `- ${title}: ${normalized}` : `- ${normalized}`;
+        })
+        .filter(Boolean);
+      
+      return lines.join('\n');
+    }
+    
+    return `- ${String(value)}`;
+  }
+
+  private formatRequirementKey(key: string): string {
+    if (!key) return '';
+    
+    const spaced = key
+      .replace(/([A-Z])/g, ' $1')
+      .replace(/_/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    return spaced.charAt(0).toUpperCase() + spaced.slice(1);
   }
 
   private isTechJob(jobTitle: string): boolean {
