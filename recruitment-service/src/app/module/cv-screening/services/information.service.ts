@@ -159,6 +159,7 @@ export class InformationService {
                jobPostingId,
                processedData,
                aiAnalysis,
+               pdfFilePath, // ✅ Truyền pdfFilePath để lưu vào resumeUrl
             );
             this.logger.log(`Đã tạo application với ID: ${application.applicationId}`);
          }
@@ -502,13 +503,14 @@ export class InformationService {
       jobPostingId: number,
       processedData: ProcessedCvData,
       aiAnalysis?: any,
+      pdfFilePath?: string, // ✅ Thêm tham số pdfFilePath
    ): Promise<ApplicationEntity> {
      try {
         // Delegate to ApplicationService to handle business rules and side effects
         const dto = {
            jobPostingId,
            candidateId,
-           resumeUrl: '',
+           resumeUrl: pdfFilePath || '', // ✅ Sử dụng pdfFilePath thay vì empty string
            coverLetter: aiAnalysis?.summary || undefined,
         };
 
