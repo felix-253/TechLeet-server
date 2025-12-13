@@ -107,7 +107,7 @@ export class ApplicationController {
    @Get('interview-requests')
    @ApiOperation({
       summary: 'Get applications that need interview scheduling',
-      description: 'Returns applications with status=screening_passed that don\'t have a scheduled interview yet',
+      description: 'Returns applications with status=screening_passed or passed_exam that don\'t have a scheduled interview yet',
    })
    @ApiQuery({
       name: 'page',

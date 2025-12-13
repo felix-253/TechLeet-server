@@ -762,7 +762,7 @@ export class ApplicationService {
 
    /**
     * Find applications that need interview scheduling
-    * Returns applications with status='screening_passed' that don't have a scheduled interview yet
+    * Returns applications with status='screening_passed' or 'passed_exam' that don't have a scheduled interview yet
     */
    async findInterviewRequests(query?: {
       page?: number;
@@ -773,7 +773,7 @@ export class ApplicationService {
       const page = query?.page || 0;
       const limit = query?.limit || 20;
 
-      // Use query builder to find applications with status='screening_passed'
+      // Use query builder to find applications with status='screening_passed' or 'passed_exam'
       // that don't have a scheduled interview (no interview OR interview.status='pending')
       // AND if job has test, examination must be completed and passed
       const qb = this.applicationRepository
@@ -793,7 +793,7 @@ export class ApplicationService {
             'examination',
             'examination.applicationId = application.applicationId',
          )
-         .where('application.status = :status', { status: 'screening_passed' })
+         .where('application.status IN (:...statuses)', { statuses: ['screening_passed', 'passed_exam'] })
          .andWhere('(interview.interview_id IS NULL OR interview.status = :pendingStatus)', {
             pendingStatus: 'pending',
          })
