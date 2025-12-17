@@ -3,12 +3,22 @@ hide footbox
 skinparam ParticipantPadding 10
 skinparam BoxPadding 5
 
+
+
+' --- CẤU HÌNH FONT SIZE 20 ---
+skinparam DefaultFontSize 20
+skinparam ActorFontSize 20
+skinparam ArrowFontSize 20
+skinparam NoteFontSize 28
+' ----------------------------
+
 actor "Nhân viên/Quản trị viên" as User
 boundary "Giao diện đăng nhập" as LoginUI
 control "AuthController" as AuthController
 control "LocalStrategy" as LocalStrategy
 control "AuthService" as AuthService
-entity "EmployeeRepository" as EmployeeRepo
+control "EmployeeRepository" as EmployeeRepo
+entity "EmployeeEntity" as EmployeeEntity
 
 User -> LoginUI: Nhập email và mật khẩu
 User -> LoginUI: Nhấn "Đăng nhập"
@@ -19,7 +29,10 @@ AuthController -> LocalStrategy: validate(email, password)
 
 LocalStrategy -> EmployeeRepo: employeeLogin(email)
 activate EmployeeRepo
-EmployeeRepo -> EmployeeRepo: findOne({ email })\nrelations: ['permissions']
+EmployeeRepo -> EmployeeEntity: <<EmployeeEntity>>
+activate EmployeeEntity
+EmployeeEntity --> EmployeeRepo: EmployeeEntity
+deactivate EmployeeEntity
 EmployeeRepo --> LocalStrategy: EmployeeEntity
 deactivate EmployeeRepo
 

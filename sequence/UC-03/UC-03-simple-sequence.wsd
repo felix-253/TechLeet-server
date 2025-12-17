@@ -1,56 +1,177 @@
-@startuml UC-03: Tạo tin tuyển dụng tự động
+@startuml UC-03: Gợi ý ứng viên phù hợp
 hide footbox
 skinparam ParticipantPadding 10
 skinparam BoxPadding 5
 
-actor "Nhà tuyển dụng" as HiringManager
-boundary "Giao diện tạo tin tự động" as AutoJobUI
-control "JobPostingController" as JobPostingController
-control "AIService" as AIService
-entity "JobPostingRepository" as JobPostingRepo
-entity "TemplateRepository" as TemplateRepo
-entity "CompanyRepository" as CompanyRepo
-database "Cơ sở dữ liệu" as Database
+actor "Nhà tuyển dụng" as Recruiter
+boundary "Giao diện chatbox" as ChatUI
+control "ChatbotAgentController" as ChatController
+control "AgentExecutorService" as AgentExecutor
+control "SessionManagerService" as SessionManager
+control "CandidateTool" as CandidateTool
+control "CvEmbeddingService" as EmbeddingService
+control "ScoringService" as ScoringService
+control "ApplicationRepository" as ApplicationRepo
+control "JobPostingRepository" as JobPostingRepo
+entity "ChatSessionEntity" as ChatSessionEntity
+entity "ApplicationEntity" as ApplicationEntity
+entity "JobPostingEntity" as JobPostingEntity
 
-HiringManager -> AutoJobUI: Chọn "Tạo tin tự động"
-AutoJobUI -> JobPostingController: Yêu cầu hiển thị màn hình tạo tự động
-JobPostingController -> CompanyRepo: Lấy danh sách phòng ban
-CompanyRepo -> Database: Truy vấn danh sách phòng ban
-Database --> CompanyRepo: Trả về danh sách phòng ban
-CompanyRepo --> JobPostingController: Dữ liệu phòng ban
-JobPostingController -> AutoJobUI: Hiển thị form tạo tự động
 
-alt [Sử dụng mẫu có sẵn]
-    HiringManager -> AutoJobUI: Chọn template và nhập thông tin cơ bản
-    AutoJobUI -> JobPostingController: Gửi dữ liệu template
-    JobPostingController -> TemplateRepo: Lấy nội dung template
-    TemplateRepo -> Database: Truy vấn template
-    Database --> TemplateRepo: Trả về nội dung template
-    TemplateRepo --> JobPostingController: Nội dung template
-else [Sử dụng AI]
-    HiringManager -> AutoJobUI: Nhập mô tả ngắn và kích hoạt AI
-    AutoJobUI -> JobPostingController: Gửi dữ liệu tạo tin tự động
-    JobPostingController -> AIService: Gọi AI service tạo nội dung
-    AIService -> AIService: Xử lý và tạo nội dung tin tuyển dụng
-    AIService --> JobPostingController: Nội dung tin tuyển dụng được tạo
+' Bước 1: Mở chat box
+Recruiter -> ChatUI: Chọn chatbox
+ChatUI -> ChatController: POST /chatbot-agent/session\n{ userId }
+activate ChatController
+ChatController -> SessionManager: createSession(userId)
+activate SessionManager
+SessionManager -> SessionManager: Generate sessionId
+SessionManager -> ChatSessionEntity: <<ChatSessionEntity>>
+activate ChatSessionEntity
+ChatSessionEntity --> SessionManager: ChatSessionEntity
+deactivate ChatSessionEntity
+SessionManager --> ChatController: SessionResponseDto\n{ sessionId, userId, createdAt }
+deactivate SessionManager
+ChatController --> ChatUI: 200 OK\nSessionResponseDto
+deactivate ChatController
+
+' Bước 2: Hiển thị giao diện chatbox
+ChatUI -> Recruiter: Hiển thị chatbox với sessionId
+
+' Bước 3: Nhập yêu cầu gợi ý ứng viên
+Recruiter -> ChatUI: Nhập yêu cầu:\n"Gợi ý ứng viên cho vị trí\nSoftware Engineer"
+Recruiter -> ChatUI: Nhấn "Gửi"
+
+ChatUI -> ChatController: POST /chatbot-agent/chat\n{ sessionId, message }
+activate ChatController
+
+ChatController -> AgentExecutor: executeAgent(request, userId)
+activate AgentExecutor
+
+AgentExecutor -> SessionManager: getSession(sessionId)
+activate SessionManager
+SessionManager -> ChatSessionEntity: <<ChatSessionEntity>>
+activate ChatSessionEntity
+ChatSessionEntity --> SessionManager: ChatSessionEntity
+deactivate ChatSessionEntity
+SessionManager --> AgentExecutor: ChatSessionEntity
+deactivate SessionManager
+
+AgentExecutor -> AgentExecutor: Parse user intent từ message
+AgentExecutor -> AgentExecutor: Determine tool: CandidateTool
+
+AgentExecutor -> CandidateTool: execute({ action: 'suggest',\njobPostingTitle: 'Software Engineer',\njobPostingId: ? })
+activate CandidateTool
+
+CandidateTool -> JobPostingRepo: findOne({ title hoặc jobPostingId })
+activate JobPostingRepo
+JobPostingRepo -> JobPostingEntity: <<JobPostingEntity>>
+activate JobPostingEntity
+JobPostingEntity --> JobPostingRepo: JobPostingEntity
+deactivate JobPostingEntity
+JobPostingRepo --> CandidateTool: JobPostingEntity
+deactivate JobPostingRepo
+
+CandidateTool -> EmbeddingService: findSimilarCvs(jobPostingId, limit, threshold)
+activate EmbeddingService
+EmbeddingService -> ApplicationRepo: Query applications với CV embeddings
+activate ApplicationRepo
+ApplicationRepo -> ApplicationEntity: <<ApplicationEntity>>
+activate ApplicationEntity
+ApplicationEntity --> ApplicationRepo: ApplicationEntity[]
+deactivate ApplicationEntity
+ApplicationRepo --> EmbeddingService: SimilarityResult[]\n{ applicationId, similarity, ... }
+deactivate ApplicationRepo
+EmbeddingService --> CandidateTool: SimilarityResult[]
+deactivate EmbeddingService
+
+loop [Cho mỗi application trong SimilarityResult]
+    CandidateTool -> EmbeddingService: calculateSimilarity(applicationId, jobPostingId)
+    activate EmbeddingService
+    EmbeddingService --> CandidateTool: vectorSimilarity
+    deactivate EmbeddingService
+    
+    CandidateTool -> ApplicationRepo: findOne({ applicationId })
+    activate ApplicationRepo
+    ApplicationRepo -> ApplicationEntity: <<ApplicationEntity>>
+    activate ApplicationEntity
+    ApplicationEntity --> ApplicationRepo: ApplicationEntity\n{ candidate, processedCvData }
+    deactivate ApplicationEntity
+    ApplicationRepo --> CandidateTool: ApplicationEntity
+    deactivate ApplicationRepo
+    
+    CandidateTool -> ScoringService: calculateSkillsMatchScore(cvSkills, jobSkills)
+    activate ScoringService
+    ScoringService --> CandidateTool: skillsScore
+    deactivate ScoringService
+    
+    CandidateTool -> ScoringService: calculateExperienceMatchScore(cvExperience, minExp, maxExp)
+    activate ScoringService
+    ScoringService --> CandidateTool: experienceScore
+    deactivate ScoringService
+    
+    CandidateTool -> ScoringService: calculateEducationMatchScore(cvEducation, jobEducation)
+    activate ScoringService
+    ScoringService --> CandidateTool: educationScore
+    deactivate ScoringService
+    
+    CandidateTool -> ScoringService: calculateOverallScore(vectorSimilarity, skillsScore, experienceScore, educationScore, chunkSimilarity)
+    activate ScoringService
+    ScoringService --> CandidateTool: ScoringResult\n{overallScore, skillsScore, experienceScore, educationScore, vectorSimilarity}
+    deactivate ScoringService
 end
 
-JobPostingController -> JobPostingController: Kiểm tra tính hợp lệ của dữ liệu
+CandidateTool -> CandidateTool: Sort candidates by overallScore DESC
+CandidateTool -> CandidateTool: Filter candidates with overallScore >= threshold
+CandidateTool -> CandidateTool: Map to SuggestCandidateDto\n{ candidateId, name, email, overallScore, recommendation, reasons }
 
-alt [Dữ liệu hợp lệ]
-    JobPostingController -> JobPostingRepo: Tạo tin tuyển dụng mới
-    JobPostingRepo -> Database: Lưu tin tuyển dụng vào cơ sở dữ liệu
-    Database --> JobPostingRepo: Xác nhận lưu thành công
-    JobPostingRepo --> JobPostingController: Tin tuyển dụng đã được tạo
+alt [Tìm thấy ứng viên phù hợp]
+    CandidateTool --> AgentExecutor: ToolResult\n{ success: true,\ncandidates: SuggestCandidateDto[] }
+    deactivate CandidateTool
     
-    JobPostingController -> JobPostingController: Tạo mã tin tuyển dụng duy nhất
-    JobPostingController -> JobPostingController: Đặt trạng thái DRAFT
+    AgentExecutor -> AgentExecutor: Format response message với danh sách ứng viên
+    AgentExecutor -> SessionManager: updateSession(sessionId, { conversationHistory })
+    activate SessionManager
+    SessionManager -> ChatSessionEntity: <<ChatSessionEntity>>
+    activate ChatSessionEntity
+    ChatSessionEntity --> SessionManager: ChatSessionEntity
+    deactivate ChatSessionEntity
+    SessionManager --> AgentExecutor: void
+    deactivate SessionManager
     
-    JobPostingController -> AutoJobUI: Thông báo tạo tin thành công
-    AutoJobUI -> HiringManager: Hiển thị preview và cho phép chỉnh sửa
-else [Dữ liệu không hợp lệ]
-    JobPostingController -> AutoJobUI: Thông báo lỗi validation
-    AutoJobUI -> HiringManager: Quay lại màn hình nhập liệu với thông báo lỗi
+    AgentExecutor --> ChatController: ChatResponseDto\n{ message: "Danh sách ứng viên phù hợp...",\ncandidates: SuggestCandidateDto[], toolResults }
+    deactivate AgentExecutor
+    
+    ChatController --> ChatUI: 200 OK\nChatResponseDto
+    deactivate ChatController
+    
+    ' Bước 4: Hiển thị danh sách các ứng viên phù hợp
+    ChatUI -> Recruiter: Hiển thị danh sách ứng viên được gợi ý\nvới điểm số, lý do và thông tin chi tiết
+    
+    ' Bước 5: Nhận danh sách ứng viên và xem xét
+    Recruiter -> ChatUI: Xem xét danh sách ứng viên
+    Recruiter -> ChatUI: Có thể chọn xem chi tiết từng ứng viên
+else [Không tìm thấy ứng viên phù hợp - 4.1]
+    CandidateTool -> CandidateTool: Check if candidates.length === 0\nhoặc overallScore < threshold
+    CandidateTool --> AgentExecutor: ToolResult\n{ success: false,\nerror: 'No suitable candidates found',\nsuggestions: 'Có thể mở rộng tiêu chí tìm kiếm' }
+    deactivate CandidateTool
+    
+    AgentExecutor -> AgentExecutor: Format response message thông báo không tìm thấy
+    AgentExecutor -> SessionManager: updateSession(sessionId, { conversationHistory })
+    activate SessionManager
+    SessionManager -> ChatSessionEntity: <<ChatSessionEntity>>
+    activate ChatSessionEntity
+    ChatSessionEntity --> SessionManager: ChatSessionEntity
+    deactivate ChatSessionEntity
+    SessionManager --> AgentExecutor: void
+    deactivate SessionManager
+    
+    AgentExecutor --> ChatController: ChatResponseDto\n{ message: "Không tìm thấy ứng viên phù hợp...",\nerror, suggestions, toolResults }
+    deactivate AgentExecutor
+    
+    ChatController --> ChatUI: 200 OK\nChatResponseDto
+    deactivate ChatController
+    
+    ChatUI -> Recruiter: Hiển thị thông báo:\n"Không tìm thấy ứng viên phù hợp với vị trí này.\nCó thể mở rộng tiêu chí tìm kiếm hoặc thử lại sau."
 end
 
 @enduml

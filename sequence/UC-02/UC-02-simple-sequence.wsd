@@ -1,42 +1,135 @@
-@startuml UC-02: Tạo tin tuyển dụng thủ công
+@startuml UC-02: Tải lên CV và phân tích tự động
 hide footbox
 skinparam ParticipantPadding 10
 skinparam BoxPadding 5
 
-actor "Nhà tuyển dụng" as HiringManager
-boundary "Giao diện tạo tin tuyển dụng" as JobPostingUI
-control "JobPostingController" as JobPostingController
-entity "JobPostingRepository" as JobPostingRepo
-entity "CompanyRepository" as CompanyRepo
-database "Cơ sở dữ liệu" as Database
+' --- CẤU HÌNH FONT SIZE 20 ---
+skinparam DefaultFontSize 20
+skinparam ActorFontSize 20
+skinparam ArrowFontSize 20
+skinparam NoteFontSize 28
 
-HiringManager -> JobPostingUI: Chọn "Tạo tin tuyển dụng"
-JobPostingUI -> JobPostingController: Yêu cầu hiển thị form tạo tin
-JobPostingController -> CompanyRepo: Lấy danh sách phòng ban
-CompanyRepo -> Database: Truy vấn danh sách phòng ban
-Database --> CompanyRepo: Trả về danh sách phòng ban
-CompanyRepo --> JobPostingController: Dữ liệu phòng ban
-JobPostingController -> JobPostingUI: Hiển thị form nhập thông tin
+actor "Ứng viên" as Candidate
+boundary "Giao diện upload CV" as UploadUI
+control "FileController" as FileController
+control "FileService" as FileService
+control "InformationService" as InfoService
+control "CvAnalyzer" as CvAnalyzer
+control "TextExtractionService" as TextExtractService
+control "NlpProcessingService" as NlpService
+control "CvLlmSummaryService" as LlmService
+control "FileRepository" as FileRepo
+control "CandidateRepository" as CandidateRepo
+control "ApplicationRepository" as AppRepo
+entity "FileEntity" as FileEntity
+entity "CandidateEntity" as CandidateEntity
+entity "ApplicationEntity" as ApplicationEntity
 
-HiringManager -> JobPostingUI: Nhập thông tin chi tiết và nhấn "Lưu"
+Candidate -> UploadUI: Chọn file CV
+Candidate -> UploadUI: Nhấn "Tải lên"
 
-JobPostingUI -> JobPostingController: Gửi dữ liệu tin tuyển dụng
-JobPostingController -> JobPostingController: Kiểm tra tính hợp lệ của dữ liệu
+UploadUI -> FileController: POST /files/upload\n(file, fileType, jobPostingId?)
 
-alt [Dữ liệu hợp lệ]
-    JobPostingController -> JobPostingRepo: Tạo tin tuyển dụng mới
-    JobPostingRepo -> Database: Lưu tin tuyển dụng vào cơ sở dữ liệu
-    Database --> JobPostingRepo: Xác nhận lưu thành công
-    JobPostingRepo --> JobPostingController: Tin tuyển dụng đã được tạo
+FileController -> FileService: uploadFile(file, fileType, jobPostingId?)
+activate FileService
+
+FileService -> FileService: Validate file type và size
+FileService -> FileService: Move file to uploads folder
+FileService -> FileRepo: save(fileMetadata)
+activate FileRepo
+FileRepo -> FileEntity: <<FileEntity>>
+activate FileEntity
+FileEntity --> FileRepo: FileEntity
+deactivate FileEntity
+FileRepo --> FileService: FileEntity
+deactivate FileRepo
+
+FileService --> FileController: FileResponseDto
+deactivate FileService
+
+FileController --> UploadUI: 200 OK\nFileResponseDto
+
+alt [Có jobPostingId]
+    UploadUI -> FileController: POST /cv-screening/extract\n(pdfFilePath, jobPostingId)
+    FileController -> InfoService: extractCandidateInformationFromPdf(pdfFilePath, jobPostingId)
+    activate InfoService
     
-    JobPostingController -> JobPostingController: Tạo mã tin tuyển dụng duy nhất
-    JobPostingController -> JobPostingController: Đặt trạng thái DRAFT
+    InfoService -> TextExtractService: extractTextFromPdf(pdfFilePath)
+    activate TextExtractService
+    TextExtractService --> InfoService: ExtractedTextResult
+    deactivate TextExtractService
     
-    JobPostingController -> JobPostingUI: Thông báo tạo tin thành công
-    JobPostingUI -> HiringManager: Chuyển đến trang chỉnh sửa tin tuyển dụng
-else [Dữ liệu không hợp lệ]
-    JobPostingController -> JobPostingUI: Thông báo lỗi validation
-    JobPostingUI -> HiringManager: Quay lại màn hình nhập liệu với thông báo lỗi
+    InfoService -> NlpService: processCvText(extractedText)
+    activate NlpService
+    NlpService --> InfoService: ProcessedCvData
+    deactivate NlpService
+    
+    InfoService -> LlmService: generateCvSummary(text, processedData)
+    activate LlmService
+    LlmService --> InfoService: CvSummaryResult\n{summary, fitScore, recommendation}
+    deactivate LlmService
+    
+    InfoService -> InfoService: createOrUpdateCandidate(processedData)
+    InfoService -> CandidateRepo: findOne({ email }) hoặc create(candidateData)
+    activate CandidateRepo
+    CandidateRepo -> CandidateEntity: <<CandidateEntity>>
+    activate CandidateEntity
+    CandidateEntity --> CandidateRepo: CandidateEntity
+    deactivate CandidateEntity
+    CandidateRepo --> InfoService: CandidateEntity
+    deactivate CandidateRepo
+    
+    InfoService -> InfoService: createApplication(candidateId, jobPostingId, processedData, aiAnalysis)
+    InfoService -> AppRepo: create(applicationData)
+    activate AppRepo
+    AppRepo -> ApplicationEntity: <<ApplicationEntity>>
+    activate ApplicationEntity
+    ApplicationEntity --> AppRepo: ApplicationEntity
+    deactivate ApplicationEntity
+    AppRepo --> InfoService: ApplicationEntity
+    deactivate AppRepo
+    
+    InfoService --> FileController: CandidateInformationResult\n{success, candidateId, applicationId, extractedData, aiAnalysis}
+    deactivate InfoService
+    
+    FileController --> UploadUI: 200 OK\nCandidateInformationResult
+    UploadUI -> Candidate: Hiển thị kết quả phân tích CV
+else [Không có jobPostingId]
+    UploadUI -> FileController: POST /cv-screening/extract\n(pdfFilePath)
+    FileController -> InfoService: extractCandidateInformationFromPdf(pdfFilePath)
+    activate InfoService
+    
+    InfoService -> TextExtractService: extractTextFromPdf(pdfFilePath)
+    activate TextExtractService
+    TextExtractService --> InfoService: ExtractedTextResult
+    deactivate TextExtractService
+    
+    InfoService -> NlpService: processCvText(extractedText)
+    activate NlpService
+    NlpService --> InfoService: ProcessedCvData
+    deactivate NlpService
+    
+    InfoService -> LlmService: generateCvSummary(text, processedData)
+    activate LlmService
+    LlmService --> InfoService: CvSummaryResult
+    deactivate LlmService
+    
+    InfoService -> InfoService: createOrUpdateCandidate(processedData)
+    InfoService -> CandidateRepo: findOne({ email }) hoặc create(candidateData)
+    activate CandidateRepo
+    CandidateRepo -> CandidateEntity: <<CandidateEntity>>
+    activate CandidateEntity
+    CandidateEntity --> CandidateRepo: CandidateEntity
+    deactivate CandidateEntity
+    CandidateRepo --> InfoService: CandidateEntity
+    deactivate CandidateRepo
+    
+    InfoService --> FileController: CandidateInformationResult\n{success, candidateId, extractedData, aiAnalysis}
+    deactivate InfoService
+    
+    FileController --> UploadUI: 200 OK\nCandidateInformationResult
+    UploadUI -> Candidate: Hiển thị kết quả phân tích CV\n(Lưu vào danh sách ứng viên tiềm năng)
 end
 
 @enduml
+

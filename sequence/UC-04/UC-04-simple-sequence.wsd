@@ -1,50 +1,134 @@
-@startuml UC-04: Cập nhật thông tin tuyển dụng
+@startuml UC-04: Tạo tin tuyển dụng với chatbox
 hide footbox
 skinparam ParticipantPadding 10
 skinparam BoxPadding 5
 
-actor "Nhà tuyển dụng" as HiringManager
-boundary "Giao diện chỉnh sửa tin tuyển dụng" as EditJobUI
+actor "Nhà tuyển dụng" as Recruiter
+boundary "Giao diện chatbox" as ChatUI
+boundary "Giao diện form tạo tin tuyển dụng" as FormUI
+control "ChatbotAgentController" as ChatController
 control "JobPostingController" as JobPostingController
-entity "JobPostingRepository" as JobPostingRepo
-entity "JobHistoryRepository" as JobHistoryRepo
-entity "NotificationService" as NotificationService
-database "Cơ sở dữ liệu" as Database
+control "AgentExecutorService" as AgentExecutor
+control "SessionManagerService" as SessionManager
+control "JobPostingService" as JobPostingService
+control "JobPostingTool" as JobPostingTool
+control "JobPostingRepository" as JobPostingRepo
+entity "JobPostingEntity" as JobPostingEntity
+entity "ChatSessionEntity" as ChatSessionEntity
 
-HiringManager -> EditJobUI: Chọn tin tuyển dụng cần chỉnh sửa
-EditJobUI -> JobPostingController: Yêu cầu hiển thị màn hình chỉnh sửa
-JobPostingController -> JobPostingRepo: Lấy thông tin tin tuyển dụng
-JobPostingRepo -> Database: Truy vấn thông tin tin tuyển dụng
-Database --> JobPostingRepo: Trả về thông tin tin tuyển dụng
-JobPostingRepo --> JobPostingController: Dữ liệu tin tuyển dụng
-JobPostingController -> EditJobUI: Hiển thị form chỉnh sửa
 
-HiringManager -> EditJobUI: Chỉnh sửa thông tin và nhấn "Cập nhật"
+Recruiter -> ChatUI: Chọn chatbox
+ChatUI -> ChatController: POST /chatbot-agent/session\n{ userId }
+activate ChatController
+ChatController -> SessionManager: createSession(userId)
+activate SessionManager
+SessionManager -> SessionManager: Generate sessionId
+SessionManager -> ChatSessionEntity: <<ChatSessionEntity>>
+activate ChatSessionEntity
+ChatSessionEntity --> SessionManager: ChatSessionEntity
+deactivate ChatSessionEntity
+SessionManager --> ChatController: SessionResponseDto\n{ sessionId, userId, createdAt }
+deactivate SessionManager
+ChatController --> ChatUI: 200 OK\nSessionResponseDto
+deactivate ChatController
+ChatUI -> Recruiter: Hiển thị chatbox với sessionId
 
-EditJobUI -> JobPostingController: Gửi dữ liệu cập nhật
-JobPostingController -> JobPostingController: Kiểm tra tính hợp lệ của dữ liệu
 
-alt [Dữ liệu hợp lệ]
-    JobPostingController -> JobPostingRepo: Cập nhật tin tuyển dụng
-    JobPostingRepo -> Database: Cập nhật tin tuyển dụng trong cơ sở dữ liệu
-    Database --> JobPostingRepo: Xác nhận cập nhật thành công
-    JobPostingRepo --> JobPostingController: Tin tuyển dụng đã được cập nhật
+Recruiter -> ChatUI: Nhập thông tin yêu cầu:\n"Tạo tin tuyển dụng cho vị trí\nSoftware Engineer"
+Recruiter -> ChatUI: Nhấn "Gửi"
+
+ChatUI -> ChatController: POST /chatbot-agent/chat\n{ sessionId, message }
+activate ChatController
+
+ChatController -> AgentExecutor: executeAgent(request, userId)
+activate AgentExecutor
+
+AgentExecutor -> SessionManager: getSession(sessionId)
+activate SessionManager
+SessionManager -> ChatSessionEntity: <<ChatSessionEntity>>
+activate ChatSessionEntity
+ChatSessionEntity --> SessionManager: ChatSessionEntity
+deactivate ChatSessionEntity
+SessionManager --> AgentExecutor: ChatSessionEntity
+deactivate SessionManager
+
+AgentExecutor -> AgentExecutor: Parse user intent từ message
+AgentExecutor -> AgentExecutor: Determine tool: JobPostingTool
+
+AgentExecutor -> JobPostingTool: execute({ action: 'create',\ntitle: 'Software Engineer',\ndescription: ?, requirements: ? })
+activate JobPostingTool
+
+JobPostingTool -> JobPostingTool: Validate required fields\n(title, description, requirements)
+JobPostingTool -> JobPostingTool: Detect missing fields
+JobPostingTool -> JobPostingTool: Generate suggestions based on title
+
+JobPostingTool --> AgentExecutor: ToolResult\n{ success: false,\nerror: 'Missing required fields',\nsuggestions: { description, requirements, ... } }
+deactivate JobPostingTool
+
+AgentExecutor -> AgentExecutor: Format response message với gợi ý
+AgentExecutor -> SessionManager: updateSession(sessionId, { conversationHistory })
+activate SessionManager
+SessionManager -> ChatSessionEntity: <<ChatSessionEntity>>
+activate ChatSessionEntity
+ChatSessionEntity --> SessionManager: ChatSessionEntity
+deactivate ChatSessionEntity
+SessionManager --> AgentExecutor: void
+deactivate SessionManager
+
+AgentExecutor --> ChatController: ChatResponseDto\n{ message: "Gợi ý thông tin tin tuyển dụng...",\nsuggestions, toolResults }
+deactivate AgentExecutor
+
+ChatController --> ChatUI: 200 OK\nChatResponseDto
+deactivate ChatController
+
+ChatUI -> Recruiter: Hiển thị gợi ý và yêu cầu xác thực:\n"Tôi đã gợi ý thông tin sau:\n- Mô tả: ...\n- Yêu cầu: ...\nBạn có muốn tạo form với thông tin này?"
+
+
+Recruiter -> ChatUI: Kiểm tra thông tin gợi ý\nvà xác thực: "Đồng ý"
+Recruiter -> ChatUI: Nhấn "Tạo form"
+
+ChatUI -> FormUI: Hiển thị form điền tin tuyển dụng\nvới dữ liệu đã gợi ý ở bước 4
+FormUI -> Recruiter: Hiển thị form pre-filled:\n{ title, description, requirements, ... }
+
+Recruiter -> FormUI: Chỉnh sửa theo mong muốn
+Recruiter -> FormUI: Chọn "Tạo"
+
+FormUI -> JobPostingController: POST /job-postings\n{ title, description, requirements, ... }
+activate JobPostingController
+
+JobPostingController -> JobPostingService: create(createJobPostingDto)
+activate JobPostingService
+
+JobPostingService -> JobPostingService: Validate required fields\n(title, description, requirements)
+JobPostingService -> JobPostingService: Validate salary range
+JobPostingService -> JobPostingService: Validate experience range
+JobPostingService -> JobPostingService: Validate application deadline
+
+alt [Validation passed]
+    JobPostingService -> JobPostingRepo: create(jobPostingData)
+    activate JobPostingRepo
+    JobPostingRepo -> JobPostingEntity: <<JobPostingEntity>>
+    activate JobPostingEntity
+    JobPostingEntity --> JobPostingRepo: JobPostingEntity
+    deactivate JobPostingEntity
+    JobPostingRepo --> JobPostingService: JobPostingEntity
+    deactivate JobPostingRepo
     
-    JobPostingController -> JobHistoryRepo: Lưu lịch sử thay đổi
-    JobHistoryRepo -> Database: Lưu lịch sử thay đổi vào cơ sở dữ liệu
-    Database --> JobHistoryRepo: Xác nhận lưu lịch sử thành công
-    JobHistoryRepo --> JobPostingController: Lịch sử đã được lưu
+    JobPostingService --> JobPostingController: JobPostingResponseDto\n{ jobPostingId, title, status: 'draft' }
+    deactivate JobPostingService
     
-    alt [Trạng thái = PUBLISHED]
-        JobPostingController -> NotificationService: Gửi thông báo đến ứng viên
-        NotificationService -> NotificationService: Xử lý và gửi thông báo
-    end
+    JobPostingController --> FormUI: 201 Created\nJobPostingResponseDto
+    deactivate JobPostingController
     
-    JobPostingController -> EditJobUI: Thông báo cập nhật thành công
-    EditJobUI -> HiringManager: Chuyển đến trang quản lý tin tuyển dụng
-else [Dữ liệu không hợp lệ]
-    JobPostingController -> EditJobUI: Thông báo lỗi validation
-    EditJobUI -> HiringManager: Quay lại màn hình nhập liệu với thông báo lỗi
+    FormUI -> Recruiter: Hiển thị thông báo:\n"Tạo tin tuyển dụng thành công"\nvà quay về màn hình Quản lý Tin Tuyển Dụng
+else [Validation failed - Missing required fields]
+    JobPostingService --> JobPostingController: BadRequestException\n"Missing required fields: title, description, requirements"
+    deactivate JobPostingService
+    JobPostingController --> FormUI: 400 Bad Request\nError message
+    deactivate JobPostingController
+    
+    FormUI -> Recruiter: Hiển thị lỗi: "Thiếu thông tin bắt buộc"
+    FormUI -> Recruiter: Quay lại Bước 5,\nchỉnh sửa và bổ sung dữ liệu theo yêu cầu
 end
 
 @enduml

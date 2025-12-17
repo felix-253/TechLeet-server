@@ -1,47 +1,111 @@
-@startuml UC-05: Xem danh sách tin tuyển dụng
+@startuml UC-05: Thực hiện bài kiểm tra
 hide footbox
 skinparam ParticipantPadding 10
 skinparam BoxPadding 5
 
-actor "Người dùng" as User
-boundary "Giao diện danh sách tin tuyển dụng" as JobListUI
-control "JobPostingController" as JobPostingController
-entity "JobPostingRepository" as JobPostingRepo
-entity "AuthService" as AuthService
-database "Cơ sở dữ liệu" as Database
+actor "Ứng viên" as Candidate
+boundary "Giao diện bài kiểm tra" as ExamUI
+control "QuestionController" as QuestionController
+control "QuestionService" as QuestionService
+control "ExaminationRepository" as ExamRepo
+control "ExamQuestionRepository" as ExamQuestionRepo
+entity "ExaminationEntity" as ExaminationEntity
+entity "ExamQuestionEntity" as ExamQuestionEntity
 
-User -> JobListUI: Truy cập trang danh sách tin tuyển dụng
-JobListUI -> JobPostingController: Yêu cầu hiển thị danh sách tin
-JobPostingController -> AuthService: Kiểm tra quyền truy cập
-AuthService -> AuthService: Xác thực quyền người dùng
-AuthService --> JobPostingController: Kết quả xác thực quyền
-JobPostingController -> JobPostingRepo: Lấy danh sách tin tuyển dụng
-JobPostingRepo -> Database: Truy vấn danh sách tin tuyển dụng
-Database --> JobPostingRepo: Trả về danh sách tin tuyển dụng
-JobPostingRepo --> JobPostingController: Dữ liệu danh sách tin
-JobPostingController -> JobListUI: Hiển thị danh sách tin tuyển dụng
+Candidate -> ExamUI: Truy cập link bài kiểm tra
+ExamUI -> QuestionController: GET /question/examinations/:id
 
-User -> JobListUI: Nhập bộ lọc/tìm kiếm (nếu có)
+QuestionController -> QuestionService: getExaminationDetail(examinationId)
+activate QuestionService
 
-JobListUI -> JobPostingController: Gửi yêu cầu lọc/tìm kiếm
-JobPostingController -> JobPostingController: Áp dụng bộ lọc và tìm kiếm
-JobPostingController -> JobPostingRepo: Lấy kết quả đã lọc
-JobPostingRepo -> Database: Truy vấn kết quả đã lọc
-Database --> JobPostingRepo: Trả về kết quả đã lọc
-JobPostingRepo --> JobPostingController: Dữ liệu kết quả đã lọc
-JobPostingController -> JobListUI: Hiển thị kết quả đã lọc
+QuestionService -> ExamRepo: findOne({ examinationId })\nrelations: ['examQuestions', 'examQuestions.question']
+activate ExamRepo
+ExamRepo -> ExaminationEntity: <<ExaminationEntity>>
+activate ExaminationEntity
+ExaminationEntity --> ExamRepo: ExaminationEntity
+deactivate ExaminationEntity
+ExamRepo --> QuestionService: ExaminationEntity
+deactivate ExamRepo
 
-alt [Cần xem chi tiết]
-    User -> JobListUI: Click vào tin tuyển dụng
-    JobListUI -> JobPostingController: Yêu cầu hiển thị chi tiết
-    JobPostingController -> JobPostingRepo: Lấy thông tin chi tiết tin tuyển dụng
-    JobPostingRepo -> Database: Truy vấn thông tin chi tiết
-    Database --> JobPostingRepo: Trả về chi tiết tin tuyển dụng
-    JobPostingRepo --> JobPostingController: Dữ liệu chi tiết tin tuyển dụng
-    JobPostingController -> JobListUI: Hiển thị chi tiết tin tuyển dụng
-    JobListUI -> User: Chuyển đến trang chi tiết tin tuyển dụng
-else [Tiếp tục duyệt]
-    JobListUI -> User: Hiển thị danh sách tin tuyển dụng
+QuestionService --> QuestionController: ExaminationDetail\n{ examinationId, status, questions }
+deactivate QuestionService
+
+QuestionController --> ExamUI: 200 OK\nExaminationDetail
+ExamUI -> Candidate: Hiển thị danh sách câu hỏi
+
+Candidate -> ExamUI: Nhập câu trả lời cho từng câu hỏi
+Candidate -> ExamUI: Nhấn "Nộp bài"
+
+ExamUI -> QuestionController: POST /question/examinations/:id/submit\n{ answers: { examQuestionId: { answerText } } }
+
+QuestionController -> QuestionService: submitExamination(examinationId, submitDto)
+activate QuestionService
+
+QuestionService -> ExamRepo: findOne({ examinationId })
+activate ExamRepo
+ExamRepo -> ExaminationEntity: <<ExaminationEntity>>
+activate ExaminationEntity
+ExaminationEntity --> ExamRepo: ExaminationEntity
+deactivate ExaminationEntity
+ExamRepo --> QuestionService: ExaminationEntity
+deactivate ExamRepo
+
+QuestionService -> ExamQuestionRepo: find({ examinationId })\nrelations: ['question']
+activate ExamQuestionRepo
+ExamQuestionRepo -> ExamQuestionEntity: <<ExamQuestionEntity>>
+activate ExamQuestionEntity
+ExamQuestionEntity --> ExamQuestionRepo: ExamQuestionEntity[]
+deactivate ExamQuestionEntity
+ExamQuestionRepo --> QuestionService: ExamQuestionEntity[]
+deactivate ExamQuestionRepo
+
+QuestionService -> QuestionService: Initialize totalScore = 0
+
+loop [Cho mỗi câu trả lời]
+    QuestionService -> QuestionService: Find examQuestion by examQuestionId
+    QuestionService -> QuestionService: Set examQuestion.answerText = answerText
+    
+    alt [Chưa có score/reason]
+        QuestionService -> QuestionService: gradeAnswerWithAI(question, answerText)
+        QuestionService -> QuestionService: Set examQuestion.score = aiResult.score
+        QuestionService -> QuestionService: Set examQuestion.reason = aiResult.reason
+    else [Đã có score/reason]
+        QuestionService -> QuestionService: Set examQuestion.score = providedScore
+        QuestionService -> QuestionService: Set examQuestion.reason = providedReason
+    end
+    
+    QuestionService -> QuestionService: totalScore += examQuestion.score
 end
 
+QuestionService -> ExamQuestionRepo: save(examQuestions)
+activate ExamQuestionRepo
+ExamQuestionRepo -> ExamQuestionEntity: <<ExamQuestionEntity>>
+activate ExamQuestionEntity
+ExamQuestionEntity --> ExamQuestionRepo: ExamQuestionEntity[]
+deactivate ExamQuestionEntity
+ExamQuestionRepo --> QuestionService: void
+deactivate ExamQuestionRepo
+
+QuestionService -> QuestionService: Calculate averageScore = totalScore / examQuestions.length
+
+QuestionService -> QuestionService: Set examination.status = 'completed'
+QuestionService -> QuestionService: Set examination.submittedAt = new Date()
+QuestionService -> QuestionService: Set examination.totalScore = averageScore
+
+QuestionService -> ExamRepo: save(examination)
+activate ExamRepo
+ExamRepo -> ExaminationEntity: <<ExaminationEntity>>
+activate ExaminationEntity
+ExaminationEntity --> ExamRepo: ExaminationEntity
+deactivate ExaminationEntity
+ExamRepo --> QuestionService: ExaminationEntity
+deactivate ExamRepo
+
+QuestionService --> QuestionController: ExaminationDetail\n{ examinationId, status: 'completed', totalScore }
+deactivate QuestionService
+
+QuestionController --> ExamUI: 200 OK\nExaminationDetail
+ExamUI -> Candidate: Hiển thị kết quả: "Đã nộp bài thành công"\n"Điểm số: {totalScore}"
+
 @enduml
+
